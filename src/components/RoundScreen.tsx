@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import type { Round } from '../types'
-import InvestmentCard from './InvestmentCard'
-import AllocSlider from './AllocSlider'
+import RoundDecision from './RoundDecision'
 import LiqCards from './LiqCards'
 
 type Props = {
@@ -11,24 +10,18 @@ type Props = {
   onNext: (allocX: number) => void
 }
 
-const INPUT = 10000
-
 export default function RoundScreen({ round, index, total, onNext }: Props) {
-  const [allocX, setAllocX] = useState(50)
   const [selected, setSelected] = useState<'x' | 'y' | null>(null)
 
-  const isAlloc = round.type === 'alloc'
-  const canAdvance = isAlloc || selected !== null
+  // Allocation rounds use the PayoffBar-based decision screen.
+  if (round.type === 'alloc') {
+    return <RoundDecision round={round} index={index} total={total} onNext={onNext} />
+  }
 
-  const xAmount = Math.round((INPUT * allocX) / 100)
-  const yAmount = INPUT - xAmount
-
+  // Liquidity rounds — unchanged binary card layout.
+  const canAdvance = selected !== null
   const handleNext = () => {
-    if (isAlloc) {
-      onNext(allocX)
-    } else if (selected) {
-      onNext(selected === 'x' ? 100 : 0)
-    }
+    if (selected) onNext(selected === 'x' ? 100 : 0)
   }
 
   return (
@@ -46,16 +39,6 @@ export default function RoundScreen({ round, index, total, onNext }: Props) {
         <h2 className="text-2xl font-semibold leading-snug tracking-tight text-text">{round.q}</h2>
         <p className="mt-2.5 text-base leading-relaxed text-muted">{round.sub}</p>
 
-        {/* Nudge banner (allocation rounds) */}
-        {isAlloc && (
-          <div className="mt-5 inline-flex w-fit items-center gap-2 rounded-full bg-teal/10 px-4 py-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-teal" />
-            <p className="text-sm font-medium text-teal">
-              Don’t overthink — go with your first instinct
-            </p>
-          </div>
-        )}
-
         {/* Body */}
         <div className="mt-7">
           {/* Reference point — always visible so outcomes read as gain/loss */}
@@ -63,36 +46,7 @@ export default function RoundScreen({ round, index, total, onNext }: Props) {
             You invest <span className="font-medium text-text">$10,000</span>
           </div>
 
-          {round.type === 'alloc' ? (
-            <>
-              <div className="flex items-stretch gap-6">
-                <InvestmentCard
-                  side="x"
-                  label={round.x.label}
-                  scenarios={round.x.scenarios}
-                  amount={xAmount}
-                  share={allocX}
-                  displayMode={round.displayMode}
-                  ambigNote={round.x.ambigNote}
-                />
-                <InvestmentCard
-                  side="y"
-                  label={round.y.label}
-                  scenarios={round.y.scenarios}
-                  amount={yAmount}
-                  share={100 - allocX}
-                  displayMode={round.displayMode}
-                  ambigNote={round.y.ambigNote}
-                />
-              </div>
-
-              <div className="mt-7">
-                <AllocSlider allocX={allocX} onChange={setAllocX} />
-              </div>
-            </>
-          ) : (
-            <LiqCards x={round.x} y={round.y} selected={selected} onSelect={setSelected} />
-          )}
+          <LiqCards x={round.x} y={round.y} selected={selected} onSelect={setSelected} />
         </div>
 
         {/* Next button */}

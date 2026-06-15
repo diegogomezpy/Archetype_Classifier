@@ -7,8 +7,9 @@ import type { Round } from '../types'
 //
 // 16 rounds split across two screens of 8. The progress bar spans all 16.
 //
-// `displayMode: 'relative'` shows each outcome as a gain/loss vs the $10,000
-// input (handled in InvestmentCard). Every alloc round here uses 'relative'.
+// Allocation rounds render via RoundDecision + PayoffBar, which always show
+// outcomes as gains/losses vs the $10,000 input. (`displayMode` is retained on
+// the type for compatibility but the payoff bar is always relative.)
 //
 // Liquidity icons use the names the Icon component renders: 'lock' (lockup),
 // 'refresh' (fully liquid), and 'door-exit' (R13's soft-lockup / can-exit side).

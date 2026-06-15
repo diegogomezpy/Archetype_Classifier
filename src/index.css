@@ -35,6 +35,101 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* PayoffBar overlay labels — positioned imperatively at each tile/cluster midpoint */
+.payoff-label {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.05;
+  text-align: center;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.payoff-label-d {
+  font-family: 'DM Mono', ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 600;
+}
+.payoff-label-p {
+  font-size: 10px;
+  opacity: 0.85;
+}
+
+/* PayoffBar $0 split marker — positioned imperatively under the bar */
+.payoff-zero {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  pointer-events: none;
+  font-family: 'DM Mono', ui-monospace, monospace;
+  font-size: 11px;
+  color: #7c808b;
+}
+
+/* PayoffBar allocation slider — native range styled to match the brand.
+   Left end = X (teal), right end = Y (amber). */
+.payoff-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 28px;
+  background: transparent;
+  cursor: pointer;
+  outline: none;
+}
+.payoff-range::-webkit-slider-runnable-track {
+  height: 12px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    90deg,
+    rgba(10, 160, 136, 0.32) 0%,
+    rgba(10, 160, 136, 0.12) 30%,
+    #edebe5 50%,
+    rgba(181, 131, 44, 0.14) 70%,
+    rgba(181, 131, 44, 0.34) 100%
+  );
+}
+.payoff-range::-moz-range-track {
+  height: 12px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    90deg,
+    rgba(10, 160, 136, 0.32) 0%,
+    rgba(10, 160, 136, 0.12) 30%,
+    #edebe5 50%,
+    rgba(181, 131, 44, 0.14) 70%,
+    rgba(181, 131, 44, 0.34) 100%
+  );
+}
+.payoff-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  margin-top: -6px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 1px solid #e7e4de;
+  box-shadow: 0 1px 3px rgba(35, 38, 47, 0.18), 0 4px 12px -2px rgba(35, 38, 47, 0.2);
+}
+.payoff-range::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 1px solid #e7e4de;
+  box-shadow: 0 1px 3px rgba(35, 38, 47, 0.18), 0 4px 12px -2px rgba(35, 38, 47, 0.2);
+}
+.payoff-range:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px rgba(10, 160, 136, 0.3);
+}
+.payoff-range:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 4px rgba(10, 160, 136, 0.3);
+}
+
 /* ---- Entrance animations ---- */
 @keyframes fadeSlideUp {
   from {

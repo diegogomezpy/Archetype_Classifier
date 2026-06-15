@@ -73,9 +73,9 @@ src/
 ├── index.css               # Tailwind layers + animations
 ├── components/
 │   ├── IntroScreen.tsx     # Landing screen
-│   ├── RoundScreen.tsx     # Per-round layout (allocation or liquidity)
-│   ├── InvestmentCard.tsx  # Outcome card with relative/absolute display
-│   ├── AllocSlider.tsx     # Drag-to-allocate slider
+│   ├── RoundScreen.tsx     # Per-round router (allocation → RoundDecision, else liquidity)
+│   ├── RoundDecision.tsx   # Allocation round: portfolio mix + payoff distribution
+│   ├── PayoffBar.tsx       # Canvas payoff-distribution bar (probability × magnitude)
 │   ├── LiqCards.tsx        # Liquidity choice cards
 │   ├── HalfwayScreen.tsx   # Screen 1 → screen 2 transition
 │   ├── AdvisorDashboard.tsx# Two-panel results view
@@ -90,6 +90,7 @@ src/
 │   └── archetypes.ts       # Archetype copy + target vectors
 └── lib/
     ├── scoring.ts          # Scoring pipeline, classification, allocation engine
+    ├── payoff.ts           # Joint outcome distribution + fixed global axis bounds
     ├── instruments.ts      # Instrument universe + asset-class loadings
     ├── advisorCopy.ts      # Advisor talking-point generation
     └── format.ts           # Money formatting helper
