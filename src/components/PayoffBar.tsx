@@ -20,7 +20,7 @@ const SMOOTH = 0.22 // per-frame approach rate toward the target distribution
 // Magnitude color ramps: pale/desaturated (small) → vivid/saturated (large).
 // Stays bright at the high end (no dark/near-black tones).
 const POS_LIGHT = [178, 224, 202]
-const POS_VIVID = [13, 173, 110]
+const POS_VIVID = [0, 166, 80]
 const NEG_LIGHT = [247, 201, 201]
 const NEG_VIVID = [226, 48, 48]
 const NEUTRAL = [206, 203, 195] // breakeven ($0)
@@ -32,7 +32,11 @@ const clamp01 = (t: number) => Math.max(0, Math.min(1, t))
 function rampRGB(delta: number, gMin: number, gMax: number): RGB {
   if (delta === 0) return NEUTRAL as RGB
   if (delta > 0) {
-    const t = gMax > 0 ? clamp01(delta / gMax) : 0
+    // Gains span a huge range (the lottery jackpot stretches gMax to ~$19.5k),
+    // so a linear map leaves ordinary gains nearly pale. Ramp the saturation up
+    // fast with a sub-linear curve — modest gains read clearly green while the
+    // jackpot still tops out at full vivid.
+    const t = gMax > 0 ? Math.pow(clamp01(delta / gMax), 0.32) : 0
     return [
       Math.round(lerp(POS_LIGHT[0], POS_VIVID[0], t)),
       Math.round(lerp(POS_LIGHT[1], POS_VIVID[1], t)),
