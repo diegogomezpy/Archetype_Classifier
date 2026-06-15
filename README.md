@@ -1,4 +1,4 @@
-# CADIEM · Investor Profile
+# Investor Profile
 
 A gamified investor risk-profiling web app. The client makes a series of quick
 investment decisions, and the app builds a behavioral risk profile from those
