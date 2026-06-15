@@ -222,6 +222,18 @@ function vecDistance(a: CoreScores, b: CoreScores): number {
 // allocation engine.
 export const ALLOC_TEMPERATURE = 0.5
 
+// "Core" asset classes that may take large allocations. Everything else is a
+// satellite sleeve that gets held down (see SATELLITE_PENALTY).
+const CORE_CLASSES = new Set<AssetClass>(['Fixed income', 'Equities'])
+
+// Satellite-sleeve penalty strength. After the softmax, every non-core class's
+// weight w is passed through a saturating map w / (1 + k·w): small sleeves pass
+// through nearly unchanged, but large sleeves are damped progressively harder,
+// so the bigger a satellite allocation would be, the more it's penalized. The
+// freed weight flows to the core classes on renormalization. Higher k = more
+// core-heavy portfolios. 0 disables the penalty.
+export const SATELLITE_PENALTY = 6
+
 export function computeAllocation(
   archetype: string,
   scores: { sigma: number; alpha: number; lambda: number; ambig: number; liq: number },
@@ -243,6 +255,14 @@ export function computeAllocation(
   const expTotal = Object.values(exps).reduce((s, v) => s + v, 0) || 1
   const raw: Record<string, number> = {}
   for (const cls of classes) raw[cls] = exps[cls] / expTotal
+
+  // Step 1b: satellite-sleeve penalty. Non-core classes (everything but Fixed
+  // income and Equities) pass through a saturating map w / (1 + k·w), so larger
+  // would-be satellite allocations are damped progressively harder. The core
+  // classes keep their full weight and absorb the freed share on renormalization.
+  for (const cls of classes) {
+    if (!CORE_CLASSES.has(cls)) raw[cls] = raw[cls] / (1 + SATELLITE_PENALTY * raw[cls])
+  }
 
   // Step 2: apply archetype caps plus global 60% cap
   const capped: Record<string, number> = {}
