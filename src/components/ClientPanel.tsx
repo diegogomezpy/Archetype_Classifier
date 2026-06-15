@@ -1,9 +1,9 @@
 import { useMemo } from 'react'
 import { ARCHETYPES } from '../data/archetypes'
-import { computeAllocation, getRankedInstruments, type DashboardData } from '../lib/scoring'
+import { computeAllocation, type DashboardData } from '../lib/scoring'
 import { ASSET_CLASS_COLORS } from '../lib/instruments'
 import DonutChart from './DonutChart'
-import InstrumentList from './InstrumentList'
+import InstrumentTabs from './InstrumentTabs'
 
 type Props = {
   data: DashboardData
@@ -18,8 +18,6 @@ export default function ClientPanel({ data, onRetake }: Props) {
     () => computeAllocation(data.archetype, data.scores),
     [data.archetype, data.scores],
   )
-  const instruments = useMemo(() => getRankedInstruments(data.scores), [data.scores])
-
   return (
     <div className="flex flex-col gap-10 p-8 min-[900px]:p-10">
       {/* Archetype header */}
@@ -69,22 +67,31 @@ export default function ClientPanel({ data, onRetake }: Props) {
         </div>
       </section>
 
-      {/* Recommended instruments */}
+      {/* Recommended instruments — per asset-class tabs */}
       <section>
-        <h2 className="mb-2 font-mono text-xs uppercase tracking-[0.14em] text-muted">
+        <h2 className="mb-5 font-mono text-xs uppercase tracking-[0.14em] text-muted">
           Recommended instruments
         </h2>
-        <InstrumentList instruments={instruments} />
+        <InstrumentTabs allocation={allocation} scores={data.scores} />
       </section>
 
-      {/* Retake */}
-      <button
-        type="button"
-        onClick={onRetake}
-        className="w-full max-w-xs rounded-2xl border border-border bg-surface py-3.5 text-sm font-medium text-muted shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:text-text hover:shadow-card"
-      >
-        Retake the assessment
-      </button>
+      {/* Actions — hidden from the printed report */}
+      <div className="no-print flex w-full max-w-md flex-col gap-3 sm:flex-row">
+        <button
+          type="button"
+          onClick={() => window.print()}
+          className="flex-1 rounded-2xl bg-teal py-3.5 text-sm font-medium text-white shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card"
+        >
+          Download report (PDF)
+        </button>
+        <button
+          type="button"
+          onClick={onRetake}
+          className="flex-1 rounded-2xl border border-border bg-surface py-3.5 text-sm font-medium text-muted shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:text-text hover:shadow-card"
+        >
+          Retake the assessment
+        </button>
+      </div>
     </div>
   )
 }

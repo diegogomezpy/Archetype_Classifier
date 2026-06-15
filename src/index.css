@@ -176,3 +176,61 @@ body {
     animation: none;
   }
 }
+
+/* ---- Print / PDF export ----
+   The "Download report" button on the dashboard calls window.print(); the user
+   then picks "Save as PDF". These rules turn the live dashboard DOM into a clean
+   multi-section report: chrome is hidden, the two-panel grid stacks, hex brand
+   colors are preserved, and the per-class instrument tabs are replaced by a
+   print-only block that stacks every asset class as its own section. */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 14mm;
+  }
+
+  /* Preserve the brand hex colors (donut, fit bars, accents) in the PDF. */
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body {
+    background: #ffffff;
+  }
+
+  /* Drop interactive chrome and anything explicitly marked no-print. */
+  .no-print {
+    display: none !important;
+  }
+
+  /* Stack the advisor/client two-panel grid for the report. */
+  .print-report-grid {
+    display: block !important;
+    max-width: none !important;
+  }
+  .print-report-grid > * {
+    border: none !important;
+    background: transparent !important;
+  }
+
+  /* Avoid awkward breaks mid-section. */
+  section,
+  .print-avoid-break {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Swap the interactive tabs for the flattened, stacked print version. */
+  .print-only {
+    display: block !important;
+  }
+  .screen-only {
+    display: none !important;
+  }
+}
+
+/* Print-only blocks are hidden on screen until @media print reveals them. */
+.print-only {
+  display: none;
+}
