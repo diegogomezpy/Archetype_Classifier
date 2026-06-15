@@ -13,7 +13,7 @@ type Props = {
   /** Allocation slices (pct > 0), already sorted by weight desc. */
   allocation: { assetClass: AssetClass; pct: number }[]
   scores: NormalizedScores
-  /** Max instruments shown per asset-class tab. */
+  /** Max instruments shown per asset-class tab. Defaults to all (no cap). */
   perClassLimit?: number
 }
 
@@ -24,7 +24,7 @@ function hexAlpha(hex: string, alpha: number): string {
   return `${hex}${a}`
 }
 
-export default function InstrumentTabs({ allocation, scores, perClassLimit = 5 }: Props) {
+export default function InstrumentTabs({ allocation, scores, perClassLimit = Infinity }: Props) {
   // Tabs cover the asset classes present in the suggested allocation, ordered
   // by allocation weight desc (allocation is already sorted that way).
   const classes = allocation.map((a) => a.assetClass)
@@ -99,7 +99,11 @@ export default function InstrumentTabs({ allocation, scores, perClassLimit = 5 }
         aria-labelledby={`tab-${activeClass}`}
       >
         {byClass[activeClass] && byClass[activeClass].length > 0 ? (
-          <InstrumentList instruments={byClass[activeClass]} showClassBadge={false} />
+          // Fixed-height scroll area so a long class list (e.g. all equities)
+          // doesn't balloon the page — scrolls internally instead.
+          <div className="max-h-80 overflow-y-auto pr-2">
+            <InstrumentList instruments={byClass[activeClass]} showClassBadge={false} />
+          </div>
         ) : (
           <p className="py-4 text-sm text-muted">No matching instruments in this class.</p>
         )}

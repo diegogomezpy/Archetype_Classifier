@@ -232,7 +232,7 @@ const CORE_CLASSES = new Set<AssetClass>(['Fixed income', 'Equities'])
 // so the bigger a satellite allocation would be, the more it's penalized. The
 // freed weight flows to the core classes on renormalization. Higher k = more
 // core-heavy portfolios. 0 disables the penalty.
-export const SATELLITE_PENALTY = 6
+export const SATELLITE_PENALTY = 10
 
 export function computeAllocation(
   archetype: string,
