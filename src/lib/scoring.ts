@@ -216,11 +216,11 @@ function vecDistance(a: CoreScores, b: CoreScores): number {
 
 // Affinity temperature for the softmax in step 1. Lower = sharper (allocations
 // concentrate in the closest-fitting classes); higher = flatter (allocations
-// spread evenly regardless of profile). 0.35 sharpens conviction so the
-// closest-fitting classes lead and broad "middle" classes (Alternatives,
-// Crypto) stop over-accumulating, without collapsing onto a single class.
-// This is the one knob to tune the overall conviction of the allocation engine.
-export const ALLOC_TEMPERATURE = 0.35
+// spread evenly regardless of profile). 0.2 gives a high-conviction tilt so
+// the closest-fitting classes dominate and broad "middle" classes
+// (Alternatives, Crypto) stop over-accumulating. This is the one knob to tune
+// the overall conviction of the allocation engine.
+export const ALLOC_TEMPERATURE = 0.2
 
 export function computeAllocation(
   archetype: string,
