@@ -214,6 +214,14 @@ function vecDistance(a: CoreScores, b: CoreScores): number {
   return Math.sqrt((a.sigma - b.sigma) ** 2 + (a.alpha - b.alpha) ** 2 + (a.lambda - b.lambda) ** 2)
 }
 
+// Affinity temperature for the softmax in step 1. Lower = sharper (allocations
+// concentrate in the closest-fitting classes); higher = flatter (allocations
+// spread evenly regardless of profile). 0.35 sharpens conviction so the
+// closest-fitting classes lead and broad "middle" classes (Alternatives,
+// Crypto) stop over-accumulating, without collapsing onto a single class.
+// This is the one knob to tune the overall conviction of the allocation engine.
+export const ALLOC_TEMPERATURE = 0.35
+
 export function computeAllocation(
   archetype: string,
   scores: { sigma: number; alpha: number; lambda: number; ambig: number; liq: number },
@@ -222,12 +230,19 @@ export function computeAllocation(
   const classes = Object.keys(ASSET_CLASS_LOADINGS) as AssetClass[]
   const caps = ALLOC_CAPS[archetype] ?? {}
 
-  // Step 1: inverse-distance weight toward each asset class
-  const raw: Record<string, number> = {}
+  // Step 1: softmax affinity toward each asset class. Weight ∝ exp(-d / T),
+  // where d is the distance from the client's profile to the class loading and
+  // T is the temperature. This rewards proximity far more sharply than the old
+  // 1/(1+d) kernel (which compressed every class into a similar share, making
+  // all profiles look alike); the closest classes now dominate. Result sums to 1.
+  const exps: Record<string, number> = {}
   for (const cls of classes) {
     const d = vecDistance(ASSET_CLASS_LOADINGS[cls], target)
-    raw[cls] = 1.0 / (1.0 + d)
+    exps[cls] = Math.exp(-d / ALLOC_TEMPERATURE)
   }
+  const expTotal = Object.values(exps).reduce((s, v) => s + v, 0) || 1
+  const raw: Record<string, number> = {}
+  for (const cls of classes) raw[cls] = exps[cls] / expTotal
 
   // Step 2: apply archetype caps plus global 60% cap
   const capped: Record<string, number> = {}
