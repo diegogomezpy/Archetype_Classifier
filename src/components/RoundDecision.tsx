@@ -3,8 +3,9 @@ import type { AllocRound } from '../types'
 import PayoffBar from './PayoffBar'
 import RoundProgress from './RoundProgress'
 import Coachmarks, { tutorialSeen } from './Coachmarks'
-import DrawReveal from './DrawReveal'
+import Scoreboard from './Scoreboard'
 import { INPUT, computeOutcomes, sampleOutcome } from '../lib/outcomes'
+import { useDrawSequence } from '../hooks/useDrawSequence'
 
 type Props = {
   round: AllocRound
@@ -91,31 +92,28 @@ export default function RoundDecision({ round, index, total, runningPnl, onNext 
   const [allocX, setAllocX] = useState(50)
   const [showCards, setShowCards] = useState(index <= EXPAND_CARDS_THROUGH)
   const [showTutorial, setShowTutorial] = useState(() => index === 1 && !tutorialSeen())
-  // The drawn outcome for this round, set on lock-in to trigger the reveal.
-  const [draw, setDraw] = useState<{ delta: number; prob: number } | null>(null)
+  const { phase, roll, delta, applied, start } = useDrawSequence()
 
   const xDollars = allocX * 100
   const yDollars = (100 - allocX) * 100
 
+  const locked = phase !== 'idle'
+  const capital = INPUT + runningPnl + applied
+  const pnl = runningPnl + applied
+  const liveDraw = phase === 'idle' ? null : phase === 'rolling' ? roll : delta
+
   const lockIn = () => {
     const outcomes = computeOutcomes(round, allocX)
     const drawn = sampleOutcome(outcomes)
-    setDraw({ delta: drawn.end - INPUT, prob: drawn.p })
+    const pool = outcomes.map((o) => o.end - INPUT)
+    start(drawn.end - INPUT, pool)
   }
+
+  const isLast = index === total
 
   return (
     <div className="round-enter flex min-h-[100svh] w-full items-center justify-center px-6 py-10">
       {showTutorial && <Coachmarks onClose={() => setShowTutorial(false)} />}
-
-      {draw && (
-        <DrawReveal
-          delta={draw.delta}
-          prob={draw.prob}
-          runningTotal={runningPnl + draw.delta}
-          isLast={index === total}
-          onContinue={() => onNext(allocX, draw.delta)}
-        />
-      )}
 
       <div className="flex w-full max-w-4xl flex-col">
         {/* 1 — "How it works" replay + segmented progress */}
@@ -139,8 +137,11 @@ export default function RoundDecision({ round, index, total, runningPnl, onNext 
 
         {/* 3 — Distribution card */}
         <div className="mt-7 rounded-2xl border border-border bg-surface p-6 shadow-card">
+          {/* Prominent running tally above the bar */}
+          <Scoreboard capital={capital} pnl={pnl} draw={liveDraw} drawPulsing={phase === 'rolling'} />
+
           {/* Plain-language mix readout */}
-          <div className="mb-4 flex items-baseline justify-between">
+          <div className="mb-4 mt-4 flex items-baseline justify-between border-t border-border pt-4">
             <span className="text-sm font-medium text-text">Your mix</span>
             <span className="text-sm tnum">
               <span className="font-mono font-medium text-teal">{fmtMoney(xDollars)}</span>
@@ -167,7 +168,7 @@ export default function RoundDecision({ round, index, total, runningPnl, onNext 
           {/* Divider */}
           <div className="my-5 h-px w-full bg-border" />
 
-          {/* Slider section */}
+          {/* Slider section — locked once the draw is rolling */}
           <div className="mb-2 flex items-center justify-between text-sm font-medium">
             <span className="text-teal">← all {X_NAME}</span>
             <span className="text-amber">all {Y_NAME} →</span>
@@ -181,10 +182,11 @@ export default function RoundDecision({ round, index, total, runningPnl, onNext 
             max={100}
             step={1}
             value={100 - allocX}
+            disabled={locked}
             onChange={(e) => setAllocX(100 - Number(e.target.value))}
             aria-label={`Allocation between ${X_NAME} and ${Y_NAME}`}
             aria-valuetext={`${fmtMoney(xDollars)} into ${X_NAME}, ${fmtMoney(yDollars)} into ${Y_NAME}`}
-            className="payoff-range w-full"
+            className={`payoff-range w-full ${locked ? 'opacity-50' : ''}`}
           />
           <p className="mt-3 text-center text-xs text-muted">
             Drag to split your $10,000 between {X_NAME} and {Y_NAME}
@@ -211,14 +213,25 @@ export default function RoundDecision({ round, index, total, runningPnl, onNext 
           )}
         </div>
 
-        {/* 5 — Lock-in button — triggers the random draw from the chosen mix */}
+        {/* 5 — Action button: lock in → (draw resolves) → advance */}
         <button
           data-tour="next"
           type="button"
-          onClick={lockIn}
-          className="mt-7 w-full rounded-2xl bg-teal py-4 text-base font-semibold text-white shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card active:translate-y-0"
+          disabled={phase === 'rolling' || phase === 'ticking'}
+          onClick={phase === 'done' ? () => onNext(allocX, delta) : phase === 'idle' ? lockIn : undefined}
+          className={`mt-7 w-full rounded-2xl py-4 text-base font-semibold shadow-soft transition-all duration-200 ${
+            phase === 'rolling' || phase === 'ticking'
+              ? 'cursor-default bg-surface2 text-muted'
+              : 'bg-teal text-white hover:-translate-y-0.5 hover:shadow-card active:translate-y-0'
+          }`}
         >
-          Lock it in
+          {phase === 'idle'
+            ? 'Lock it in'
+            : phase === 'done'
+              ? isLast
+                ? 'See my profile'
+                : 'Next round'
+              : 'Drawing…'}
         </button>
       </div>
     </div>

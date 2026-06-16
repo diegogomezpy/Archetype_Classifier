@@ -85,22 +85,6 @@ export default function App() {
 
       {state === 'intro' && <IntroScreen onStart={start} />}
 
-      {/* Running winnings chip — appears once the first draw has landed */}
-      {(state === 'playing' || state === 'interstitial') && roundIndex > 0 && (
-        <div className="fixed left-4 top-4 z-40 flex items-center gap-2 rounded-full border border-border bg-surface px-3.5 py-1.5 shadow-soft">
-          <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-muted">Total</span>
-          <span
-            className={`font-mono text-sm font-semibold tnum ${
-              Math.round(totalPnl) === 0 ? 'text-muted' : totalPnl > 0 ? 'text-teal' : 'text-red'
-            }`}
-          >
-            {Math.round(totalPnl) === 0
-              ? '$0'
-              : (totalPnl > 0 ? '+$' : '−$') + Math.abs(Math.round(totalPnl)).toLocaleString('en-US')}
-          </span>
-        </div>
-      )}
-
       {state === 'playing' && (
         <RoundScreen
           key={ROUNDS[roundIndex].id}
