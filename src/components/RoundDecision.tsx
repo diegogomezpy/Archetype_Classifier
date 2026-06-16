@@ -5,7 +5,7 @@ import RoundProgress from './RoundProgress'
 import Coachmarks, { tutorialSeen } from './Coachmarks'
 import Scoreboard from './Scoreboard'
 import DrawPointer from './DrawPointer'
-import { INPUT, computeOutcomes, sampleOutcome, type Outcome } from '../lib/outcomes'
+import { INPUT, computeOutcomes, type Outcome } from '../lib/outcomes'
 import { useDrawSequence } from '../hooks/useDrawSequence'
 
 type Props = {
@@ -94,26 +94,32 @@ export default function RoundDecision({ round, index, total, runningPnl, onNext 
   const [showCards, setShowCards] = useState(index <= EXPAND_CARDS_THROUGH)
   const [showTutorial, setShowTutorial] = useState(() => index === 1 && !tutorialSeen())
   const { phase, delta, applied, start } = useDrawSequence()
-  // The round's outcome distribution + the drawn segment, captured on lock-in so
-  // the pointer can swing across the bar and land on the right segment.
+  // The round's outcome distribution, captured on lock-in. The pointer spins to
+  // a random spot and reports which segment it landed on (`handleLand`), and
+  // that segment determines the drawn value — the position IS the result.
   const [outcomes, setOutcomes] = useState<Outcome[]>([])
-  const [targetIndex, setTargetIndex] = useState<number | null>(null)
+  const [spinning, setSpinning] = useState(false)
 
   const xDollars = allocX * 100
   const yDollars = (100 - allocX) * 100
 
-  const locked = phase !== 'idle'
+  const locked = spinning || phase !== 'idle'
   const capital = INPUT + runningPnl + applied
   const pnl = runningPnl + applied
   // "This draw" appears once the pointer has landed (during/after the tick).
   const liveDraw = phase === 'ticking' || phase === 'done' ? delta : null
 
   const lockIn = () => {
-    const outs = computeOutcomes(round, allocX)
-    const drawn = sampleOutcome(outs)
-    setOutcomes(outs)
-    setTargetIndex(outs.indexOf(drawn))
-    start(drawn.end - INPUT, true)
+    setOutcomes(computeOutcomes(round, allocX))
+    setSpinning(true)
+  }
+
+  // Pointer has come to rest on segment `idx` — read off the value and run the
+  // Capital / Profit count-up.
+  const handleLand = (idx: number) => {
+    setSpinning(false)
+    const landed = outcomes[idx]
+    if (landed) start(landed.end - INPUT)
   }
 
   const isLast = index === total
@@ -163,7 +169,7 @@ export default function RoundDecision({ round, index, total, runningPnl, onNext 
               it and lands on the drawn segment. */}
           <div data-tour="bar" className="relative">
             <PayoffBar round={round} allocX={allocX} />
-            <DrawPointer outcomes={outcomes} targetIndex={targetIndex} phase={phase} />
+            <DrawPointer outcomes={outcomes} active={spinning} onLand={handleLand} />
           </div>
 
           {/* Legend — shown only on the first round, while the format is new. */}
@@ -222,26 +228,26 @@ export default function RoundDecision({ round, index, total, runningPnl, onNext 
           )}
         </div>
 
-        {/* 5 — Action button: lock in → (draw resolves) → advance */}
-        <button
-          data-tour="next"
-          type="button"
-          disabled={phase === 'rolling' || phase === 'ticking'}
-          onClick={phase === 'done' ? () => onNext(allocX, delta) : phase === 'idle' ? lockIn : undefined}
-          className={`mt-7 w-full rounded-2xl py-4 text-base font-semibold shadow-soft transition-all duration-200 ${
-            phase === 'rolling' || phase === 'ticking'
-              ? 'cursor-default bg-surface2 text-muted'
-              : 'bg-teal text-white hover:-translate-y-0.5 hover:shadow-card active:translate-y-0'
-          }`}
-        >
-          {phase === 'idle'
-            ? 'Lock it in'
-            : phase === 'done'
-              ? isLast
-                ? 'See my profile'
-                : 'Next round'
-              : 'Drawing…'}
-        </button>
+        {/* 5 — Action button: lock in → (spin + draw resolves) → advance */}
+        {(() => {
+          const drawing = spinning || phase === 'ticking'
+          const done = phase === 'done'
+          return (
+            <button
+              data-tour="next"
+              type="button"
+              disabled={drawing}
+              onClick={done ? () => onNext(allocX, delta) : !drawing ? lockIn : undefined}
+              className={`mt-7 w-full rounded-2xl py-4 text-base font-semibold shadow-soft transition-all duration-200 ${
+                drawing
+                  ? 'cursor-default bg-surface2 text-muted'
+                  : 'bg-teal text-white hover:-translate-y-0.5 hover:shadow-card active:translate-y-0'
+              }`}
+            >
+              {drawing ? 'Drawing…' : done ? (isLast ? 'See my profile' : 'Next round') : 'Lock it in'}
+            </button>
+          )
+        })()}
       </div>
     </div>
   )

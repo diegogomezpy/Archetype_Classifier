@@ -1,12 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Outcome } from '../lib/outcomes'
-import { type DrawPhase, ROLL_MS } from '../hooks/useDrawSequence'
+import { ROLL_MS } from '../hooks/useDrawSequence'
 import { PAD_X, LIFT_H } from './PayoffBar'
 
 const POINTER_W = 18
 const POINTER_H = 14
 const FRAME_MS = 16 // animation step
-const SPINS = 2.3 // roughly how many bar-lengths it travels before resting
+// Random travel range, in bar-lengths. The width of this range is exactly one
+// full reflection period (2 lengths), so the folded landing spot is uniform
+// across the bar — i.e. each segment is hit in proportion to its width, which
+// is its probability. (Don't change the 2.0 width without re-checking that.)
+const MIN_SPINS = 1.6
+const MAX_SPINS = 3.6
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
 // Strong deceleration: lots of travel up front, creeping to a stop at the end.
@@ -14,20 +19,21 @@ const easeOutQuart = (t: number) => 1 - Math.pow(1 - t, 4)
 
 type Props = {
   outcomes: Outcome[]
-  targetIndex: number | null // index (in `outcomes`) of the drawn segment
-  phase: DrawPhase
+  active: boolean // true while the spin is running
+  onLand: (index: number) => void // reports the segment the pointer rests on
 }
 
 // A marker that hangs over the payoff bar. It rests at the bar's center until a
 // draw begins, then travels in one direction — bouncing off the bar's edges —
-// decelerating until it comes to rest exactly on the drawn segment. The landing
-// spot is precomputed, so the motion is a real "spin down", never a wobble
-// around the answer. Positioned with PayoffBar's geometry so it lines up.
-export default function DrawPointer({ outcomes, targetIndex, phase }: Props) {
+// decelerating to a genuinely random stop. Whichever segment it lands on is the
+// outcome (wider segment = more likely), so the position and the value can never
+// disagree. Positioned with PayoffBar's geometry so it lines up exactly.
+export default function DrawPointer({ outcomes, active, onLand }: Props) {
   const ref = useRef<HTMLDivElement | null>(null)
   const [w, setW] = useState(0)
   const [left, setLeft] = useState<number | null>(null)
   const leftRef = useRef<number | null>(null)
+  const landedRef = useRef<number | null>(null)
   const timers = useRef<number[]>([])
 
   // The wrapper width drives the segment layout (the canvas is w-full).
@@ -51,10 +57,16 @@ export default function DrawPointer({ outcomes, targetIndex, phase }: Props) {
   const innerW = Math.max(0, hi - lo)
   const restX = lo + innerW / 2
   const total = outcomes.reduce((s, o) => s + o.p, 0) || 1
-  const centerOf = (idx: number) => {
+
+  // Which segment a given x sits over (segments laid out worst→best by width).
+  const segmentAt = (x: number) => {
+    const frac = clamp((x - lo) / (innerW || 1), 0, 1)
     let cum = 0
-    for (let i = 0; i < idx; i++) cum += outcomes[i].p
-    return lo + ((cum + outcomes[idx].p / 2) / total) * innerW
+    for (let i = 0; i < outcomes.length; i++) {
+      cum += outcomes[i].p / total
+      if (frac <= cum) return i
+    }
+    return outcomes.length - 1
   }
 
   useEffect(() => {
@@ -65,67 +77,40 @@ export default function DrawPointer({ outcomes, targetIndex, phase }: Props) {
     clearTimers()
     if (w === 0) return clearTimers
 
-    // Idle (or no draw yet): rest at the bar's center.
-    if (phase === 'idle' || targetIndex === null) {
-      setBoth(restX)
+    if (!active) {
+      // Before a draw: rest at center. After a draw: stay where it landed.
+      setBoth(landedRef.current ?? restX)
       return clearTimers
     }
 
-    const target = centerOf(targetIndex)
-
-    if (phase === 'rolling') {
-      const span = innerW || 1
-      const start = leftRef.current ?? restX
-      const dir = Math.random() < 0.5 ? 1 : -1
-
-      // Reflect an unfolded coordinate back into [lo, hi] (triangle wave), so
-      // motion that runs past an edge "bounces" off it.
-      const fold = (x: number) => {
-        let p = ((x - lo) % (2 * span) + 2 * span) % (2 * span)
-        return p <= span ? lo + p : lo + (2 * span - p)
-      }
-
-      // Pick the unfolded landing coordinate that (a) folds onto the target,
-      // (b) lies in the travel direction, and (c) is ~SPINS bar-lengths away —
-      // so the total travelled distance is fixed and it stops on the target.
-      // NOTE: n must be an integer — only base + 2·span·n folds back onto the
-      // target; a fractional n would settle off-target and require a snap.
-      const goal = start + dir * span * SPINS
-      const nMax = Math.ceil(SPINS) + 2
-      let landing = goal
-      let bestErr = Infinity
-      for (const base of [target, 2 * lo - target]) {
-        for (let n = -nMax; n <= nMax; n++) {
-          const x = base + 2 * span * n
-          const travel = dir * (x - start)
-          if (travel < span * 0.5) continue // ensure it actually spins
-          const err = Math.abs(x - goal)
-          if (err < bestErr) {
-            bestErr = err
-            landing = x
-          }
-        }
-      }
-      const distance = dir * (landing - start)
-
-      const t0 = performance.now()
-      const id = window.setInterval(() => {
-        const u = Math.min(1, (performance.now() - t0) / ROLL_MS)
-        const travelled = distance * easeOutQuart(u)
-        setBoth(clamp(fold(start + dir * travelled), lo, hi))
-        if (u >= 1) {
-          clearInterval(id)
-          setBoth(target)
-        }
-      }, FRAME_MS)
-      timers.current.push(id)
-    } else {
-      // ticking / done — pinned on the target.
-      setBoth(target)
+    // Spin: travel a random distance in one direction, bouncing off the edges
+    // (reflection / fold), decelerating to a stop wherever it ends up.
+    const span = innerW || 1
+    const start = leftRef.current ?? restX
+    const dir = Math.random() < 0.5 ? 1 : -1
+    const distance = span * (MIN_SPINS + Math.random() * (MAX_SPINS - MIN_SPINS))
+    const fold = (x: number) => {
+      let p = ((x - lo) % (2 * span) + 2 * span) % (2 * span)
+      return p <= span ? lo + p : lo + (2 * span - p)
     }
+
+    const t0 = performance.now()
+    const id = window.setInterval(() => {
+      const u = Math.min(1, (performance.now() - t0) / ROLL_MS)
+      const pos = fold(start + dir * distance * easeOutQuart(u))
+      setBoth(clamp(pos, lo, hi))
+      if (u >= 1) {
+        clearInterval(id)
+        const finalPos = clamp(fold(start + dir * distance), lo, hi)
+        setBoth(finalPos)
+        landedRef.current = finalPos
+        onLand(segmentAt(finalPos))
+      }
+    }, FRAME_MS)
+    timers.current.push(id)
     return clearTimers
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, targetIndex, w])
+  }, [active, w])
 
   if (w === 0) {
     // Keep the wrapper mounted so its width can be measured.
