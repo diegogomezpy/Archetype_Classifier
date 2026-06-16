@@ -88,11 +88,14 @@ export default function DrawPointer({ outcomes, targetIndex, phase }: Props) {
       // Pick the unfolded landing coordinate that (a) folds onto the target,
       // (b) lies in the travel direction, and (c) is ~SPINS bar-lengths away —
       // so the total travelled distance is fixed and it stops on the target.
+      // NOTE: n must be an integer — only base + 2·span·n folds back onto the
+      // target; a fractional n would settle off-target and require a snap.
       const goal = start + dir * span * SPINS
-      let landing = start + dir * span * SPINS
+      const nMax = Math.ceil(SPINS) + 2
+      let landing = goal
       let bestErr = Infinity
       for (const base of [target, 2 * lo - target]) {
-        for (let n = -SPINS - 2; n <= SPINS + 2; n++) {
+        for (let n = -nMax; n <= nMax; n++) {
           const x = base + 2 * span * n
           const travel = dir * (x - start)
           if (travel < span * 0.5) continue // ensure it actually spins
