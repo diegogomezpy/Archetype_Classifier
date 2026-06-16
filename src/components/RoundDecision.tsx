@@ -121,7 +121,9 @@ export default function RoundDecision({ round, index, total, onNext }: Props) {
 
           {/* Payoff bar — joint outcome distribution (width = probability,
               absolute-anchored color = P&L magnitude). */}
-          <PayoffBar round={round} allocX={allocX} />
+          <div data-tour="bar">
+            <PayoffBar round={round} allocX={allocX} />
+          </div>
 
           {/* Legend — shown only on the first round, while the format is new. */}
           {index === 1 && (
@@ -142,6 +144,7 @@ export default function RoundDecision({ round, index, total, onNext }: Props) {
           {/* Raw slider value is the Y-share so the thumb's left end = all Growth
               (matching the labels); allocX = 100 - value. */}
           <input
+            data-tour="slider"
             type="range"
             min={0}
             max={100}
@@ -179,6 +182,7 @@ export default function RoundDecision({ round, index, total, onNext }: Props) {
 
         {/* 5 — Next button */}
         <button
+          data-tour="next"
           type="button"
           onClick={() => onNext(allocX)}
           className="mt-7 w-full rounded-2xl bg-teal py-4 text-base font-semibold text-white shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card active:translate-y-0"
