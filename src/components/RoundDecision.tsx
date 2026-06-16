@@ -156,19 +156,11 @@ export default function RoundDecision({ round, index, total, runningPnl, onNext 
             reference cards and the payoff bar carry the choice on their own. */}
         <div className="mt-2 rounded-2xl border border-border bg-surface p-6 shadow-card">
           {/* Prominent running tally above the bar */}
-          <Scoreboard capital={capital} pnl={pnl} draw={liveDraw} />
-
-          {/* Plain-language mix readout — sits right above the bar so the split
-              reads as a caption for the distribution. */}
-          <div className="mb-2 mt-5 flex items-baseline justify-between">
-            <span className="text-sm font-medium text-text">Your mix</span>
-            <span className="text-sm tnum">
-              <span className="font-mono font-medium text-teal">{fmtMoney(xDollars)}</span>
-              <span className="text-muted"> in {X_NAME} · </span>
-              <span className="font-mono font-medium text-amber">{fmtMoney(yDollars)}</span>
-              <span className="text-muted"> in {Y_NAME}</span>
-            </span>
+          <div data-tour="capital">
+            <Scoreboard capital={capital} pnl={pnl} draw={liveDraw} />
           </div>
+
+          <div className="mt-5" />
 
           {/* Payoff bar — joint outcome distribution (width = probability,
               absolute-anchored color = P&L magnitude). The draw pointer overlays
@@ -209,13 +201,10 @@ export default function RoundDecision({ round, index, total, runningPnl, onNext 
             aria-valuetext={`${fmtMoney(xDollars)} into ${X_NAME}, ${fmtMoney(yDollars)} into ${Y_NAME}`}
             className={`payoff-range w-full ${locked ? 'opacity-50' : ''}`}
           />
-          <p className="mt-3 text-center text-xs text-muted">
-            Drag to split your $10,000 between {X_NAME} and {Y_NAME}
-          </p>
         </div>
 
         {/* 4 — Read-only reference cards: each side's outcomes, always shown. */}
-        <div className="mt-5 flex items-stretch gap-4">
+        <div data-tour="cards" className="mt-5 flex items-stretch gap-4">
           <ReferenceCard side="x" name={X_NAME} label={round.x.label} scenarios={round.x.scenarios} />
           <ReferenceCard side="y" name={Y_NAME} label={round.y.label} scenarios={round.y.scenarios} />
         </div>
