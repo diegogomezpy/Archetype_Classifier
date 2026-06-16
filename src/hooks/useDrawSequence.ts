@@ -6,7 +6,7 @@ export type DrawPhase = 'idle' | 'rolling' | 'ticking' | 'done'
 // swings and lands), then a count-up of the applied delta so the Capital /
 // Profit figures climb into place. Timer-based so it runs regardless of tab
 // visibility. ROLL_MS is shared with the pointer so they finish together.
-export const ROLL_MS = 1700 // duration of the pointer's swing-and-settle
+export const ROLL_MS = 2600 // duration of the pointer's travel-and-settle
 const TICK_STEPS = 26 // count-up frames
 const TICK_INTERVAL = 22 // ms per count-up frame
 

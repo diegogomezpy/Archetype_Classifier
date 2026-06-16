@@ -3,14 +3,13 @@ import type { Outcome } from '../lib/outcomes'
 import { type DrawPhase, ROLL_MS } from '../hooks/useDrawSequence'
 import { PAD_X, LIFT_H } from './PayoffBar'
 
-const POINTER_W = 20
-const POINTER_H = 24
+const POINTER_W = 18
+const POINTER_H = 14
 const FRAME_MS = 16 // animation step
-const N_OSC = 3.2 // how many swings before settling
-const DAMP = 3.4 // higher = settles faster / less wandering near the end
+const SPINS = 2.3 // roughly how many bar-lengths it travels before resting
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
-// Fast at the start, slow at the end — drives how the swing's "time" advances.
+// Strong deceleration: lots of travel up front, creeping to a stop at the end.
 const easeOutQuart = (t: number) => 1 - Math.pow(1 - t, 4)
 
 type Props = {
@@ -19,10 +18,11 @@ type Props = {
   phase: DrawPhase
 }
 
-// A pin that hangs over the payoff bar. It rests at the bar's center until a
-// draw begins, then swings across the bar — fast at first, decelerating — and
-// settles onto the drawn segment. Positioned with PayoffBar's geometry so it
-// lines up exactly.
+// A marker that hangs over the payoff bar. It rests at the bar's center until a
+// draw begins, then travels in one direction — bouncing off the bar's edges —
+// decelerating until it comes to rest exactly on the drawn segment. The landing
+// spot is precomputed, so the motion is a real "spin down", never a wobble
+// around the answer. Positioned with PayoffBar's geometry so it lines up.
 export default function DrawPointer({ outcomes, targetIndex, phase }: Props) {
   const ref = useRef<HTMLDivElement | null>(null)
   const [w, setW] = useState(0)
@@ -46,13 +46,15 @@ export default function DrawPointer({ outcomes, targetIndex, phase }: Props) {
     setLeft(x)
   }
 
-  const innerW = Math.max(0, w - 2 * PAD_X)
-  const restX = PAD_X + innerW / 2
+  const lo = PAD_X
+  const hi = w - PAD_X
+  const innerW = Math.max(0, hi - lo)
+  const restX = lo + innerW / 2
   const total = outcomes.reduce((s, o) => s + o.p, 0) || 1
   const centerOf = (idx: number) => {
     let cum = 0
     for (let i = 0; i < idx; i++) cum += outcomes[i].p
-    return PAD_X + ((cum + outcomes[idx].p / 2) / total) * innerW
+    return lo + ((cum + outcomes[idx].p / 2) / total) * innerW
   }
 
   useEffect(() => {
@@ -72,18 +74,42 @@ export default function DrawPointer({ outcomes, targetIndex, phase }: Props) {
     const target = centerOf(targetIndex)
 
     if (phase === 'rolling') {
-      // Damped oscillation that begins at the current rest position and decays
-      // onto the target. Amplitude shrinks and the angular sweep slows (driven
-      // by an ease-out clock), so it starts fast and eases to a stop.
-      const from = leftRef.current ?? restX
-      const amp = Math.max(Math.abs(from - target), innerW * 0.5)
-      const phi = Math.acos(clamp((from - target) / amp, -1, 1)) // so pos(0) = from
+      const span = innerW || 1
+      const start = leftRef.current ?? restX
+      const dir = Math.random() < 0.5 ? 1 : -1
+
+      // Reflect an unfolded coordinate back into [lo, hi] (triangle wave), so
+      // motion that runs past an edge "bounces" off it.
+      const fold = (x: number) => {
+        let p = ((x - lo) % (2 * span) + 2 * span) % (2 * span)
+        return p <= span ? lo + p : lo + (2 * span - p)
+      }
+
+      // Pick the unfolded landing coordinate that (a) folds onto the target,
+      // (b) lies in the travel direction, and (c) is ~SPINS bar-lengths away —
+      // so the total travelled distance is fixed and it stops on the target.
+      const goal = start + dir * span * SPINS
+      let landing = start + dir * span * SPINS
+      let bestErr = Infinity
+      for (const base of [target, 2 * lo - target]) {
+        for (let n = -SPINS - 2; n <= SPINS + 2; n++) {
+          const x = base + 2 * span * n
+          const travel = dir * (x - start)
+          if (travel < span * 0.5) continue // ensure it actually spins
+          const err = Math.abs(x - goal)
+          if (err < bestErr) {
+            bestErr = err
+            landing = x
+          }
+        }
+      }
+      const distance = dir * (landing - start)
+
       const t0 = performance.now()
       const id = window.setInterval(() => {
         const u = Math.min(1, (performance.now() - t0) / ROLL_MS)
-        const e = easeOutQuart(u)
-        const pos = target + amp * Math.exp(-DAMP * e) * Math.cos(2 * Math.PI * N_OSC * e + phi)
-        setBoth(clamp(pos, PAD_X, w - PAD_X))
+        const travelled = distance * easeOutQuart(u)
+        setBoth(clamp(fold(start + dir * travelled), lo, hi))
         if (u >= 1) {
           clearInterval(id)
           setBoth(target)
@@ -98,19 +124,27 @@ export default function DrawPointer({ outcomes, targetIndex, phase }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, targetIndex, w])
 
-  // The wrapper stays mounted so its width can be measured; the pin shows once
-  // a resting position has been computed.
+  if (w === 0) {
+    // Keep the wrapper mounted so its width can be measured.
+    return <div ref={ref} className="pointer-events-none absolute inset-x-0 top-0" />
+  }
+
   return (
     <div ref={ref} className="pointer-events-none absolute inset-x-0 top-0 z-10">
       {left !== null && (
-        <div className="absolute" style={{ left: left - POINTER_W / 2, top: LIFT_H - POINTER_H + 2 }}>
-          <svg width={POINTER_W} height={POINTER_H} viewBox="0 0 20 24" aria-hidden>
-            <g style={{ filter: 'drop-shadow(0 2px 3px rgba(20,22,28,0.35))' }}>
-              {/* teardrop / pin pointing down */}
-              <path d="M10 23 L3 11 A7 7 0 1 1 17 11 Z" fill="#0AA088" />
-              <circle cx="10" cy="8" r="2.6" fill="#fff" fillOpacity="0.9" />
-            </g>
+        <div
+          className="absolute flex flex-col items-center"
+          style={{ left: left - POINTER_W / 2, top: LIFT_H - POINTER_H - 5 }}
+        >
+          {/* downward triangle marker + thin stem touching the bar */}
+          <svg width={POINTER_W} height={POINTER_H} viewBox="0 0 18 14" aria-hidden>
+            <path
+              d="M2 1 H16 a1 1 0 0 1 .8 1.6 L9.8 12.4 a1 1 0 0 1 -1.6 0 L1.2 2.6 A1 1 0 0 1 2 1 Z"
+              fill="#0AA088"
+              style={{ filter: 'drop-shadow(0 1px 2px rgba(20,22,28,0.3))' }}
+            />
           </svg>
+          <div className="h-[5px] w-px bg-[#0AA088]" />
         </div>
       )}
     </div>
