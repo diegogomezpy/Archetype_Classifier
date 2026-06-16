@@ -248,27 +248,28 @@ export const ROUNDS: Round[] = [
     },
   },
 
-  // R10 — Liquidity II: penalty exit vs hard lockup, same premium. Pure liq (optionality).
+  // R10 — Liquidity II: hard lockup (higher rate) vs flexible (lower rate). You
+  // pay for optionality by giving up return. Picking X (lockup) = liquidity-tolerant.
   {
     id: 10,
     screen: 2,
     type: 'liq',
     tag: 'Flexibility',
-    q: 'Both pay +6% if held for 1 year. The difference is what happens if you need to exit early.',
-    sub: 'Would you pay for the option to leave?',
+    q: 'A locked-in product pays more. A flexible one pays less but lets you exit anytime.',
+    sub: 'Is the option to leave worth a lower return?',
     x: {
       label: 'Hard lockup — 1 year',
       ret: '+6%',
       ev: 10600,
       icon: 'lock',
-      sub: 'Cannot exit early under any circumstances. Earns $600 at maturity.',
+      sub: 'Cannot exit early under any circumstances. Earns $600.',
     },
     y: {
-      label: 'Soft lockup — exit with fee',
-      ret: '+6%',
-      ev: 10600,
+      label: 'Flexible — exit anytime',
+      ret: '+4%',
+      ev: 10400,
       icon: 'door-exit',
-      sub: 'Can exit any time, but pay a 2% penalty on early exit. Same return if held to maturity.',
+      sub: 'Withdraw whenever you like, no penalty. Earns $400.',
     },
   },
 
