@@ -60,22 +60,36 @@ export default function Coachmarks({ onClose }: Props) {
 
   useLayoutEffect(() => {
     const el = document.querySelector(STEPS[step].selector)
-    const measure = () => {
-      if (!el) return
-      const r = el.getBoundingClientRect()
-      setBox({ top: r.top, left: r.left, width: r.width, height: r.height })
-    }
     // Bring the target on-screen before pointing at it (the Next button can
-    // sit below the fold), then measure once the scroll settles.
+    // sit below the fold).
     el?.scrollIntoView({ block: 'center', behavior: 'auto' })
+
+    // Re-measure on anything that can move the target. The round layout is
+    // vertically centered, so collapsing/expanding the detail cards re-centers
+    // the whole block — that's a DOM mutation, which the observer catches.
+    // `prev` de-dupes so the observer doesn't loop on our own re-renders.
+    let prev = ''
+    const measure = () => {
+      const t = document.querySelector(STEPS[step].selector)
+      if (!t) return
+      const r = t.getBoundingClientRect()
+      const key = `${Math.round(r.top)},${Math.round(r.left)},${Math.round(r.width)},${Math.round(r.height)}`
+      if (key !== prev) {
+        prev = key
+        setBox({ top: r.top, left: r.left, width: r.width, height: r.height })
+      }
+    }
     measure()
-    const t = window.setTimeout(measure, 60)
+    const t = window.setTimeout(measure, 60) // after the scroll settles
     window.addEventListener('resize', measure)
     window.addEventListener('scroll', measure, true)
+    const mo = new MutationObserver(measure)
+    mo.observe(document.body, { childList: true, subtree: true })
     return () => {
       window.clearTimeout(t)
       window.removeEventListener('resize', measure)
       window.removeEventListener('scroll', measure, true)
+      mo.disconnect()
     }
   }, [step])
 
