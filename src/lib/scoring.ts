@@ -237,6 +237,17 @@ export function computeAllocation(
   archetype: string,
   scores: { sigma: number; alpha: number; lambda: number },
 ): { assetClass: AssetClass; pct: number }[] {
+  // The Quant has no payoff-shape preference (σ=α=λ≈0), so the distance engine
+  // would hand back a flat, characterless spread. A disciplined EV-maximizer is
+  // better expressed as a concentrated, low-cost equity book with a small
+  // high-expected-return satellite — fix it at 90% equities / 10% crypto.
+  if (archetype === 'quant') {
+    return [
+      { assetClass: 'Equities', pct: 90 },
+      { assetClass: 'Crypto', pct: 10 },
+    ]
+  }
+
   const target = { sigma: scores.sigma, alpha: scores.alpha, lambda: scores.lambda }
   const classes = Object.keys(ASSET_CLASS_LOADINGS) as AssetClass[]
   const caps = ALLOC_CAPS[archetype] ?? {}
