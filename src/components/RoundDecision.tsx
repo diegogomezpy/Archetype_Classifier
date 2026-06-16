@@ -57,7 +57,7 @@ function ReferenceCard({
       {/* Colored accent strip */}
       <div className={`h-1.5 w-full ${isX ? 'bg-teal' : 'bg-amber'}`} />
 
-      <div className={`flex flex-1 flex-col gap-3.5 p-5 ${isX ? 'bg-teal/[0.05]' : 'bg-amber/[0.05]'}`}>
+      <div className={`flex flex-1 flex-col gap-4 p-5 ${isX ? 'bg-teal/[0.05]' : 'bg-amber/[0.05]'}`}>
         <div className="flex items-center gap-2.5">
           <span
             className={`shrink-0 rounded-lg px-2.5 py-1 font-mono text-xs font-semibold uppercase tracking-wide ${
@@ -66,20 +66,33 @@ function ReferenceCard({
           >
             {name}
           </span>
-          <span className="truncate text-base font-semibold text-text">{label}</span>
+          <span className="truncate text-lg font-semibold text-text">{label}</span>
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           {scenarios.map((s, i) => {
             const delta = s.amt - 10000
             const color = delta < 0 ? 'text-red' : delta > 0 ? 'text-teal' : 'text-muted'
+            const pct = Math.max(0, Math.min(100, parseFloat(s.p) || 0))
             return (
-              <div key={i} className="flex items-center gap-2 text-sm">
-                <span className="font-mono font-medium text-muted tnum">{s.p} probability</span>
-                <span className="text-muted">→</span>
-                <span className={`font-mono text-lg font-semibold tnum ${color}`}>
-                  {fmtDelta(delta)}
-                </span>
+              <div key={i} className="rounded-xl border border-border/70 bg-surface px-4 py-3">
+                <div className="flex items-baseline justify-between gap-3">
+                  <div className="flex min-w-0 items-baseline gap-2">
+                    <span className="font-mono text-xl font-bold tabular-nums text-text">{s.p}</span>
+                    {s.note && <span className="truncate text-xs text-muted">{s.note}</span>}
+                  </div>
+                  <span className={`shrink-0 font-mono text-xl font-bold tabular-nums ${color}`}>
+                    {fmtDelta(delta)}
+                  </span>
+                </div>
+                {/* Likelihood bar — width is the probability, so the most likely
+                    outcomes read at a glance. */}
+                <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-border/50">
+                  <div
+                    className={`h-full rounded-full ${isX ? 'bg-teal/60' : 'bg-amber/60'}`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
               </div>
             )
           })}
@@ -206,15 +219,15 @@ export default function RoundDecision({ round, index, total, runningPnl, onNext 
           </p>
         </div>
 
-        {/* 4 — Read-only reference cards, collapsible once the format is known */}
+        {/* 4 — Read-only reference cards: each side's outcomes. Collapsible. */}
         <div className="mt-5">
           <button
             type="button"
             onClick={() => setShowCards((v) => !v)}
-            className="flex items-center gap-1.5 text-sm font-medium text-muted transition-colors hover:text-text"
+            className="flex items-center gap-1.5 rounded-full border border-border bg-surface px-3.5 py-1.5 text-sm font-medium text-muted shadow-soft transition-colors hover:text-text"
             aria-expanded={showCards}
           >
-            {showCards ? 'Hide the details' : 'Show the details'}
+            {showCards ? 'Hide the outcomes' : 'Show each side’s outcomes'}
             <span className={`text-xs transition-transform ${showCards ? 'rotate-180' : ''}`}>▾</span>
           </button>
 
