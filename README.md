@@ -11,7 +11,7 @@ no backend, no external UI libraries.
 
 ## How it works
 
-The profiler runs as a **13-round game across two screens** (a brief halfway
+The profiler runs as a **10-round game across two screens** (a brief halfway
 interstitial sits between them):
 
 - **Allocation rounds** — the client splits $10,000 between two sides. The
@@ -87,7 +87,7 @@ src/
 │   ├── DimensionScoreBar.tsx
 │   └── Icon.tsx            # Inlined Tabler icons
 ├── data/
-│   ├── rounds.ts           # The 13 round definitions
+│   ├── rounds.ts           # The 10 round definitions
 │   └── archetypes.ts       # Archetype copy + target vectors
 └── lib/
     ├── scoring.ts          # Scoring pipeline, classification, allocation engine

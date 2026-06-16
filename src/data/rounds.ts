@@ -6,8 +6,8 @@ import type { Round } from '../types'
 // scoring signal is monotone: more Growth = higher sigma, higher alpha,
 // lower lambda.
 //
-// 13 rounds split across two screens (7 + 6). The progress indicator spans all
-// 13 rounds.
+// 10 rounds split across two screens (5 + 5). The progress indicator spans all
+// 10 rounds.
 //
 // Allocation rounds render via RoundDecision + PayoffBar, which always show
 // outcomes as gains/losses vs the $10,000 input. (`displayMode` is retained on
@@ -147,11 +147,13 @@ export const ROUNDS: Round[] = [
     },
   },
 
+  // ════════════════════ SCREEN 2 ════════════════════
+
   // R6 — Loss aversion II. Larger stakes. Growth: 50/50 bigger loss. Steady: guaranteed. Pure λ.
   // EV matched: X = 0.50×14000 + 0.50×7000 = 10500. Y = 10500 guaranteed.
   {
     id: 6,
-    screen: 1,
+    screen: 2,
     type: 'alloc',
     tag: 'Stakes',
     displayMode: 'relative',
@@ -173,7 +175,7 @@ export const ROUNDS: Round[] = [
   // R7 — Liquidity I. 1-year lockup vs fully liquid, modest premium. Pure liq.
   {
     id: 7,
-    screen: 1,
+    screen: 2,
     type: 'liq',
     tag: 'Liquidity',
     q: 'Would you lock up your money for a year for a slightly higher return?',
@@ -193,8 +195,6 @@ export const ROUNDS: Round[] = [
       sub: 'Fully liquid. Earns $350.',
     },
   },
-
-  // ════════════════════ SCREEN 2 ════════════════════
 
   // R8 — Skew, matched probabilities (25/75). The cleanest α test: mirror-flipped payoffs.
   // EV matched: X = 0.25×16500 + 0.75×8500 = 10500. Y = 0.75×11500 + 0.25×7500 = 10500.
@@ -270,78 +270,6 @@ export const ROUNDS: Round[] = [
       ev: 10400,
       icon: 'door-exit',
       sub: 'Withdraw whenever you like, no penalty. Earns $400.',
-    },
-  },
-
-  // R11 — Liquidity III. 3-year lockup vs fully liquid, modest premium. Pure liq.
-  {
-    id: 11,
-    screen: 2,
-    type: 'liq',
-    tag: 'Long lockup',
-    q: 'Would you lock up your money for 3 years for a somewhat higher return?',
-    sub: 'You have $10,000 to invest.',
-    x: {
-      label: 'Lock in for 3 years',
-      ret: '+9%',
-      ev: 10900,
-      icon: 'lock',
-      sub: 'Cannot withdraw. Earns $900 over 3 years.',
-    },
-    y: {
-      label: 'Withdraw anytime',
-      ret: '+4%',
-      ev: 10400,
-      icon: 'refresh',
-      sub: 'Fully liquid. Earns $400.',
-    },
-  },
-
-  // R12 — Liquidity IV. Low premium threshold ($100 gap). Minimum acceptable illiquidity premium.
-  {
-    id: 12,
-    screen: 2,
-    type: 'liq',
-    tag: 'Threshold',
-    q: 'A small extra return for giving up liquidity for 1 year.',
-    sub: 'Is $100 extra worth losing access to your money for a year?',
-    x: {
-      label: 'Lock in for 1 year',
-      ret: '+6%',
-      ev: 10600,
-      icon: 'lock',
-      sub: 'Cannot withdraw. Earns $600.',
-    },
-    y: {
-      label: 'Withdraw anytime',
-      ret: '+5%',
-      ev: 10500,
-      icon: 'refresh',
-      sub: 'Fully liquid. Earns $500.',
-    },
-  },
-
-  // R13 — Liquidity V. 2-year lockup, modest premium. Completes the liquidity curve.
-  {
-    id: 13,
-    screen: 2,
-    type: 'liq',
-    tag: 'Commitment',
-    q: 'A 2-year lockup with a modest return premium.',
-    sub: 'How much does flexibility matter to you?',
-    x: {
-      label: 'Lock in for 2 years',
-      ret: '+8%',
-      ev: 10800,
-      icon: 'lock',
-      sub: 'Cannot withdraw. Earns $800 over 2 years.',
-    },
-    y: {
-      label: 'Withdraw anytime',
-      ret: '+5%',
-      ev: 10500,
-      icon: 'refresh',
-      sub: 'Fully liquid. Earns $500.',
     },
   },
 ]

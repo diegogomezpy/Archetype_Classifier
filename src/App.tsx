@@ -69,7 +69,7 @@ export default function App() {
 
   return (
     <div className="relative min-h-[100svh] w-full bg-bg text-text">
-      {/* Thin teal progress bar across the very top (spans all 13 rounds) */}
+      {/* Thin teal progress bar across the very top (spans all 10 rounds) */}
       <div className="fixed inset-x-0 top-0 z-50 h-1 bg-black/[0.06]">
         <div
           className="h-full bg-teal transition-[width] duration-500 ease-out"

@@ -17,7 +17,7 @@ export const EMPTY_SCORES: Scores = { sigma: 0, alpha: 0, lambda: 0, liq: 0 }
  * Weights are signed — a positive weight means more Growth raises that
  * dimension, a negative weight means more Growth lowers it. Aggressive =>
  * higher sigma/alpha, lower lambda, hence the negative lambda weights.
- * Liquidity rounds (7, 10, 11, 12, 13) are handled separately in applyScore.
+ * Liquidity rounds (7, 10) are handled separately in applyScore.
  */
 export const ROUND_SCORES: Record<
   number,
@@ -45,18 +45,15 @@ export const ROUND_SCORES: Record<
     { dim: 'alpha', weight: 2 },
   ],
   10: [], // liquidity — handled separately
-  11: [], // liquidity — handled separately
-  12: [], // liquidity — handled separately
-  13: [], // liquidity — handled separately
 }
 
 // Liquidity rounds and their weights. Picking X (lockup) is liquidity-tolerant.
-const LIQ_WEIGHTS: Record<number, number> = { 7: 1.0, 10: 1.0, 11: 1.0, 12: 1.0, 13: 1.0 }
+const LIQ_WEIGHTS: Record<number, number> = { 7: 1.0, 10: 1.0 }
 
 /**
  * Accumulate a round's contribution into the raw score accumulator.
  *
- * Liquidity rounds (type 'liq': 7, 10, 11, 12, 13): binary card pick — X is the
+ * Liquidity rounds (type 'liq': 7, 10): binary card pick — X is the
  *   lockup option (RoundScreen passes allocX === 100), Y is the liquid option
  *   (allocX === 0). Picking X (lockup) adds +weight to liq (liquidity-tolerant),
  *   picking Y (liquid) adds -weight.
@@ -91,11 +88,11 @@ export type NormalizedScores = {
 // sigma:  R1(3) + R2(2) + R4(1) + R6(1) + R9(2)        = 9
 // alpha:  R3(3) + R5(3) + R8(3) + R9(2)                = 11
 // lambda: R2(1) + R4(3) + R6(3)                        = 7
-// liq:    R7(1) + R10(1) + R11(1) + R12(1) + R13(1)    = 5
+// liq:    R7(1) + R10(1)                               = 2
 const NORM_SIGMA = 9
 const NORM_ALPHA = 11
 const NORM_LAMBDA = 7
-const NORM_LIQ = 5
+const NORM_LIQ = 2
 
 export function normalizeScores(raw: Scores): NormalizedScores {
   return {

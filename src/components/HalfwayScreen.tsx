@@ -2,14 +2,14 @@ type Props = {
   onContinue: () => void
 }
 
-// Brief transition between screen 1 (rounds 1-7) and screen 2 (rounds 8-13).
+// Brief transition between screen 1 (rounds 1-5) and screen 2 (rounds 6-10).
 // No scores are shown here by design.
 export default function HalfwayScreen({ onContinue }: Props) {
   return (
     <div className="flex min-h-[100svh] w-full items-center justify-center px-6 py-16">
       <div className="animate-fade-slide-up flex w-full max-w-md flex-col items-center text-center">
         <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-teal/12 font-mono text-xl font-medium text-teal tnum shadow-soft">
-          7/13
+          5/10
         </span>
 
         <h1 className="mt-10 text-3xl font-semibold leading-tight tracking-tight text-text sm:text-4xl">
@@ -17,7 +17,7 @@ export default function HalfwayScreen({ onContinue }: Props) {
         </h1>
 
         <p className="mt-5 text-lg leading-relaxed text-muted">
-          Nice work — 6 more decisions to go. The next set explores how you feel about
+          Nice work — 5 more decisions to go. The next set explores how you feel about
           locking up your money.
         </p>
 

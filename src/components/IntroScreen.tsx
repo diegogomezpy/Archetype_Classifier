@@ -3,8 +3,8 @@ type Props = {
 }
 
 const STATS = [
-  { value: '13', label: 'Decisions' },
-  { value: '~3 min', label: 'To complete' },
+  { value: '10', label: 'Decisions' },
+  { value: '~2 min', label: 'To complete' },
   { value: '5', label: 'Profiles' },
 ]
 
@@ -21,7 +21,7 @@ export default function IntroScreen({ onStart }: Props) {
         </h1>
 
         <p className="mt-6 max-w-md text-lg leading-relaxed text-muted">
-          13 quick decisions. No right answers. Go with your instinct.
+          10 quick decisions. No right answers. Go with your instinct.
         </p>
 
         <div className="mt-14 grid w-full max-w-lg grid-cols-3 gap-4">
