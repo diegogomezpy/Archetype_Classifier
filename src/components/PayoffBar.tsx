@@ -1,249 +1,363 @@
 import { useEffect, useRef } from 'react'
-import type { Outcome } from '../lib/payoff'
+import type { AllocRound } from '../types'
 
 interface PayoffBarProps {
-  outcomes: Outcome[] // joint distribution, sorted by delta ascending
-  globalMin: number // most negative delta across all rounds (for color scaling)
-  globalMax: number // most positive delta across all rounds (for color scaling)
+  round: AllocRound
+  allocX: number // 0–100, share of the $10,000 in Investment X
 }
 
-const BAR_H = 56
-const ZERO_LABEL_H = 22 // room below the bar for the $0 marker
-const MIN_LABEL_PX = 40 // hide labels on tiles/clusters narrower than this
-const MIN_LABEL_GAP_PX = 66 // min center-to-center spacing between shown labels
-const CLUSTER_EPS = 25 // $ — combine adjacent tiles at ~the same value for labelling
-// (distinct blended outcomes in every round differ by far more than this, so
-// only visually-identical tiles — e.g. duplicates at the all-X/all-Y extremes —
-// merge, and they report their true combined probability)
-const SMOOTH = 0.22 // per-frame approach rate toward the target distribution
+// ── Tunable constants ───────────────────────────────────────────────────────
+const INPUT = 10000 // portfolio input; scenario.amt is the ending value
 
-// Magnitude color ramps: pale/desaturated (small) → vivid/saturated (large).
-// Stays bright at the high end (no dark/near-black tones).
-const POS_LIGHT = [178, 224, 202]
-const POS_VIVID = [0, 166, 80]
-const NEG_LIGHT = [247, 201, 201]
-const NEG_VIVID = [226, 48, 48]
-const NEUTRAL = [206, 203, 195] // breakeven ($0)
+// Color: diverging, absolute, fast-rising. Intensity is anchored to a FIXED
+// reference (not each round's own max) so the same dollar P&L always renders
+// the same color across every round.
+const COLOR_REF = 20000 // |P&L| that maps to full intensity
+const RAMP_EXP = 0.4 // <1 surges to vivid early, then plateaus
+const GAIN_HUE = 150 // green
+const LOSS_HUE = 6 // red
+const NEUTRAL_FILL = '#C8C6BD' // exactly $10k (|P&L| < 1)
 
-type RGB = [number, number, number]
-const lerp = (a: number, b: number, t: number) => a + (b - a) * t
-const clamp01 = (t: number) => Math.max(0, Math.min(1, t))
+// Font scaling for the per-segment dollar label (also fast-rising).
+const FONT_REF = 6000 // |P&L| that maps to MAX_FONT
+const MIN_FONT = 12.5
+const MAX_FONT = 25
 
-function rampRGB(delta: number, gMin: number, gMax: number): RGB {
-  if (delta === 0) return NEUTRAL as RGB
-  if (delta > 0) {
-    // Gains span a huge range (the lottery jackpot stretches gMax to ~$19.5k),
-    // so a linear map leaves ordinary gains nearly pale. Ramp the saturation up
-    // fast with a sub-linear curve — modest gains read clearly green while the
-    // jackpot still tops out at full vivid.
-    const t = gMax > 0 ? Math.pow(clamp01(delta / gMax), 0.32) : 0
-    return [
-      Math.round(lerp(POS_LIGHT[0], POS_VIVID[0], t)),
-      Math.round(lerp(POS_LIGHT[1], POS_VIVID[1], t)),
-      Math.round(lerp(POS_LIGHT[2], POS_VIVID[2], t)),
-    ]
+// Geometry (CSS px).
+const LIFT_H = 58 // space above the bar: baseline label + lifted dollar labels
+const BAR_H = 58 // the stacked bar
+const PROB_H = 86 // space below: probability span brackets + labels
+const PAD_X = 18 // horizontal inset so edge labels/brackets aren't clipped
+const CORNER = 8 // rounded outer corners of the bar
+const SEG_GAP = 2 // gap between adjacent segments
+const LABEL_FIT_PAD = 12 // dollar label fits inside if textW + this ≤ segWidth
+const LABEL_DEOVERLAP_GAP = 8 // min gap between de-overlapped labels
+const TINY_SEG_PX = 7 // narrower than this → bracket collapses to a dot
+
+type Outcome = { end: number; p: number }
+
+function parseProb(p: string): number {
+  const n = parseFloat(p.replace(/[^0-9.]/g, ''))
+  return Number.isFinite(n) ? n / 100 : 0
+}
+
+// Joint portfolio outcome distribution for the current X/Y split.
+function computeOutcomes(round: AllocRound, allocX: number): Outcome[] {
+  const xAmt = (INPUT * allocX) / 100
+  const yAmt = INPUT - xAmt
+  const merged = new Map<number, number>()
+  for (const sx of round.x.scenarios) {
+    for (const sy of round.y.scenarios) {
+      const end = (sx.amt / INPUT) * xAmt + (sy.amt / INPUT) * yAmt
+      const prob = parseProb(sx.p) * parseProb(sy.p)
+      const key = Math.round(end)
+      merged.set(key, (merged.get(key) ?? 0) + prob)
+    }
   }
-  const t = gMin < 0 ? clamp01(Math.abs(delta) / Math.abs(gMin)) : 0
-  return [
-    Math.round(lerp(NEG_LIGHT[0], NEG_VIVID[0], t)),
-    Math.round(lerp(NEG_LIGHT[1], NEG_VIVID[1], t)),
-    Math.round(lerp(NEG_LIGHT[2], NEG_VIVID[2], t)),
-  ]
+  return [...merged.entries()]
+    .filter(([, p]) => p >= 0.0001)
+    .map(([end, p]) => ({ end, p }))
+    .sort((a, b) => a.end - b.end)
 }
 
-const rgbStr = (c: RGB) => `rgb(${c[0]}, ${c[1]}, ${c[2]})`
-const luminance = (c: RGB) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+const clamp01 = (t: number) => Math.max(0, Math.min(1, t))
+const ramp = (mag: number, ref: number) => Math.pow(clamp01(mag / ref), RAMP_EXP)
 
-function fmtDelta(delta: number): string {
-  if (delta === 0) return '$0'
-  const sign = delta > 0 ? '+' : '−'
-  return sign + '$' + Math.abs(delta).toLocaleString('en-US')
+// Bright tint → vivid (never dark), anchored to COLOR_REF.
+function fillColor(pnl: number): string {
+  if (Math.abs(pnl) < 1) return NEUTRAL_FILL
+  const t = ramp(Math.abs(pnl), COLOR_REF)
+  const hue = pnl > 0 ? GAIN_HUE : LOSS_HUE
+  return `hsl(${hue}, ${55 + t * 40}%, ${78 - t * 30}%)`
 }
 
-export default function PayoffBar({ outcomes, globalMin, globalMax }: PayoffBarProps) {
+// Saturated, darker version for connector/bracket strokes so the pale small-
+// magnitude tints stay legible against the card background.
+function strokeColor(pnl: number): string {
+  if (Math.abs(pnl) < 1) return '#9B988F'
+  const t = ramp(Math.abs(pnl), COLOR_REF)
+  const hue = pnl > 0 ? GAIN_HUE : LOSS_HUE
+  return `hsl(${hue}, ${68 + t * 22}%, ${46 - t * 8}%)`
+}
+
+// Lightness of fillColor (for auto-contrast). Mirrors the formula above.
+function fillIsDark(pnl: number): boolean {
+  if (Math.abs(pnl) < 1) return false // neutral gray is light
+  const t = ramp(Math.abs(pnl), COLOR_REF)
+  return 78 - t * 30 < 58
+}
+
+function fontFor(pnl: number): number {
+  return MIN_FONT + (MAX_FONT - MIN_FONT) * ramp(Math.abs(pnl), FONT_REF)
+}
+
+function pnlLabel(pnl: number): string {
+  if (Math.abs(pnl) < 1) return '$0'
+  const sign = pnl > 0 ? '+' : '−'
+  return sign + '$' + Math.abs(Math.round(pnl)).toLocaleString('en-US')
+}
+
+// Walk up the DOM for the first non-transparent background, then decide ink by
+// luminance — robust whether or not the app ever gains a dark theme.
+function resolvedBg(el: HTMLElement | null): string {
+  let node: HTMLElement | null = el
+  while (node) {
+    const bg = getComputedStyle(node).backgroundColor
+    if (bg && !/rgba?\(0, 0, 0, 0\)|transparent/.test(bg)) return bg
+    node = node.parentElement
+  }
+  return '#ffffff'
+}
+function luminance(rgb: string): number {
+  const m = rgb.match(/[\d.]+/g)
+  if (!m) return 1
+  const [r, g, b] = m.map(Number)
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255
+}
+
+// Horizontal de-overlap: nudge centers apart (keeping order) so labels of the
+// given half-widths don't collide, staying within [minX, maxX].
+function deoverlap(centers: number[], halfW: number[], minX: number, maxX: number): number[] {
+  const pos = centers.slice()
+  const n = pos.length
+  for (let i = 1; i < n; i++) {
+    const minPos = pos[i - 1] + halfW[i - 1] + LABEL_DEOVERLAP_GAP + halfW[i]
+    if (pos[i] < minPos) pos[i] = minPos
+  }
+  for (let i = n - 1; i >= 0; i--) {
+    const cap = i === n - 1 ? maxX - halfW[i] : pos[i + 1] - halfW[i + 1] - LABEL_DEOVERLAP_GAP - halfW[i]
+    if (pos[i] > cap) pos[i] = cap
+  }
+  for (let i = 0; i < n; i++) {
+    const floor = i === 0 ? minX + halfW[i] : pos[i - 1] + halfW[i - 1] + LABEL_DEOVERLAP_GAP + halfW[i]
+    if (pos[i] < floor) pos[i] = floor
+  }
+  return pos
+}
+
+const FONT = (size: number, weight = 400) =>
+  `${weight} ${size}px Inter, system-ui, -apple-system, sans-serif`
+
+export default function PayoffBar({ round, allocX }: PayoffBarProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const labelRefs = useRef<(HTMLDivElement | null)[]>([])
-  const zeroRef = useRef<HTMLDivElement>(null)
 
-  // Animation state in refs so the frame loop is bound once and never stale.
-  const curRef = useRef<Outcome[]>(outcomes) // currently displayed (smoothed) state
-  const toRef = useRef<Outcome[]>(outcomes) // target state
-  const rafRef = useRef<number | null>(null)
-
-  // Draw an explicit outcomes array as a full-width stacked distribution.
-  const draw = (state: Outcome[]) => {
+  useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas) return
-    const w = canvas.offsetWidth
-    if (w === 0) return
+    const container = containerRef.current
+    if (!canvas || !container) return
 
-    const dpr = window.devicePixelRatio || 1
-    const pw = Math.round(w * dpr)
-    const ph = Math.round(BAR_H * dpr)
-    if (canvas.width !== pw || canvas.height !== ph) {
-      canvas.width = pw
-      canvas.height = ph
-    }
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    ctx.clearRect(0, 0, w, BAR_H)
+    const draw = () => {
+      const w = container.offsetWidth
+      if (w === 0) return
+      const h = LIFT_H + BAR_H + PROB_H
+      const dpr = window.devicePixelRatio || 1
+      canvas.width = Math.round(w * dpr)
+      canvas.height = Math.round(h * dpr)
+      canvas.style.height = `${h}px`
 
-    const n = state.length
-    const total = state.reduce((s, o) => s + o.p, 0) || 1
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      ctx.clearRect(0, 0, w, h)
 
-    // Lay tiles edge-to-edge, left→right, ordered worst→best (state is sorted
-    // ascending). Width = probability share, so the tiles fill the whole bar.
-    const xs: number[] = []
-    const ws: number[] = []
-    let cum = 0
-    for (let i = 0; i < n; i++) {
-      const segW = (state[i].p / total) * w
-      xs[i] = cum
-      ws[i] = segW
-      cum += segW
-    }
+      const ink = luminance(resolvedBg(container)) < 0.5 ? '#F0EEE8' : '#23262F'
+      const muted = luminance(resolvedBg(container)) < 0.5 ? '#9AA0AD' : '#7C808B'
 
-    // Tiles (+0.5px overdraw hides sub-pixel seams between same-color tiles).
-    for (let i = 0; i < n; i++) {
-      ctx.fillStyle = rgbStr(rampRGB(state[i].delta, globalMin, globalMax))
-      ctx.fillRect(xs[i], 0, ws[i] + 0.5, BAR_H)
-    }
+      const outcomes = computeOutcomes(round, allocX)
+      const total = outcomes.reduce((s, o) => s + o.p, 0) || 1
+      const innerW = w - 2 * PAD_X
+      const barTop = LIFT_H
+      const barBottom = LIFT_H + BAR_H
 
-    // Subtle separators between adjacent tiles for definition — but not between
-    // tiles at the same value (a clustered block reads as one seamless segment).
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)'
-    for (let i = 1; i < n; i++) {
-      if (Math.abs(state[i].delta - state[i - 1].delta) <= CLUSTER_EPS) continue
-      ctx.fillRect(xs[i] - 0.5, 0, 1, BAR_H)
-    }
-
-    // $0 line: the loss/gain split = cumulative probability of all losses.
-    let pLoss = 0
-    for (let i = 0; i < n; i++) if (state[i].delta < 0) pLoss += state[i].p / total
-    const zeroX = pLoss * w
-    ctx.fillStyle = 'rgba(35, 38, 47, 0.9)'
-    ctx.fillRect(zeroX - 1, 0, 2, BAR_H)
-    if (zeroRef.current) {
-      zeroRef.current.style.left = `${zeroX}px`
-      zeroRef.current.style.display = pLoss > 0.001 && pLoss < 0.999 ? 'block' : 'none'
-    }
-
-    // Build label clusters: adjacent tiles at (effectively) the same value are
-    // one visual block, so report their combined probability.
-    type Cluster = { delta: number; p: number; x: number; w: number }
-    const clusters: Cluster[] = []
-    for (let i = 0; i < n; i++) {
-      const last = clusters[clusters.length - 1]
-      if (last && Math.abs(state[i].delta - last.delta) <= CLUSTER_EPS) {
-        last.p += state[i].p / total
-        last.w += ws[i]
-      } else {
-        clusters.push({ delta: state[i].delta, p: state[i].p / total, x: xs[i], w: ws[i] })
+      // Segment geometry (width ∝ probability), ordered worst→best.
+      type Seg = Outcome & { x0: number; x1: number; pnl: number }
+      const segs: Seg[] = []
+      let cum = 0
+      for (const o of outcomes) {
+        const x0 = PAD_X + (cum / total) * innerW
+        cum += o.p
+        const x1 = PAD_X + (cum / total) * innerW
+        segs.push({ ...o, x0, x1, pnl: o.end - INPUT })
       }
-    }
+      const n = segs.length
 
-    // Place one label per cluster, left→right, skipping ones too narrow or too
-    // close to the previously shown label.
-    let lastLabelX = -Infinity
-    for (let j = 0; j < labelRefs.current.length; j++) {
-      const el = labelRefs.current[j]
-      if (!el) continue
-      const c = clusters[j]
-      const cx = c ? c.x + c.w / 2 : 0
-      if (!c || c.w < MIN_LABEL_PX || cx - lastLabelX < MIN_LABEL_GAP_PX) {
-        el.style.display = 'none'
-        continue
+      // ── Bar fills (clipped to a rounded rect for rounded outer corners) ─────
+      ctx.save()
+      roundRectPath(ctx, PAD_X, barTop, innerW, BAR_H, CORNER)
+      ctx.clip()
+      segs.forEach((s, i) => {
+        const left = s.x0 + (i > 0 ? SEG_GAP / 2 : 0)
+        const right = s.x1 - (i < n - 1 ? SEG_GAP / 2 : 0)
+        ctx.fillStyle = fillColor(s.pnl)
+        ctx.fillRect(left, barTop, Math.max(0, right - left), BAR_H)
+      })
+      ctx.restore()
+
+      // ── $10,000 baseline: split between losses (left) and gains (right) ────
+      let lossP = 0
+      for (const o of outcomes) if (o.end < INPUT) lossP += o.p
+      const baseX = Math.max(PAD_X, Math.min(PAD_X + innerW, PAD_X + (lossP / total) * innerW))
+      ctx.save()
+      ctx.strokeStyle = muted
+      ctx.lineWidth = 1.5
+      ctx.setLineDash([4, 4])
+      ctx.beginPath()
+      ctx.moveTo(baseX, barTop - 4)
+      ctx.lineTo(baseX, barBottom + 4)
+      ctx.stroke()
+      ctx.restore()
+      // "$10,000 start" label above the baseline.
+      ctx.font = FONT(11.5, 500)
+      ctx.fillStyle = muted
+      ctx.textBaseline = 'alphabetic'
+      const blLabel = '$10,000 start'
+      const blW = ctx.measureText(blLabel).width
+      ctx.textAlign = 'left'
+      const blX = Math.max(PAD_X, Math.min(w - PAD_X - blW, baseX - blW / 2))
+      ctx.fillText(blLabel, blX, 14)
+
+      // ── Dollar labels: inside if they fit, else lifted above with elbow ─────
+      const lifted: Seg[] = []
+      ctx.textBaseline = 'middle'
+      for (let i = 0; i < n; i++) {
+        const s = segs[i]
+        const size = fontFor(s.pnl)
+        const label = pnlLabel(s.pnl)
+        ctx.font = FONT(size, 600)
+        const tw = ctx.measureText(label).width
+        const segVis = s.x1 - s.x0 - SEG_GAP
+        if (tw + LABEL_FIT_PAD <= segVis) {
+          ctx.fillStyle = fillIsDark(s.pnl) ? '#ffffff' : '#23262F'
+          ctx.textAlign = 'center'
+          ctx.fillText(label, (s.x0 + s.x1) / 2, barTop + BAR_H / 2 + 1)
+        } else {
+          lifted.push(s)
+        }
       }
-      lastLabelX = cx
-      const rgb = rampRGB(c.delta, globalMin, globalMax)
-      const onDark = luminance(rgb) < 160
-      el.style.display = 'flex'
-      el.style.left = `${cx}px`
-      el.style.color = onDark ? '#ffffff' : 'rgb(35, 38, 47)'
-      el.style.textShadow = onDark
-        ? '0 1px 2px rgba(0,0,0,0.35)'
-        : '0 1px 2px rgba(255,255,255,0.65)'
-      el.innerHTML =
-        `<span class="payoff-label-d">${fmtDelta(Math.round(c.delta))}</span>` +
-        `<span class="payoff-label-p">${Math.round(c.p * 100)}%</span>`
-    }
-  }
-
-  // One animation step: ease the displayed state toward the target, then draw.
-  const tick = () => {
-    const to = toRef.current
-    let cur = curRef.current
-    if (cur.length !== to.length) cur = to.map((o) => ({ ...o })) // snap on shape change
-
-    let moving = false
-    const next = to.map((t, i) => {
-      const c = cur[i] ?? t
-      const delta = c.delta + (t.delta - c.delta) * SMOOTH
-      const p = c.p + (t.p - c.p) * SMOOTH
-      if (Math.abs(t.delta - delta) > 0.5 || Math.abs(t.p - p) > 0.0008) moving = true
-      return { delta, p }
-    })
-
-    curRef.current = moving ? next : to.map((o) => ({ ...o }))
-    draw(curRef.current)
-    rafRef.current = moving ? requestAnimationFrame(tick) : null
-  }
-
-  // Retarget whenever the distribution changes. Always clear the handle on
-  // cleanup so a fresh frame can be scheduled (guards against StrictMode's
-  // double-mount leaving a stale handle that would freeze the bar).
-  useEffect(() => {
-    toRef.current = outcomes
-    if (rafRef.current == null) rafRef.current = requestAnimationFrame(tick)
-    return () => {
-      if (rafRef.current != null) {
-        cancelAnimationFrame(rafRef.current)
-        rafRef.current = null
+      if (lifted.length) {
+        const centers = lifted.map((s) => (s.x0 + s.x1) / 2)
+        const sizes = lifted.map((s) => fontFor(s.pnl))
+        const labels = lifted.map((s) => pnlLabel(s.pnl))
+        const halfW = lifted.map((s, i) => {
+          ctx.font = FONT(sizes[i], 600)
+          return ctx.measureText(labels[i]).width / 2 + 4
+        })
+        const labelY = LIFT_H - 26
+        const placed = deoverlap(centers, halfW, PAD_X, w - PAD_X)
+        lifted.forEach((s, i) => {
+          const segCx = centers[i]
+          const lx = placed[i]
+          ctx.strokeStyle = strokeColor(s.pnl)
+          ctx.fillStyle = strokeColor(s.pnl)
+          ctx.lineWidth = 1
+          ctx.setLineDash([])
+          // elbow: label → down → across → dot on the bar
+          ctx.beginPath()
+          ctx.moveTo(lx, labelY + 8)
+          ctx.lineTo(lx, labelY + 14)
+          ctx.lineTo(segCx, barTop - 6)
+          ctx.lineTo(segCx, barTop - 1)
+          ctx.stroke()
+          ctx.beginPath()
+          ctx.arc(segCx, barTop - 1, 2, 0, Math.PI * 2)
+          ctx.fill()
+          ctx.font = FONT(sizes[i], 600)
+          ctx.textAlign = 'center'
+          ctx.fillText(labels[i], lx, labelY)
+        })
       }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [outcomes, globalMin, globalMax])
 
-  // Redraw the current state on resize.
-  useEffect(() => {
-    const target = containerRef.current
-    if (!target) return
-    const ro = new ResizeObserver(() => draw(curRef.current))
-    ro.observe(target)
-    draw(curRef.current)
+      // ── Probability span brackets below the bar ────────────────────────────
+      const bracketY = barBottom + 14
+      const tickH = 6
+      const pctY = barBottom + 44
+      const wordY = barBottom + 60
+      // de-overlap the (two-line) probability labels by their widest line
+      ctx.font = FONT(16, 500)
+      const pctTexts = segs.map((s) => `${Math.round((s.p / total) * 100)}%`)
+      const halfW = segs.map((s, i) => {
+        ctx.font = FONT(16, 500)
+        const a = ctx.measureText(pctTexts[i]).width
+        ctx.font = FONT(13, 400)
+        const b = ctx.measureText('probability').width
+        return Math.max(a, b) / 2 + 6
+      })
+      const centers = segs.map((s) => (s.x0 + s.x1) / 2)
+      const placed = deoverlap(centers, halfW, PAD_X, w - PAD_X)
+
+      segs.forEach((s, i) => {
+        const segCx = centers[i]
+        const labelX = placed[i]
+        const stroke = strokeColor(s.pnl)
+        const segW = s.x1 - s.x0 - SEG_GAP
+        ctx.strokeStyle = stroke
+        ctx.lineWidth = 1.25
+        ctx.setLineDash([])
+
+        if (segW < TINY_SEG_PX) {
+          // collapse bracket to a dot
+          ctx.fillStyle = stroke
+          ctx.beginPath()
+          ctx.arc(segCx, bracketY, 1.75, 0, Math.PI * 2)
+          ctx.fill()
+        } else {
+          const bl = s.x0 + SEG_GAP / 2
+          const br = s.x1 - SEG_GAP / 2
+          ctx.beginPath()
+          ctx.moveTo(bl, bracketY - tickH) // left tick up toward bar
+          ctx.lineTo(bl, bracketY)
+          ctx.lineTo(br, bracketY) // span
+          ctx.lineTo(br, bracketY - tickH) // right tick up
+          ctx.stroke()
+        }
+
+        // stem from bracket center down, bending to the (de-overlapped) label
+        ctx.beginPath()
+        ctx.moveTo(segCx, bracketY)
+        ctx.lineTo(segCx, bracketY + 8)
+        ctx.lineTo(labelX, bracketY + 16)
+        ctx.lineTo(labelX, pctY - 14)
+        ctx.stroke()
+
+        // two-line label: "64%" (emphasis) + "probability" (lighter)
+        ctx.textAlign = 'center'
+        ctx.fillStyle = ink
+        ctx.font = FONT(16, 500)
+        ctx.fillText(pctTexts[i], labelX, pctY)
+        ctx.fillStyle = muted
+        ctx.font = FONT(13, 400)
+        ctx.fillText('probability', labelX, wordY)
+      })
+    }
+
+    draw()
+    const ro = new ResizeObserver(draw)
+    ro.observe(container)
     return () => ro.disconnect()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [round, allocX])
 
   return (
-    <div
-      ref={containerRef}
-      className="relative w-full"
-      style={{ height: BAR_H + ZERO_LABEL_H }}
-    >
-      <div
-        className="absolute inset-x-0 top-0 overflow-hidden rounded-lg bg-surface2"
-        style={{ height: BAR_H }}
-      >
-        <canvas ref={canvasRef} className="block h-full w-full" />
-      </div>
-
-      {outcomes.map((_, i) => (
-        <div
-          key={i}
-          ref={(el) => {
-            labelRefs.current[i] = el
-          }}
-          className="payoff-label"
-          style={{ top: BAR_H / 2 }}
-        />
-      ))}
-
-      <div ref={zeroRef} className="payoff-zero" style={{ top: BAR_H + 4 }}>
-        $0
-      </div>
+    <div ref={containerRef} className="relative w-full" style={{ height: LIFT_H + BAR_H + PROB_H }}>
+      <canvas ref={canvasRef} className="block w-full" />
     </div>
   )
+}
+
+function roundRectPath(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+) {
+  const rad = Math.min(r, w / 2, h / 2)
+  ctx.beginPath()
+  ctx.moveTo(x + rad, y)
+  ctx.arcTo(x + w, y, x + w, y + h, rad)
+  ctx.arcTo(x + w, y + h, x, y + h, rad)
+  ctx.arcTo(x, y + h, x, y, rad)
+  ctx.arcTo(x, y, x + w, y, rad)
+  ctx.closePath()
 }

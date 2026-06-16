@@ -1,6 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import type { AllocRound } from '../types'
-import { GLOBAL_MAX, GLOBAL_MIN, computeJointOutcomes, toOutcomes } from '../lib/payoff'
 import PayoffBar from './PayoffBar'
 
 type Props = {
@@ -54,10 +53,9 @@ function ReferenceCard({
             const delta = s.amt - 10000
             const color = delta < 0 ? 'text-red' : delta > 0 ? 'text-teal' : 'text-muted'
             return (
-              <div key={i} className="flex items-center justify-between gap-3">
-                <span className="rounded-md bg-surface2 px-2 py-0.5 font-mono text-xs font-medium text-muted tnum">
-                  {s.p}
-                </span>
+              <div key={i} className="flex items-center gap-2 text-sm">
+                <span className="font-mono font-medium text-muted tnum">{s.p} probability</span>
+                <span className="text-muted">→</span>
                 <span className={`font-mono text-lg font-semibold tnum ${color}`}>
                   {fmtDelta(delta)}
                 </span>
@@ -80,13 +78,6 @@ function ReferenceCard({
 
 export default function RoundDecision({ round, index, total, onNext }: Props) {
   const [allocX, setAllocX] = useState(50)
-
-  const xOutcomes = useMemo(() => toOutcomes(round.x.scenarios), [round])
-  const yOutcomes = useMemo(() => toOutcomes(round.y.scenarios), [round])
-  const outcomes = useMemo(
-    () => computeJointOutcomes(allocX, xOutcomes, yOutcomes),
-    [allocX, xOutcomes, yOutcomes],
-  )
 
   return (
     <div className="round-enter flex min-h-[100svh] w-full items-center justify-center px-6 py-10">
@@ -116,15 +107,10 @@ export default function RoundDecision({ round, index, total, onNext }: Props) {
             </span>
           </div>
 
-          {/* Payoff bar — full-width stacked distribution (width = probability,
-              color saturation = magnitude). The $0 split marker is drawn inside. */}
-          <PayoffBar outcomes={outcomes} globalMin={GLOBAL_MIN} globalMax={GLOBAL_MAX} />
-
-          {/* Axis labels */}
-          <div className="mt-2 flex items-center justify-between text-[11px] text-muted">
-            <span>← bigger loss</span>
-            <span>bigger gain →</span>
-          </div>
+          {/* Payoff bar — joint outcome distribution (width = probability,
+              absolute-anchored color = P&L magnitude). $10,000 baseline, dollar
+              labels, and probability brackets are drawn inside. */}
+          <PayoffBar round={round} allocX={allocX} />
 
           {/* Divider */}
           <div className="my-5 h-px w-full bg-border" />
