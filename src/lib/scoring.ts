@@ -110,12 +110,12 @@ export function normalizeScores(raw: Scores): NormalizedScores {
 // same space, it's a separate reading of one axis.
 type ShapeScores = { sigma: number; alpha: number; lambda: number }
 
-// The four shape archetypes (Optimizer is intentionally absent — see below).
-export const SHAPE_VECTORS: Record<Exclude<ArchetypeKey, 'optimizer'>, ShapeScores> = {
-  protector: { sigma: -0.7, alpha: -0.2, lambda: +0.8 },
-  pioneer: { sigma: +0.6, alpha: +0.9, lambda: -0.5 },
-  carry: { sigma: +0.4, alpha: -0.8, lambda: 0.0 },
-  agnostic: { sigma: -0.4, alpha: 0.0, lambda: +0.1 },
+// The four shape archetypes (the Quant is intentionally absent — see below).
+export const SHAPE_VECTORS: Record<Exclude<ArchetypeKey, 'quant'>, ShapeScores> = {
+  banker: { sigma: -0.7, alpha: -0.2, lambda: +0.8 },
+  venture: { sigma: +0.6, alpha: +0.9, lambda: -0.5 },
+  insurer: { sigma: +0.4, alpha: -0.8, lambda: 0.0 },
+  indexer: { sigma: -0.4, alpha: 0.0, lambda: +0.1 },
 }
 
 export function cosineSim(a: ShapeScores, b: ShapeScores): number {
@@ -134,40 +134,40 @@ export type Classification = {
 }
 
 // Below this shape magnitude there's no real shape signal — the result is
-// driven by the EV axis (Optimizer) or, failing that, Agnostic.
+// driven by the EV axis (the Quant) or, failing that, the Indexer.
 const SHAPE_MIN = 0.3
-// EV-discipline strong enough to surface the Optimizer overlay.
+// EV-discipline strong enough to surface the Quant overlay.
 const EV_TAG = 0.3
 
 export function classify(scores: { sigma: number; alpha: number; lambda: number; ev: number }): Classification {
   const shape: ShapeScores = { sigma: scores.sigma, alpha: scores.alpha, lambda: scores.lambda }
   const shapeMag = Math.sqrt(shape.sigma ** 2 + shape.alpha ** 2 + shape.lambda ** 2)
   const evStrong = scores.ev >= EV_TAG
-  // Optimizer "match" is read straight off the EV axis (0..1).
+  // The Quant "match" is read straight off the EV axis (0..1).
   const evSim = clamp(scores.ev, 0, 1)
 
-  const sims = (Object.keys(SHAPE_VECTORS) as Exclude<ArchetypeKey, 'optimizer'>[])
+  const sims = (Object.keys(SHAPE_VECTORS) as Exclude<ArchetypeKey, 'quant'>[])
     .map((key) => ({ key, sim: cosineSim(shape, SHAPE_VECTORS[key]) }))
     .sort((a, b) => b.sim - a.sim)
 
   // No meaningful shape preference: the EV axis decides. Strong EV-discipline =>
-  // a pure Optimizer; otherwise the Agnostic default.
+  // a pure Quant; otherwise the Indexer default.
   if (shapeMag < SHAPE_MIN) {
     if (evStrong) {
-      return { archetype: 'optimizer', secondary: null, primarySim: evSim, secondarySim: null, isBlend: false }
+      return { archetype: 'quant', secondary: null, primarySim: evSim, secondarySim: null, isBlend: false }
     }
-    return { archetype: 'agnostic', secondary: null, primarySim: 0, secondarySim: null, isBlend: false }
+    return { archetype: 'indexer', secondary: null, primarySim: 0, secondarySim: null, isBlend: false }
   }
 
-  // There is a shape preference, so a shape archetype leads. The Optimizer rides
-  // on top additively: when EV-discipline is high it becomes the secondary
-  // ("a Carry Collector who also chases expected value"); otherwise the
-  // runner-up shape archetype fills the secondary slot.
+  // There is a shape preference, so a shape archetype leads. The Quant rides on
+  // top additively: when EV-discipline is high it becomes the secondary ("an
+  // Insurer who also chases expected value"); otherwise the runner-up shape
+  // archetype fills the secondary slot.
   const primary = sims[0]
   if (evStrong) {
     return {
       archetype: primary.key,
-      secondary: 'optimizer',
+      secondary: 'quant',
       primarySim: primary.sim,
       secondarySim: evSim,
       isBlend: true,
@@ -202,11 +202,11 @@ export const ASSET_CLASS_LOADINGS: Record<AssetClass, ShapeVector> = {
 
 // Per-archetype hard caps prevent degenerate outcomes
 const ALLOC_CAPS: Record<string, Partial<Record<AssetClass, number>>> = {
-  protector: { Crypto: 0.0, 'Income structures': 0.12, 'Growth structures': 0.15 },
-  optimizer: { Crypto: 0.08 },
-  pioneer: { 'Income structures': 0.06, 'Cash/MMF': 0.05 },
-  carry: { Crypto: 0.05, 'Growth structures': 0.06, 'Cash/MMF': 0.05 },
-  agnostic: { Crypto: 0.0, 'Income structures': 0.06, 'Growth structures': 0.06 },
+  banker: { Crypto: 0.0, 'Income structures': 0.12, 'Growth structures': 0.15 },
+  quant: { Crypto: 0.08 },
+  venture: { 'Income structures': 0.06, 'Cash/MMF': 0.05 },
+  insurer: { Crypto: 0.05, 'Growth structures': 0.06, 'Cash/MMF': 0.05 },
+  indexer: { Crypto: 0.0, 'Income structures': 0.06, 'Growth structures': 0.06 },
 }
 
 function vecDistance(a: ShapeVector, b: ShapeVector): number {

@@ -22,7 +22,7 @@ import type { Round } from '../types'
 //     chases the richer side even when it fights their shape preference.
 //
 // Because every shape contrast is tested both ways, EV-discipline is measured
-// fairly for every archetype, and "The Optimizer" rides additively on top of
+// fairly for every archetype, and "The Quant" rides additively on top of
 // whatever shape the player has.
 //
 // 5 contrasts × 2 = 10 rounds, split 5/5 across two screens.

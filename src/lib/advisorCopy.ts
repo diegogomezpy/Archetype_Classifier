@@ -46,35 +46,35 @@ export function getTalkingPoints(
   const evLow = scores.ev < -0.3 // sacrifices EV for a preferred shape
 
   const points: Record<string, (string | null)[]> = {
-    protector: [
+    banker: [
       'Lead with capital protection — frame every recommendation downside first, upside second.',
       'Avoid products with gap risk or uncertain barriers even if the expected return is attractive.',
       evLow
         ? 'Willing to give up expected return for certainty — quantify the premium they are paying for protection so it is a conscious choice.'
         : null,
     ],
-    optimizer: [
+    quant: [
       'Lead with expected value and fee efficiency — this client responds to data, not narrative.',
       'Avoid over-engineering — complexity will feel like a fee extraction mechanism.',
       evHigh
         ? 'Strongly EV-driven — show the math; they will accept an unfamiliar or uncomfortable shape if the expected value is clearly higher.'
         : null,
     ],
-    pioneer: [
+    venture: [
       'Lead with the upside story — show the best-case scenario first.',
       'Consider a core/satellite structure: stable core with an explicitly labeled speculative sleeve.',
       evLow
         ? 'Pays up for positive skew — be explicit when a flashy product has a lower expected value than a plainer one.'
         : null,
     ],
-    carry: [
+    insurer: [
       'Frame recommendations around income and yield — this client thinks in terms of premium, not appreciation.',
       'Be explicit about gap risk in autocallables and reverse convertibles — low loss aversion does not mean uninformed.',
       evHigh
         ? 'Comfortable accepting negative skew for a higher average — reliable premium structures land well.'
         : null,
     ],
-    agnostic: [
+    indexer: [
       'Lead with simplicity and transparency — product complexity creates friction and reduces trust.',
       'Build around well-known benchmarks the client can track independently.',
       null,
