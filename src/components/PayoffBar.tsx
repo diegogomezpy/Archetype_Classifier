@@ -23,11 +23,12 @@ const FONT_REF = 6000 // |P&L| that maps to MAX_FONT
 const MIN_FONT = 12.5
 const MAX_FONT = 25
 
-// Geometry (CSS px).
-const LIFT_H = 58 // space above the bar: baseline label + lifted dollar labels
+// Geometry (CSS px). LIFT_H and PAD_X are exported so an overlay (the draw
+// pointer) can line up with the bar's segments using the same coordinate space.
+export const LIFT_H = 58 // space above the bar: baseline label + lifted dollar labels
 const BAR_H = 58 // the stacked bar
 const PROB_H = 86 // space below: probability span brackets + labels
-const PAD_X = 18 // horizontal inset so edge labels/brackets aren't clipped
+export const PAD_X = 18 // horizontal inset so edge labels/brackets aren't clipped
 const CORNER = 8 // rounded outer corners of the bar
 const SEG_GAP = 2 // gap between adjacent segments
 const LABEL_FIT_PAD = 12 // dollar label fits inside if textW + this ≤ segWidth

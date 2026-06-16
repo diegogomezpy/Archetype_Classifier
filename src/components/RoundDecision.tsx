@@ -4,7 +4,8 @@ import PayoffBar from './PayoffBar'
 import RoundProgress from './RoundProgress'
 import Coachmarks, { tutorialSeen } from './Coachmarks'
 import Scoreboard from './Scoreboard'
-import { INPUT, computeOutcomes, sampleOutcome } from '../lib/outcomes'
+import DrawPointer from './DrawPointer'
+import { INPUT, computeOutcomes, sampleOutcome, type Outcome } from '../lib/outcomes'
 import { useDrawSequence } from '../hooks/useDrawSequence'
 
 type Props = {
@@ -92,7 +93,11 @@ export default function RoundDecision({ round, index, total, runningPnl, onNext 
   const [allocX, setAllocX] = useState(50)
   const [showCards, setShowCards] = useState(index <= EXPAND_CARDS_THROUGH)
   const [showTutorial, setShowTutorial] = useState(() => index === 1 && !tutorialSeen())
-  const { phase, roll, delta, applied, start } = useDrawSequence()
+  const { phase, delta, applied, start } = useDrawSequence()
+  // The round's outcome distribution + the drawn segment, captured on lock-in so
+  // the pointer can swing across the bar and land on the right segment.
+  const [outcomes, setOutcomes] = useState<Outcome[]>([])
+  const [targetIndex, setTargetIndex] = useState<number | null>(null)
 
   const xDollars = allocX * 100
   const yDollars = (100 - allocX) * 100
@@ -100,12 +105,15 @@ export default function RoundDecision({ round, index, total, runningPnl, onNext 
   const locked = phase !== 'idle'
   const capital = INPUT + runningPnl + applied
   const pnl = runningPnl + applied
-  const liveDraw = phase === 'idle' ? null : phase === 'rolling' ? roll : delta
+  // "This draw" appears once the pointer has landed (during/after the tick).
+  const liveDraw = phase === 'ticking' || phase === 'done' ? delta : null
 
   const lockIn = () => {
-    const outcomes = computeOutcomes(round, allocX)
-    const drawn = sampleOutcome(outcomes)
-    const pool = outcomes.map((o) => o.end - INPUT)
+    const outs = computeOutcomes(round, allocX)
+    const drawn = sampleOutcome(outs)
+    setOutcomes(outs)
+    setTargetIndex(outs.indexOf(drawn))
+    const pool = outs.map((o) => o.end - INPUT)
     start(drawn.end - INPUT, pool)
   }
 
@@ -138,7 +146,7 @@ export default function RoundDecision({ round, index, total, runningPnl, onNext 
         {/* 3 — Distribution card */}
         <div className="mt-7 rounded-2xl border border-border bg-surface p-6 shadow-card">
           {/* Prominent running tally above the bar */}
-          <Scoreboard capital={capital} pnl={pnl} draw={liveDraw} drawPulsing={phase === 'rolling'} />
+          <Scoreboard capital={capital} pnl={pnl} draw={liveDraw} />
 
           {/* Plain-language mix readout */}
           <div className="mb-4 mt-4 flex items-baseline justify-between border-t border-border pt-4">
@@ -152,9 +160,11 @@ export default function RoundDecision({ round, index, total, runningPnl, onNext 
           </div>
 
           {/* Payoff bar — joint outcome distribution (width = probability,
-              absolute-anchored color = P&L magnitude). */}
-          <div data-tour="bar">
+              absolute-anchored color = P&L magnitude). The draw pointer overlays
+              it and lands on the drawn segment. */}
+          <div data-tour="bar" className="relative">
             <PayoffBar round={round} allocX={allocX} />
+            <DrawPointer outcomes={outcomes} targetIndex={targetIndex} phase={phase} />
           </div>
 
           {/* Legend — shown only on the first round, while the format is new. */}
