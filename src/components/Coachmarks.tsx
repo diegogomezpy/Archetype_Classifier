@@ -35,8 +35,8 @@ const STEPS: Step[] = [
   },
   {
     selector: '[data-tour="next"]',
-    title: 'Go with your gut',
-    body: 'Happy with the mix? Tap Next. There are no right or wrong answers — your instinct is the signal.',
+    title: 'Lock it in',
+    body: 'Happy with the mix? Lock it in — we draw one real outcome from your odds and add it to your running total. Go with your gut.',
   },
 ]
 

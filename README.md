@@ -21,6 +21,13 @@ interstitial sits between them):
 - **Liquidity rounds** — a binary choice between locking up capital for a
   modest premium versus staying liquid.
 
+After locking in each round, the app **draws one real outcome** from the
+player's chosen distribution (weighted by probability) and adds it to a running
+total — a single, non-re-rollable draw per round. The cumulative result is
+surfaced as "Your run" on the dashboard. The draw is purely for engagement; the
+profile is scored only from the *choices*, not the outcomes (every round is
+EV-matched, so the draw can't bias the classification).
+
 Each choice contributes a signed signal to four dimensions:
 
 | Dimension | Meaning |
@@ -76,6 +83,7 @@ src/
 │   ├── RoundDecision.tsx   # Allocation round: portfolio mix + payoff distribution
 │   ├── RoundProgress.tsx   # Segmented per-round progress indicator
 │   ├── Coachmarks.tsx      # One-time in-context tutorial (first allocation round)
+│   ├── DrawReveal.tsx      # Post-decision random-draw reveal + running total
 │   ├── PayoffBar.tsx       # Canvas payoff-distribution bar (joint outcomes, computed inline)
 │   ├── LiqCards.tsx        # Liquidity choice cards
 │   ├── HalfwayScreen.tsx   # Screen 1 → screen 2 transition
@@ -91,6 +99,7 @@ src/
 │   └── archetypes.ts       # Archetype copy + target vectors
 └── lib/
     ├── scoring.ts          # Scoring pipeline, classification, allocation engine
+    ├── outcomes.ts         # Joint payoff distribution + weighted draw sampling
     ├── instruments.ts      # Instrument universe + asset-class loadings
     ├── advisorCopy.ts      # Advisor talking-point generation
     └── format.ts           # Money formatting helper

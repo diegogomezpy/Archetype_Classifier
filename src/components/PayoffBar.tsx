@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { AllocRound } from '../types'
+import { INPUT, computeOutcomes, type Outcome } from '../lib/outcomes'
 
 interface PayoffBarProps {
   round: AllocRound
@@ -7,7 +8,6 @@ interface PayoffBarProps {
 }
 
 // ── Tunable constants ───────────────────────────────────────────────────────
-const INPUT = 10000 // portfolio input; scenario.amt is the ending value
 
 // Color: diverging, absolute, fast-rising. Intensity is anchored to a FIXED
 // reference (not each round's own max) so the same dollar P&L always renders
@@ -33,32 +33,6 @@ const SEG_GAP = 2 // gap between adjacent segments
 const LABEL_FIT_PAD = 12 // dollar label fits inside if textW + this ≤ segWidth
 const LABEL_DEOVERLAP_GAP = 8 // min gap between de-overlapped labels
 const TINY_SEG_PX = 7 // narrower than this → bracket collapses to a dot
-
-type Outcome = { end: number; p: number }
-
-function parseProb(p: string): number {
-  const n = parseFloat(p.replace(/[^0-9.]/g, ''))
-  return Number.isFinite(n) ? n / 100 : 0
-}
-
-// Joint portfolio outcome distribution for the current X/Y split.
-function computeOutcomes(round: AllocRound, allocX: number): Outcome[] {
-  const xAmt = (INPUT * allocX) / 100
-  const yAmt = INPUT - xAmt
-  const merged = new Map<number, number>()
-  for (const sx of round.x.scenarios) {
-    for (const sy of round.y.scenarios) {
-      const end = (sx.amt / INPUT) * xAmt + (sy.amt / INPUT) * yAmt
-      const prob = parseProb(sx.p) * parseProb(sy.p)
-      const key = Math.round(end)
-      merged.set(key, (merged.get(key) ?? 0) + prob)
-    }
-  }
-  return [...merged.entries()]
-    .filter(([, p]) => p >= 0.0001)
-    .map(([end, p]) => ({ end, p }))
-    .sort((a, b) => a.end - b.end)
-}
 
 const clamp01 = (t: number) => Math.max(0, Math.min(1, t))
 const ramp = (mag: number, ref: number) => Math.pow(clamp01(mag / ref), RAMP_EXP)

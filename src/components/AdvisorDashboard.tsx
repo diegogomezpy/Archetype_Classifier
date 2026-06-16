@@ -4,16 +4,17 @@ import AdvisorPanel from './AdvisorPanel'
 
 type Props = {
   data: DashboardData
+  totalPnl: number
   onRetake: () => void
 }
 
-export default function AdvisorDashboard({ data, onRetake }: Props) {
+export default function AdvisorDashboard({ data, totalPnl, onRetake }: Props) {
   return (
     <div className="animate-fade-300 min-h-[100svh] w-full">
       <div className="print-report-grid mx-auto grid w-full max-w-6xl grid-cols-1 min-[900px]:grid-cols-[1.5fr_1fr]">
         {/* Left — client-facing */}
         <div className="min-w-0">
-          <ClientPanel data={data} onRetake={onRetake} />
+          <ClientPanel data={data} totalPnl={totalPnl} onRetake={onRetake} />
         </div>
 
         {/* Right — advisor-only, separated */}

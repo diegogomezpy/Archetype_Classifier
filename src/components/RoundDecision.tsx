@@ -3,12 +3,15 @@ import type { AllocRound } from '../types'
 import PayoffBar from './PayoffBar'
 import RoundProgress from './RoundProgress'
 import Coachmarks, { tutorialSeen } from './Coachmarks'
+import DrawReveal from './DrawReveal'
+import { INPUT, computeOutcomes, sampleOutcome } from '../lib/outcomes'
 
 type Props = {
   round: AllocRound
   index: number // 1-based round number
   total: number
-  onNext: (allocX: number) => void
+  runningPnl: number
+  onNext: (allocX: number, drawDelta: number) => void
 }
 
 // The two sides carry a fixed identity across every round: X is always the
@@ -84,17 +87,35 @@ function ReferenceCard({
   )
 }
 
-export default function RoundDecision({ round, index, total, onNext }: Props) {
+export default function RoundDecision({ round, index, total, runningPnl, onNext }: Props) {
   const [allocX, setAllocX] = useState(50)
   const [showCards, setShowCards] = useState(index <= EXPAND_CARDS_THROUGH)
   const [showTutorial, setShowTutorial] = useState(() => index === 1 && !tutorialSeen())
+  // The drawn outcome for this round, set on lock-in to trigger the reveal.
+  const [draw, setDraw] = useState<{ delta: number; prob: number } | null>(null)
 
   const xDollars = allocX * 100
   const yDollars = (100 - allocX) * 100
 
+  const lockIn = () => {
+    const outcomes = computeOutcomes(round, allocX)
+    const drawn = sampleOutcome(outcomes)
+    setDraw({ delta: drawn.end - INPUT, prob: drawn.p })
+  }
+
   return (
     <div className="round-enter flex min-h-[100svh] w-full items-center justify-center px-6 py-10">
       {showTutorial && <Coachmarks onClose={() => setShowTutorial(false)} />}
+
+      {draw && (
+        <DrawReveal
+          delta={draw.delta}
+          prob={draw.prob}
+          runningTotal={runningPnl + draw.delta}
+          isLast={index === total}
+          onContinue={() => onNext(allocX, draw.delta)}
+        />
+      )}
 
       <div className="flex w-full max-w-4xl flex-col">
         {/* 1 — "How it works" replay + segmented progress */}
@@ -190,14 +211,14 @@ export default function RoundDecision({ round, index, total, onNext }: Props) {
           )}
         </div>
 
-        {/* 5 — Next button */}
+        {/* 5 — Lock-in button — triggers the random draw from the chosen mix */}
         <button
           data-tour="next"
           type="button"
-          onClick={() => onNext(allocX)}
+          onClick={lockIn}
           className="mt-7 w-full rounded-2xl bg-teal py-4 text-base font-semibold text-white shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card active:translate-y-0"
         >
-          {index === total ? 'See my profile' : 'Next'}
+          Lock it in
         </button>
       </div>
     </div>

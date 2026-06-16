@@ -7,10 +7,11 @@ import InstrumentTabs from './InstrumentTabs'
 
 type Props = {
   data: DashboardData
+  totalPnl: number
   onRetake: () => void
 }
 
-export default function ClientPanel({ data, onRetake }: Props) {
+export default function ClientPanel({ data, totalPnl, onRetake }: Props) {
   const archetype = ARCHETYPES[data.archetype]
   const secondary = data.secondaryArchetype ? ARCHETYPES[data.secondaryArchetype] : null
 
@@ -44,6 +45,26 @@ export default function ClientPanel({ data, onRetake }: Props) {
           ))}
         </div>
       </header>
+
+      {/* Game result — how the player's choices actually played out */}
+      <section className="rounded-2xl border border-border bg-surface p-5 shadow-soft">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-mono text-xs uppercase tracking-[0.14em] text-muted">Your run</h2>
+            <p className="mt-1 text-sm text-muted">How your choices played out across the game</p>
+          </div>
+          <span
+            className={`font-mono text-2xl font-semibold tnum ${
+              Math.round(totalPnl) === 0 ? 'text-muted' : totalPnl > 0 ? 'text-teal' : 'text-red'
+            }`}
+          >
+            {Math.round(totalPnl) === 0
+              ? '$0'
+              : (totalPnl > 0 ? '+$' : '−$') +
+                Math.abs(Math.round(totalPnl)).toLocaleString('en-US')}
+          </span>
+        </div>
+      </section>
 
       {/* Suggested allocation */}
       <section>

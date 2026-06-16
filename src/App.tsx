@@ -23,6 +23,7 @@ export default function App() {
   const [state, setState] = useState<AppState>('intro')
   const [roundIndex, setRoundIndex] = useState(0)
   const [rawScores, setRawScores] = useState<Scores>(EMPTY_SCORES)
+  const [totalPnl, setTotalPnl] = useState(0) // cumulative drawn P&L across rounds
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null)
 
   const total = ROUNDS.length
@@ -32,15 +33,19 @@ export default function App() {
 
   const start = () => {
     setRawScores(EMPTY_SCORES)
+    setTotalPnl(0)
     setRoundIndex(0)
     setDashboardData(null)
     setState('playing')
   }
 
-  const handleNext = (allocX: number) => {
+  // Called after the player has seen the round's draw reveal. `drawDelta` is the
+  // sampled P&L for the round, accumulated into the running total.
+  const handleNext = (allocX: number, drawDelta: number) => {
     const round = ROUNDS[roundIndex]
     const nextRaw = applyScore(rawScores, round, allocX)
     setRawScores(nextRaw)
+    setTotalPnl((t) => t + drawDelta)
 
     const nextIndex = roundIndex + 1
 
@@ -62,6 +67,7 @@ export default function App() {
 
   const retake = () => {
     setRawScores(EMPTY_SCORES)
+    setTotalPnl(0)
     setRoundIndex(0)
     setDashboardData(null)
     setState('intro')
@@ -79,12 +85,29 @@ export default function App() {
 
       {state === 'intro' && <IntroScreen onStart={start} />}
 
+      {/* Running winnings chip — appears once the first draw has landed */}
+      {(state === 'playing' || state === 'interstitial') && roundIndex > 0 && (
+        <div className="fixed left-4 top-4 z-40 flex items-center gap-2 rounded-full border border-border bg-surface px-3.5 py-1.5 shadow-soft">
+          <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-muted">Total</span>
+          <span
+            className={`font-mono text-sm font-semibold tnum ${
+              Math.round(totalPnl) === 0 ? 'text-muted' : totalPnl > 0 ? 'text-teal' : 'text-red'
+            }`}
+          >
+            {Math.round(totalPnl) === 0
+              ? '$0'
+              : (totalPnl > 0 ? '+$' : '−$') + Math.abs(Math.round(totalPnl)).toLocaleString('en-US')}
+          </span>
+        </div>
+      )}
+
       {state === 'playing' && (
         <RoundScreen
           key={ROUNDS[roundIndex].id}
           round={ROUNDS[roundIndex]}
           index={roundIndex + 1}
           total={total}
+          runningPnl={totalPnl}
           onNext={handleNext}
         />
       )}
@@ -92,7 +115,7 @@ export default function App() {
       {state === 'interstitial' && <HalfwayScreen onContinue={continueToScreen2} />}
 
       {state === 'dashboard' && dashboardData && (
-        <AdvisorDashboard data={dashboardData} onRetake={retake} />
+        <AdvisorDashboard data={dashboardData} totalPnl={totalPnl} onRetake={retake} />
       )}
     </div>
   )
