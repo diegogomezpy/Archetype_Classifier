@@ -15,9 +15,14 @@ export default function ClientPanel({ data, totalPnl, onRetake }: Props) {
   const archetype = ARCHETYPES[data.archetype]
   const secondary = data.secondaryArchetype ? ARCHETYPES[data.secondaryArchetype] : null
 
+  // The Quant's EV-driven 90/10 book applies whenever the Quant is part of the
+  // result — as the primary profile or as the additive overlay (e.g. Banker +
+  // Quant) — so the allocation reflects the EV discipline either way.
+  const allocArchetype =
+    data.archetype === 'quant' || data.secondaryArchetype === 'quant' ? 'quant' : data.archetype
   const allocation = useMemo(
-    () => computeAllocation(data.archetype, data.scores),
-    [data.archetype, data.scores],
+    () => computeAllocation(allocArchetype, data.scores),
+    [allocArchetype, data.scores],
   )
   return (
     <div className="flex flex-col gap-10 p-8 min-[900px]:p-10">
