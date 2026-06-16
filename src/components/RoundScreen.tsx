@@ -29,8 +29,7 @@ export default function RoundScreen({ round, index, total, onNext }: Props) {
     <div className="round-enter flex min-h-[100svh] w-full items-center justify-center px-6 py-10">
       <div className="flex w-full max-w-4xl flex-col">
         {/* Header */}
-        <div className="mb-6 flex items-center justify-between font-mono text-xs uppercase tracking-[0.14em] text-muted">
-          <span className="rounded-full bg-surface px-3 py-1 shadow-soft">{round.tag}</span>
+        <div className="mb-6 flex items-center justify-end font-mono text-xs uppercase tracking-[0.14em] text-muted">
           <RoundProgress index={index} total={total} />
         </div>
 

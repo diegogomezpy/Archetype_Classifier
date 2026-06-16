@@ -97,9 +97,8 @@ export default function RoundDecision({ round, index, total, onNext }: Props) {
       {showTutorial && <Coachmarks onClose={() => setShowTutorial(false)} />}
 
       <div className="flex w-full max-w-4xl flex-col">
-        {/* 1 — Tag pill + segmented progress */}
-        <div className="mb-6 flex items-center justify-between font-mono text-xs uppercase tracking-[0.14em] text-muted">
-          <span className="rounded-full bg-surface px-3 py-1 shadow-soft">{round.tag}</span>
+        {/* 1 — Segmented progress */}
+        <div className="mb-6 flex items-center justify-end font-mono text-xs uppercase tracking-[0.14em] text-muted">
           <RoundProgress index={index} total={total} />
         </div>
 
