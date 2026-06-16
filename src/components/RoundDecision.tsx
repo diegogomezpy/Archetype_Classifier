@@ -22,10 +22,6 @@ type Props = {
 const X_NAME = 'Growth'
 const Y_NAME = 'Anchor'
 
-// Reference cards start expanded for the first few rounds, then collapse by
-// default once the format is familiar.
-const EXPAND_CARDS_THROUGH = 3
-
 function fmtMoney(n: number): string {
   return '$' + n.toLocaleString('en-US')
 }
@@ -104,7 +100,6 @@ function ReferenceCard({
 
 export default function RoundDecision({ round, index, total, runningPnl, onNext }: Props) {
   const [allocX, setAllocX] = useState(50)
-  const [showCards, setShowCards] = useState(index <= EXPAND_CARDS_THROUGH)
   const [showTutorial, setShowTutorial] = useState(() => index === 1 && !tutorialSeen())
   const { phase, delta, applied, start } = useDrawSequence()
   // The round's outcome distribution, captured on lock-in. The pointer spins to
@@ -219,24 +214,10 @@ export default function RoundDecision({ round, index, total, runningPnl, onNext 
           </p>
         </div>
 
-        {/* 4 — Read-only reference cards: each side's outcomes. Collapsible. */}
-        <div className="mt-5">
-          <button
-            type="button"
-            onClick={() => setShowCards((v) => !v)}
-            className="flex items-center gap-1.5 rounded-full border border-border bg-surface px-3.5 py-1.5 text-sm font-medium text-muted shadow-soft transition-colors hover:text-text"
-            aria-expanded={showCards}
-          >
-            {showCards ? 'Hide the outcomes' : 'Show each side’s outcomes'}
-            <span className={`text-xs transition-transform ${showCards ? 'rotate-180' : ''}`}>▾</span>
-          </button>
-
-          {showCards && (
-            <div className="mt-4 flex items-stretch gap-4">
-              <ReferenceCard side="x" name={X_NAME} label={round.x.label} scenarios={round.x.scenarios} />
-              <ReferenceCard side="y" name={Y_NAME} label={round.y.label} scenarios={round.y.scenarios} />
-            </div>
-          )}
+        {/* 4 — Read-only reference cards: each side's outcomes, always shown. */}
+        <div className="mt-5 flex items-stretch gap-4">
+          <ReferenceCard side="x" name={X_NAME} label={round.x.label} scenarios={round.x.scenarios} />
+          <ReferenceCard side="y" name={Y_NAME} label={round.y.label} scenarios={round.y.scenarios} />
         </div>
 
         {/* 5 — Action button: lock in → (spin + draw resolves) → advance */}
