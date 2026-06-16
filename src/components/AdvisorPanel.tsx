@@ -4,51 +4,13 @@ import {
   getSigmaLabel,
   getAlphaLabel,
   getLambdaLabel,
-  getLiqLabel,
+  getEvLabel,
   getTalkingPoints,
-  splitLabel,
 } from '../lib/advisorCopy'
 import DimensionScoreBar from './DimensionScoreBar'
 
 type Props = {
   data: DashboardData
-}
-
-const LEVELS = ['low', 'moderate', 'high'] as const
-
-function levelOf(v: number): (typeof LEVELS)[number] {
-  if (v < 0.3) return 'low'
-  if (v < 0.6) return 'moderate'
-  return 'high'
-}
-
-function AccessoryScore({ title, value, label }: { title: string; value: number; label: string }) {
-  const active = levelOf(value)
-  const { implication } = splitLabel(label)
-  return (
-    <div>
-      <div className="mb-2 flex items-center justify-between">
-        <span className="text-sm font-medium text-text">{title}</span>
-        <span className="font-mono text-xs text-muted tnum">{value.toFixed(2)}</span>
-      </div>
-      <div className="flex gap-1.5">
-        {LEVELS.map((lvl) => {
-          const on = lvl === active
-          return (
-            <div
-              key={lvl}
-              className={`flex-1 rounded-md py-1 text-center text-[11px] font-medium capitalize transition-colors ${
-                on ? 'bg-teal/15 text-teal' : 'bg-surface2 text-muted'
-              }`}
-            >
-              {lvl}
-            </div>
-          )
-        })}
-      </div>
-      <p className="mt-2 text-xs text-muted">{implication}</p>
-    </div>
-  )
 }
 
 export default function AdvisorPanel({ data }: Props) {
@@ -58,7 +20,7 @@ export default function AdvisorPanel({ data }: Props) {
     { label: 'Variance tolerance', value: scores.sigma, interp: getSigmaLabel(scores.sigma) },
     { label: 'Skew preference', value: scores.alpha, interp: getAlphaLabel(scores.alpha) },
     { label: 'Loss resilience', value: scores.lambda, interp: getLambdaLabel(scores.lambda) },
-    { label: 'Liquidity tolerance', value: scores.liq, interp: getLiqLabel(scores.liq) },
+    { label: 'EV discipline', value: scores.ev, interp: getEvLabel(scores.ev) },
   ]
 
   const matchStrength = Math.round(data.primarySimilarity * 100)
@@ -69,6 +31,7 @@ export default function AdvisorPanel({ data }: Props) {
   if (Math.abs(scores.sigma) < 0.2) lowSignals.push('variance tolerance')
   if (Math.abs(scores.alpha) < 0.2) lowSignals.push('skew preference')
   if (Math.abs(scores.lambda) < 0.2) lowSignals.push('loss aversion')
+  if (Math.abs(scores.ev) < 0.2) lowSignals.push('EV discipline')
 
   const talkingPoints = getTalkingPoints(data.archetype, scores)
 
@@ -121,18 +84,6 @@ export default function AdvisorPanel({ data }: Props) {
             ))}
           </div>
         )}
-      </section>
-
-      {/* Accessory scores */}
-      <section>
-        <h3 className={`${sectionLabel} mb-4`}>Accessory scores</h3>
-        <div className="space-y-5">
-          <AccessoryScore
-            title="Liquidity tolerance"
-            value={scores.liq}
-            label={getLiqLabel(scores.liq)}
-          />
-        </div>
       </section>
 
       {/* Talking points */}

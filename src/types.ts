@@ -18,36 +18,22 @@ export type AllocRound = {
   type: 'alloc'
   tag: string
   displayMode: DisplayMode
+  // EV-matched rounds (both sides average $10,500) measure pure payoff shape.
+  // EV-mismatched rounds (`evGap` set) have one richer side; choosing it
+  // signals EV-discipline (the Optimizer axis). `evGap` is the dollar EV
+  // advantage of side X over side Y (negative if Y is the richer side).
+  evGap?: number
   q: string
   sub: string
   x: AllocSide
   y: AllocSide
 }
 
-export type LiqOption = {
-  label: string
-  ret: string
-  ev: number
-  icon: string
-  sub: string
-}
-
-export type LiqRound = {
-  id: number
-  screen: number
-  type: 'liq'
-  tag: string
-  q: string
-  sub: string
-  x: LiqOption
-  y: LiqOption
-}
-
-export type Round = AllocRound | LiqRound
+export type Round = AllocRound
 
 export type Scores = {
   sigma: number
   alpha: number
   lambda: number
-  liq: number
+  ev: number
 }

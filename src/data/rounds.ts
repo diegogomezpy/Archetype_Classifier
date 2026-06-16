@@ -1,275 +1,296 @@
 import type { Round } from '../types'
 
-// All amounts in USD, $10,000 input, 1-year horizon (multi-year where noted).
-// "Growth" (X) is the more aggressive / higher-variance / more skew-seeking
-// side; "Steady" (Y) is the more conservative / carry / protected side. The
-// scoring signal is monotone: more Growth = higher sigma, higher alpha,
-// lower lambda.
+// All amounts in USD, $10,000 input, 1-year horizon.
+// "Growth" (X) is always the more aggressive / higher-variance / skew-seeking
+// side; "Anchor" (Y) is the calmer side. Outcomes are framed as gains/losses
+// vs. the $10,000 input.
 //
-// 10 rounds split across two screens (5 + 5). The progress indicator spans all
-// 10 rounds.
+// PAIRED ALL-MISMATCHED DESIGN
+// ----------------------------
+// Every round has a slightly richer side (one side's average outcome is higher
+// by ~$200–350) — the gap is never stated; an EV-sensitive player has to spot
+// it from the numbers. Rounds come in pairs that share the SAME payoff-shape
+// contrast (e.g. high-variance vs low-variance) but flip which side is richer:
 //
-// Allocation rounds render via RoundDecision + PayoffBar, which always show
-// outcomes as gains/losses vs the $10,000 input. (`displayMode` is retained on
-// the type for compatibility but the payoff bar is always relative.)
+//   • the "a" round of a pair makes the aggressive side (Growth/X) the richer one
+//   • the "b" round makes the calm side (Anchor/Y) the richer one
 //
-// Liquidity icons use the names the Icon component renders: 'lock' (lockup),
-// 'refresh' (fully liquid), and 'door-exit' (the soft-lockup / can-exit side).
-// Liquidity premiums are kept modest so the lockup and liquid options sit
-// close together — the choice is a genuine trade-off, not an obvious win.
+// Scoring then separates two things cleanly (see scoring.ts):
+//   • SHAPE (σ, α, λ): the AVERAGE of the pair — the EV pull cancels out, what's
+//     left is the player's payoff-shape taste.
+//   • EV-DISCIPLINE (ev): the DIFFERENCE within the pair — how much the player
+//     chases the richer side even when it fights their shape preference.
+//
+// Because every shape contrast is tested both ways, EV-discipline is measured
+// fairly for every archetype, and "The Optimizer" rides additively on top of
+// whatever shape the player has.
+//
+// 5 contrasts × 2 = 10 rounds, split 5/5 across two screens.
 export const ROUNDS: Round[] = [
   // ════════════════════ SCREEN 1 ════════════════════
 
-  // R1 — Variance, gain-only. No loss psychology. Pure σ.
-  // EV matched: X = 0.20×12500 + 0.80×10000 = 10500. Y = 0.80×10625 + 0.20×10000 = 10500.
+  // ── Contrast 1 — Variance (σ), gain-only (no losses, so it isolates σ) ──
+  // R1a: Growth (high-variance) is richer. X EV = .25×12800+.75×10000 = 10700; Y = .8×10600+.2×10000 = 10480.
   {
     id: 1,
     screen: 1,
     type: 'alloc',
     tag: 'Variance',
     displayMode: 'relative',
-    q: 'Both sides always return a profit. One has a larger potential upside.',
+    evGap: 220,
+    q: 'Both sides always return a profit. One swings wider than the other.',
     sub: 'How do you split your $10,000?',
     x: {
       label: 'Bigger upside',
       scenarios: [
-        { p: '20%', amt: 12500, note: 'great year' },
-        { p: '80%', amt: 10000, note: 'flat year' },
+        { p: '25%', amt: 12800, note: 'great year' },
+        { p: '75%', amt: 10000, note: 'flat year' },
       ],
     },
     y: {
-      label: 'Steady gain',
+      label: 'Steadier gain',
       scenarios: [
-        { p: '80%', amt: 10625, note: 'good year' },
+        { p: '80%', amt: 10600, note: 'good year' },
         { p: '20%', amt: 10000, note: 'flat year' },
       ],
     },
   },
 
-  // R2 — Downside. Growth can lose money, Steady cannot. σ + λ signal.
-  // EV matched: X = 0.70×11500 + 0.30×8167 = 10500. Y = 0.80×10625 + 0.20×10000 = 10500.
+  // ── Contrast 2 — Skew (α): positive-skew vs negative-skew ──
+  // R2a: Growth (positive-skew) is richer. X EV = .15×16500+.85×9350 = 10422; Y = .85×10550+.15×8200 = 10197.
   {
     id: 2,
     screen: 1,
     type: 'alloc',
-    tag: 'Downside',
+    tag: 'Skew',
     displayMode: 'relative',
-    q: 'The Growth side can lose money. The Steady side always returns a profit.',
-    sub: 'Both have the same expected return.',
+    evGap: 225,
+    q: 'Growth has a rare large upside. Anchor gains often but has a rare large loss.',
+    sub: 'Which payoff shape do you prefer?',
     x: {
-      label: 'Can lose money',
+      label: 'Rare big win',
       scenarios: [
-        { p: '70%', amt: 11500, note: 'good year' },
-        { p: '30%', amt: 8167, note: 'loss' },
+        { p: '15%', amt: 16500, note: 'rare big win' },
+        { p: '85%', amt: 9350, note: 'most years' },
       ],
     },
     y: {
-      label: 'Always profits',
+      label: 'Frequent gain, rare big loss',
       scenarios: [
-        { p: '80%', amt: 10625, note: 'gain' },
-        { p: '20%', amt: 10000, note: 'flat' },
+        { p: '85%', amt: 10550, note: 'most years' },
+        { p: '15%', amt: 8200, note: 'rare big loss' },
       ],
     },
   },
 
-  // R3 — Skew, 20% tail. Positive skew Growth vs negative skew Steady. Pure α.
-  // EV matched: X = 0.20×16500 + 0.80×9000 = 10500. Y = 0.80×11250 + 0.20×7500 = 10500.
+  // ── Contrast 3 — Loss aversion (λ): a 50/50 with a real loss vs a sure gain ──
+  // R3a: Growth (the gamble) is richer. X EV = .5×12200+.5×9000 = 10600; Y = 10400.
   {
     id: 3,
     screen: 1,
     type: 'alloc',
-    tag: 'Skew',
-    displayMode: 'relative',
-    q: 'Growth has a rare large upside. Steady has frequent moderate gains but a larger rare loss.',
-    sub: 'Same expected return. Which do you prefer?',
-    x: {
-      label: 'Rare big win',
-      scenarios: [
-        { p: '20%', amt: 16500, note: 'rare big win' },
-        { p: '80%', amt: 9000, note: 'most years' },
-      ],
-    },
-    y: {
-      label: 'Steady, rare big loss',
-      scenarios: [
-        { p: '80%', amt: 11250, note: 'most years' },
-        { p: '20%', amt: 7500, note: 'rare big loss' },
-      ],
-    },
-  },
-
-  // R4 — Loss aversion I. Growth: 50/50 with real loss. Steady: guaranteed gain. Pure λ.
-  // EV matched: X = 0.50×12000 + 0.50×9000 = 10500. Y = 10500 guaranteed.
-  {
-    id: 4,
-    screen: 1,
-    type: 'alloc',
     tag: 'Loss aversion',
     displayMode: 'relative',
-    q: 'The Growth side is a 50/50 bet — you could gain $2,000 or lose $1,000.',
-    sub: 'The Steady side gives you a guaranteed $500 profit.',
+    evGap: 200,
+    q: 'Growth is a 50/50 — you could gain $2,200 or lose $1,000. Anchor is a sure gain.',
+    sub: 'How do you split your $10,000?',
     x: {
       label: '50/50 bet',
       scenarios: [
-        { p: '50%', amt: 12000, note: 'win' },
+        { p: '50%', amt: 12200, note: 'win' },
         { p: '50%', amt: 9000, note: 'loss' },
       ],
     },
     y: {
-      label: 'Guaranteed +$500',
-      scenarios: [{ p: '100%', amt: 10500, note: 'certain' }],
+      label: 'Guaranteed gain',
+      scenarios: [{ p: '100%', amt: 10400, note: 'certain' }],
     },
   },
 
-  // R5 — Skew, 5% tail. Tiny-probability jackpot vs high-prob carry. Pure α.
-  // EV matched: X = 0.05×29500 + 0.95×9500 = 10500. Y = 0.90×10833 + 0.10×7500 = 10500.
+  // ── Contrast 4 — Combined risk profile (σ + α + λ) ──
+  // R4a: Growth (upside-leaning, volatile) is richer. X EV = .4×13800+.6×8400 = 10560; Y = .6×11600+.4×8400 = 10320.
+  {
+    id: 4,
+    screen: 1,
+    type: 'alloc',
+    tag: 'Risk profile',
+    displayMode: 'relative',
+    evGap: 240,
+    q: 'Both sides are volatile. Growth leans to the upside, Anchor leans to the downside.',
+    sub: 'How do you split your $10,000?',
+    x: {
+      label: 'Upside-leaning swing',
+      scenarios: [
+        { p: '40%', amt: 13800, note: 'gain' },
+        { p: '60%', amt: 8400, note: 'loss' },
+      ],
+    },
+    y: {
+      label: 'Downside-leaning swing',
+      scenarios: [
+        { p: '60%', amt: 11600, note: 'gain' },
+        { p: '40%', amt: 8400, note: 'loss' },
+      ],
+    },
+  },
+
+  // ── Contrast 5 — Lottery skew (α), tiny-probability jackpot ──
+  // R5a: Growth (jackpot) is richer. X EV = .05×30000+.95×9500 = 10525; Y = .9×10550+.1×8000 = 10295.
   {
     id: 5,
     screen: 1,
     type: 'alloc',
-    tag: 'Lottery',
+    tag: 'Long shot',
     displayMode: 'relative',
-    q: 'The Growth side has a 1-in-20 chance of a very large gain.',
-    sub: 'The Steady side is more predictable. Same expected return.',
+    evGap: 230,
+    q: 'Growth has a 1-in-20 shot at a very large gain. Anchor is more predictable.',
+    sub: 'How do you split your $10,000?',
     x: {
-      label: 'Lottery ticket',
+      label: 'Tiny-chance jackpot',
       scenarios: [
-        { p: '5%', amt: 29500, note: '1-in-20 chance' },
+        { p: '5%', amt: 30000, note: '1-in-20 jackpot' },
         { p: '95%', amt: 9500, note: 'most years' },
       ],
     },
     y: {
       label: 'Predictable',
       scenarios: [
-        { p: '90%', amt: 10833, note: 'most years' },
-        { p: '10%', amt: 7500, note: 'bad year' },
+        { p: '90%', amt: 10550, note: 'most years' },
+        { p: '10%', amt: 8000, note: 'bad year' },
       ],
     },
   },
 
   // ════════════════════ SCREEN 2 ════════════════════
+  // The "b" rounds: same five contrasts, but now the CALM side (Anchor) is the
+  // slightly richer one. A pure-shape player answers these the same way they
+  // answered screen 1 (so the EV pull cancels); an EV-disciplined player swings
+  // toward Anchor here, which is what reveals their EV-discipline.
 
-  // R6 — Loss aversion II. Larger stakes. Growth: 50/50 bigger loss. Steady: guaranteed. Pure λ.
-  // EV matched: X = 0.50×14000 + 0.50×7000 = 10500. Y = 10500 guaranteed.
+  // R1b — Variance, gain-only. Anchor richer. X EV = .25×12000+.75×10000 = 10500; Y = .8×10900+.2×10000 = 10720.
   {
     id: 6,
     screen: 2,
     type: 'alloc',
-    tag: 'Stakes',
+    tag: 'Variance',
     displayMode: 'relative',
-    q: 'Same structure as before — but the swings are much bigger.',
-    sub: 'You could gain $4,000 or lose $3,000. Or take the guaranteed $500.',
+    evGap: -220,
+    q: 'Both sides always return a profit. One swings wider than the other.',
+    sub: 'How do you split your $10,000?',
     x: {
-      label: 'Big 50/50 swing',
+      label: 'Bigger upside',
       scenarios: [
-        { p: '50%', amt: 14000, note: 'win' },
-        { p: '50%', amt: 7000, note: 'loss' },
+        { p: '25%', amt: 12000, note: 'great year' },
+        { p: '75%', amt: 10000, note: 'flat year' },
       ],
     },
     y: {
-      label: 'Guaranteed +$500',
-      scenarios: [{ p: '100%', amt: 10500, note: 'certain' }],
+      label: 'Steadier gain',
+      scenarios: [
+        { p: '80%', amt: 10900, note: 'good year' },
+        { p: '20%', amt: 10000, note: 'flat year' },
+      ],
     },
   },
 
-  // R7 — Liquidity I. 1-year lockup vs fully liquid, modest premium. Pure liq.
+  // R2b — Skew. Anchor richer. X EV = .15×15500+.85×9300 = 10230; Y = .85×10800+.15×8200 = 10410.
   {
     id: 7,
     screen: 2,
-    type: 'liq',
-    tag: 'Liquidity',
-    q: 'Would you lock up your money for a year for a slightly higher return?',
-    sub: 'You have $10,000 to invest.',
+    type: 'alloc',
+    tag: 'Skew',
+    displayMode: 'relative',
+    evGap: -180,
+    q: 'Growth has a rare large upside. Anchor gains often but has a rare large loss.',
+    sub: 'Which payoff shape do you prefer?',
     x: {
-      label: 'Lock in for 1 year',
-      ret: '+5%',
-      ev: 10500,
-      icon: 'lock',
-      sub: 'Cannot withdraw early. Earns $500.',
+      label: 'Rare big win',
+      scenarios: [
+        { p: '15%', amt: 15500, note: 'rare big win' },
+        { p: '85%', amt: 9300, note: 'most years' },
+      ],
     },
     y: {
-      label: 'Withdraw anytime',
-      ret: '+3.5%',
-      ev: 10350,
-      icon: 'refresh',
-      sub: 'Fully liquid. Earns $350.',
+      label: 'Frequent gain, rare big loss',
+      scenarios: [
+        { p: '85%', amt: 10800, note: 'most years' },
+        { p: '15%', amt: 8200, note: 'rare big loss' },
+      ],
     },
   },
 
-  // R8 — Skew, matched probabilities (25/75). The cleanest α test: mirror-flipped payoffs.
-  // EV matched: X = 0.25×16500 + 0.75×8500 = 10500. Y = 0.75×11500 + 0.25×7500 = 10500.
+  // R3b — Loss aversion. Anchor richer. X EV = .5×11800+.5×9000 = 10400; Y = 10600.
   {
     id: 8,
     screen: 2,
     type: 'alloc',
-    tag: 'Payoff shape',
+    tag: 'Loss aversion',
     displayMode: 'relative',
-    q: 'Both sides have the same probabilities and the same expected return.',
-    sub: 'Only the payoff shape differs. Which feels better?',
+    evGap: -200,
+    q: 'Growth is a 50/50 — you could gain $1,800 or lose $1,000. Anchor is a sure gain.',
+    sub: 'How do you split your $10,000?',
     x: {
-      label: 'Rare big win',
+      label: '50/50 bet',
       scenarios: [
-        { p: '25%', amt: 16500, note: 'good year' },
-        { p: '75%', amt: 8500, note: 'most years' },
+        { p: '50%', amt: 11800, note: 'win' },
+        { p: '50%', amt: 9000, note: 'loss' },
       ],
     },
     y: {
-      label: 'Frequent gain',
-      scenarios: [
-        { p: '75%', amt: 11500, note: 'most years' },
-        { p: '25%', amt: 7500, note: 'bad year' },
-      ],
+      label: 'Guaranteed gain',
+      scenarios: [{ p: '100%', amt: 10600, note: 'certain' }],
     },
   },
 
-  // R9 — Variance + skew combined. σ and α double contribution.
-  // EV matched: X = 0.40×13750 + 0.60×8333 = 10500. Y = 0.60×12000 + 0.40×8250 = 10500.
+  // R4b — Combined risk profile. Anchor richer. X EV = .4×13000+.6×8400 = 10240; Y = .6×12000+.4×8400 = 10560.
   {
     id: 9,
     screen: 2,
     type: 'alloc',
     tag: 'Risk profile',
     displayMode: 'relative',
-    q: 'Both sides are volatile. Growth leans toward upside, Steady leans toward downside.',
-    sub: 'Same expected return.',
+    evGap: -320,
+    q: 'Both sides are volatile. Growth leans to the upside, Anchor leans to the downside.',
+    sub: 'How do you split your $10,000?',
     x: {
-      label: 'Upside-leaning',
+      label: 'Upside-leaning swing',
       scenarios: [
-        { p: '40%', amt: 13750, note: 'gain' },
-        { p: '60%', amt: 8333, note: 'loss' },
+        { p: '40%', amt: 13000, note: 'gain' },
+        { p: '60%', amt: 8400, note: 'loss' },
       ],
     },
     y: {
-      label: 'Downside-leaning',
+      label: 'Downside-leaning swing',
       scenarios: [
         { p: '60%', amt: 12000, note: 'gain' },
-        { p: '40%', amt: 8250, note: 'loss' },
+        { p: '40%', amt: 8400, note: 'loss' },
       ],
     },
   },
 
-  // R10 — Liquidity II: hard lockup (higher rate) vs flexible (lower rate). You
-  // pay for optionality by giving up return. Picking X (lockup) = liquidity-tolerant.
+  // R5b — Lottery skew. Anchor richer. X EV = .05×26000+.95×9500 = 10325; Y = .9×10800+.1×8000 = 10520.
   {
     id: 10,
     screen: 2,
-    type: 'liq',
-    tag: 'Flexibility',
-    q: 'A locked-in product pays more. A flexible one pays less but lets you exit anytime.',
-    sub: 'Is the option to leave worth a lower return?',
+    type: 'alloc',
+    tag: 'Long shot',
+    displayMode: 'relative',
+    evGap: -195,
+    q: 'Growth has a 1-in-20 shot at a very large gain. Anchor is more predictable.',
+    sub: 'How do you split your $10,000?',
     x: {
-      label: 'Hard lockup — 1 year',
-      ret: '+6%',
-      ev: 10600,
-      icon: 'lock',
-      sub: 'Cannot exit early under any circumstances. Earns $600.',
+      label: 'Tiny-chance jackpot',
+      scenarios: [
+        { p: '5%', amt: 26000, note: '1-in-20 jackpot' },
+        { p: '95%', amt: 9500, note: 'most years' },
+      ],
     },
     y: {
-      label: 'Flexible — exit anytime',
-      ret: '+4%',
-      ev: 10400,
-      icon: 'door-exit',
-      sub: 'Withdraw whenever you like, no penalty. Earns $400.',
+      label: 'Predictable',
+      scenarios: [
+        { p: '90%', amt: 10800, note: 'most years' },
+        { p: '10%', amt: 8000, note: 'bad year' },
+      ],
     },
   },
 ]

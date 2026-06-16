@@ -26,17 +26,12 @@ export function getLambdaLabel(v: number): string {
   return 'high loss aversion'
 }
 
-export function getLiqLabel(v: number): string {
-  if (v < 0.3) return 'low — illiquidity-tolerant, lockups appropriate'
-  if (v < 0.6) return 'moderate — standard liquid product mix'
-  return 'high — avoid lockups, prioritize exit flexibility'
-}
-
-/** Split an accessory label "head — implication" into its level and product implication. */
-export function splitLabel(label: string): { level: 'low' | 'moderate' | 'high'; implication: string } {
-  const [head, ...rest] = label.split(' — ')
-  const level = head.trim().toLowerCase() as 'low' | 'moderate' | 'high'
-  return { level, implication: rest.join(' — ') }
+export function getEvLabel(v: number): string {
+  if (v < -0.6) return 'comfort-driven — sacrifices expected return for a preferred payoff shape'
+  if (v < -0.2) return 'mildly comfort-driven'
+  if (v < 0.2) return 'balanced between expected value and payoff shape'
+  if (v < 0.6) return 'mildly EV-driven'
+  return 'strongly EV-driven — takes the richer side regardless of shape'
 }
 
 // ---------------------------------------------------------------------------
@@ -45,44 +40,44 @@ export function splitLabel(label: string): { level: 'low' | 'moderate' | 'high';
 
 export function getTalkingPoints(
   archetype: string,
-  scores: { liq: number },
+  scores: { ev: number },
 ): string[] {
-  const liqHigh = scores.liq > 0.3
-  const liqLow = scores.liq < -0.3
+  const evHigh = scores.ev > 0.3 // chases expected value
+  const evLow = scores.ev < -0.3 // sacrifices EV for a preferred shape
 
   const points: Record<string, (string | null)[]> = {
     protector: [
       'Lead with capital protection — frame every recommendation downside first, upside second.',
       'Avoid products with gap risk or uncertain barriers even if the expected return is attractive.',
-      liqHigh ? 'Liquidity is important — avoid lockups even at meaningfully higher returns.' : null,
+      evLow
+        ? 'Willing to give up expected return for certainty — quantify the premium they are paying for protection so it is a conscious choice.'
+        : null,
     ],
     optimizer: [
       'Lead with expected value and fee efficiency — this client responds to data, not narrative.',
       'Avoid over-engineering — complexity will feel like a fee extraction mechanism.',
-      liqLow
-        ? 'Liquidity-tolerant — longer-dated instruments and illiquidity premia are appropriate.'
+      evHigh
+        ? 'Strongly EV-driven — show the math; they will accept an unfamiliar or uncomfortable shape if the expected value is clearly higher.'
         : null,
     ],
-    lottery: [
+    pioneer: [
       'Lead with the upside story — show the best-case scenario first.',
       'Consider a core/satellite structure: stable core with an explicitly labeled speculative sleeve.',
-      liqLow
-        ? 'High liquidity tolerance — private market exposure or long-dated options viable for the satellite.'
+      evLow
+        ? 'Pays up for positive skew — be explicit when a flashy product has a lower expected value than a plainer one.'
         : null,
     ],
     carry: [
       'Frame recommendations around income and yield — this client thinks in terms of premium, not appreciation.',
       'Be explicit about gap risk in autocallables and reverse convertibles — low loss aversion does not mean uninformed.',
-      liqHigh
-        ? 'Liquidity preference — covered-call ETFs may suit better than illiquid OTC structures.'
+      evHigh
+        ? 'Comfortable accepting negative skew for a higher average — reliable premium structures land well.'
         : null,
     ],
     agnostic: [
       'Lead with simplicity and transparency — product complexity creates friction and reduces trust.',
       'Build around well-known benchmarks the client can track independently.',
-      liqHigh
-        ? 'Liquidity is a priority — keep the portfolio fully liquid even at modest return cost.'
-        : null,
+      null,
     ],
   }
 

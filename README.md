@@ -12,21 +12,24 @@ no backend, no external UI libraries.
 ## How it works
 
 The profiler runs as a **10-round game across two screens** (a brief halfway
-interstitial sits between them):
+interstitial sits between them). Every round is an allocation slider: the client
+splits $10,000 between two sides. The **Growth** side (`X`) is always the more
+aggressive / higher-variance / skew-seeking option; the **Steady** side (`Y`) is
+the more conservative one. Outcomes are framed as gains/losses vs. the $10,000
+input. Rounds come in two flavors:
 
-- **Allocation rounds** — the client splits $10,000 between two sides. The
-  **Growth** side (`X`) is always the more aggressive / higher-variance /
-  skew-seeking option; the **Steady** side (`Y`) is the more conservative one.
-  Outcomes are framed as gains/losses relative to the $10,000 input.
-- **Liquidity rounds** — a binary choice between locking up capital for a
-  modest premium versus staying liquid.
+- **EV-matched rounds (1–6)** — both sides average exactly $10,500, so the only
+  thing the choice reveals is payoff-shape taste (variance, skew, loss aversion).
+- **EV-mismatched rounds (7–10)** — one side has a clearly higher average
+  outcome. Taking the richer side regardless of its shape is the EV-discipline
+  signal. The four rounds place the richer side on a different shape each time
+  (risky, safe, positive-skew, negative-skew), so a pure expected-value maximizer
+  nets out flat on shape and lights up only the EV axis.
 
 After locking in each round, the app **draws one real outcome** from the
-player's chosen distribution (weighted by probability) and adds it to a running
-total — a single, non-re-rollable draw per round. The cumulative result is
-surfaced as "Your run" on the dashboard. The draw is purely for engagement; the
-profile is scored only from the *choices*, not the outcomes (every round is
-EV-matched, so the draw can't bias the classification).
+player's chosen distribution and adds it to a running total — a single,
+non-re-rollable draw per round, surfaced as "Your run" on the dashboard. The
+draw is purely for engagement; the profile is scored only from the *choices*.
 
 Each choice contributes a signed signal to four dimensions:
 
@@ -35,12 +38,14 @@ Each choice contributes a signed signal to four dimensions:
 | **σ (sigma)** | Variance tolerance |
 | **α (alpha)** | Skew preference (taste for positive vs. negative skew) |
 | **λ (lambda)** | Loss aversion |
-| **liquidity** | Preference for liquidity over lockups |
+| **ev** | EV-discipline (chases the higher expected value vs. a preferred shape) |
 
-The normalized `(σ, α, λ)` vector is matched by **cosine similarity** against
+The normalized `(σ, α, λ, ev)` vector is matched by **cosine similarity** against
 five archetype vectors — **Protector, Optimizer, Lottery Seeker, Carry
-Collector, Agnostic**. The liquidity dimension then shapes the suggested
-allocation and instrument ranking on the advisor dashboard.
+Collector, Agnostic**. The `ev` axis is what makes **The Optimizer** reachable: a
+client with no strong shape preference who consistently grabs the richer side.
+Asset-class allocation and instrument ranking on the advisor dashboard are driven
+by the `(σ, α, λ)` shape vector.
 
 ## Getting started
 
@@ -79,21 +84,20 @@ src/
 ├── index.css               # Tailwind layers + animations
 ├── components/
 │   ├── IntroScreen.tsx     # Landing screen
-│   ├── RoundScreen.tsx     # Per-round router (allocation → RoundDecision, else liquidity)
+│   ├── RoundScreen.tsx     # Per-round wrapper → RoundDecision
 │   ├── RoundDecision.tsx   # Allocation round: portfolio mix + payoff distribution
 │   ├── RoundProgress.tsx   # Segmented per-round progress indicator
-│   ├── Coachmarks.tsx      # One-time in-context tutorial (first allocation round)
-│   ├── DrawReveal.tsx      # Post-decision random-draw reveal + running total
-│   ├── PayoffBar.tsx       # Canvas payoff-distribution bar (joint outcomes, computed inline)
-│   ├── LiqCards.tsx        # Liquidity choice cards
+│   ├── Coachmarks.tsx      # One-time in-context tutorial (first round)
+│   ├── Scoreboard.tsx      # Running capital / profit tally above the bar
+│   ├── DrawPointer.tsx     # Spinning pointer that lands on the drawn outcome
+│   ├── PayoffBar.tsx       # Canvas payoff-distribution bar (joint outcomes)
 │   ├── HalfwayScreen.tsx   # Screen 1 → screen 2 transition
 │   ├── AdvisorDashboard.tsx# Two-panel results view
 │   ├── ClientPanel.tsx     # Client-facing profile + allocation
 │   ├── AdvisorPanel.tsx    # Advisor-only raw scores + talking points
 │   ├── DonutChart.tsx      # Pure-SVG allocation donut
 │   ├── InstrumentList.tsx  # Ranked instrument fit list
-│   ├── DimensionScoreBar.tsx
-│   └── Icon.tsx            # Inlined Tabler icons
+│   └── DimensionScoreBar.tsx
 ├── data/
 │   ├── rounds.ts           # The 10 round definitions
 │   └── archetypes.ts       # Archetype copy + target vectors

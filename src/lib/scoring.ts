@@ -8,70 +8,66 @@ import {
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
 
-export const EMPTY_SCORES: Scores = { sigma: 0, alpha: 0, lambda: 0, liq: 0 }
+export const EMPTY_SCORES: Scores = { sigma: 0, alpha: 0, lambda: 0, ev: 0 }
 
 /**
- * Per-round scoring contributions for the core dimensions (13-round design).
- * Growth (X) is the aggressive option in every round, so the signal is
- * monotone: s = (allocX - 50) / 50 ∈ [-1, +1]; positive s = leaning aggressive.
- * Weights are signed — a positive weight means more Growth raises that
- * dimension, a negative weight means more Growth lowers it. Aggressive =>
- * higher sigma/alpha, lower lambda, hence the negative lambda weights.
- * Liquidity rounds (7, 10) are handled separately in applyScore.
+ * Per-round scoring contributions (10-round paired all-mismatched design).
+ * Every round is an allocation slider: Growth (X) is always the more aggressive
+ * side, so the signal is monotone: s = (allocX - 50) / 50 ∈ [-1, +1]; positive
+ * s = leaning toward X. Shape weights are signed in the X-direction.
+ *
+ * Rounds come in pairs sharing a shape contrast (ids n and n+5):
+ *   1/6  variance (σ), gain-only
+ *   2/7  skew (α)
+ *   3/8  loss aversion (λ, + a little σ)
+ *   4/9  combined risk profile (σ + α + λ)
+ *   5/10 lottery skew (α)
+ * Both rounds of a pair carry IDENTICAL shape weights (X is the aggressive side
+ * in both), so the shape signal is the pair's average. The `ev` weight FLIPS
+ * sign between them: +2 when the richer side is X (the "a"/screen-1 round), -2
+ * when the richer side is Y (the "b"/screen-2 round). A player who answers on
+ * pure shape gives the same slider both times → the ev contributions cancel; a
+ * player who chases the richer side splits them → ev accumulates. That's the
+ * EV-discipline (Optimizer) signal, isolated from shape.
  */
 export const ROUND_SCORES: Record<
   number,
-  { dim: 'sigma' | 'alpha' | 'lambda'; weight: number }[]
+  { dim: 'sigma' | 'alpha' | 'lambda' | 'ev'; weight: number }[]
 > = {
-  1: [{ dim: 'sigma', weight: 3 }],
-  2: [
-    { dim: 'sigma', weight: 2 },
-    { dim: 'lambda', weight: -1 },
-  ],
-  3: [{ dim: 'alpha', weight: 3 }],
+  // ── screen 1: the "a" rounds, aggressive side (X) is the richer one ──
+  1: [{ dim: 'sigma', weight: 2 }, { dim: 'ev', weight: 2 }],
+  2: [{ dim: 'alpha', weight: 2 }, { dim: 'ev', weight: 2 }],
+  3: [{ dim: 'lambda', weight: -2 }, { dim: 'sigma', weight: 1 }, { dim: 'ev', weight: 2 }],
   4: [
-    { dim: 'lambda', weight: -3 },
     { dim: 'sigma', weight: 1 },
+    { dim: 'alpha', weight: 1 },
+    { dim: 'lambda', weight: -1 },
+    { dim: 'ev', weight: 2 },
   ],
-  5: [{ dim: 'alpha', weight: 3 }],
-  6: [
-    { dim: 'lambda', weight: -3 },
-    { dim: 'sigma', weight: 1 },
-  ],
-  7: [], // liquidity — handled separately
-  8: [{ dim: 'alpha', weight: 3 }],
+  5: [{ dim: 'alpha', weight: 2 }, { dim: 'ev', weight: 2 }],
+  // ── screen 2: the "b" rounds, calm side (Y) is the richer one (ev flips) ──
+  6: [{ dim: 'sigma', weight: 2 }, { dim: 'ev', weight: -2 }],
+  7: [{ dim: 'alpha', weight: 2 }, { dim: 'ev', weight: -2 }],
+  8: [{ dim: 'lambda', weight: -2 }, { dim: 'sigma', weight: 1 }, { dim: 'ev', weight: -2 }],
   9: [
-    { dim: 'sigma', weight: 2 },
-    { dim: 'alpha', weight: 2 },
+    { dim: 'sigma', weight: 1 },
+    { dim: 'alpha', weight: 1 },
+    { dim: 'lambda', weight: -1 },
+    { dim: 'ev', weight: -2 },
   ],
-  10: [], // liquidity — handled separately
+  10: [{ dim: 'alpha', weight: 2 }, { dim: 'ev', weight: -2 }],
 }
 
-// Liquidity rounds and their weights. Picking X (lockup) is liquidity-tolerant.
-const LIQ_WEIGHTS: Record<number, number> = { 7: 1.0, 10: 1.0 }
-
 /**
- * Accumulate a round's contribution into the raw score accumulator.
- *
- * Liquidity rounds (type 'liq': 7, 10): binary card pick — X is the
- *   lockup option (RoundScreen passes allocX === 100), Y is the liquid option
- *   (allocX === 0). Picking X (lockup) adds +weight to liq (liquidity-tolerant),
- *   picking Y (liquid) adds -weight.
- * Core rounds: signal scaled by the signed ROUND_SCORES weights.
+ * Accumulate a round's contribution into the raw score accumulator. The slider
+ * value maps to a monotone signal and is scaled by the signed ROUND_SCORES
+ * weights.
  */
 export function applyScore(acc: Scores, round: Round, allocX: number): Scores {
   const next: Scores = { ...acc }
-  const id = round.id
-
-  if (round.type === 'liq') {
-    const pickedX = allocX === 100 // X = lockup, Y = liquid
-    next.liq += (LIQ_WEIGHTS[id] ?? 0) * (pickedX ? +1 : -1)
-    return next
-  }
-
   const signal = (allocX - 50) / 50 // [-1, +1]
 
-  for (const { dim, weight } of ROUND_SCORES[id] ?? []) {
+  for (const { dim, weight } of ROUND_SCORES[round.id] ?? []) {
     next[dim] += weight * signal
   }
   return next
@@ -81,27 +77,25 @@ export type NormalizedScores = {
   sigma: number // [-1, 1] variance tolerance
   alpha: number // [-1, 1] skew preference (positive = seeks positive skew)
   lambda: number // [-1, 1] loss aversion (positive = more loss averse)
-  liq: number // [0, 1] liquidity preference (positive = prefers liquidity)
+  ev: number // [-1, 1] EV-discipline (positive = chases higher expected value)
 }
 
-// Normalization denominators = sum of |weights| per dimension.
-// sigma:  R1(3) + R2(2) + R4(1) + R6(1) + R9(2)        = 9
-// alpha:  R3(3) + R5(3) + R8(3) + R9(2)                = 11
-// lambda: R2(1) + R4(3) + R6(3)                        = 7
-// liq:    R7(1) + R10(1)                               = 2
-const NORM_SIGMA = 9
-const NORM_ALPHA = 11
-const NORM_LAMBDA = 7
-const NORM_LIQ = 2
+// Normalization denominators = sum of |weights| per dimension across all rounds.
+// sigma:  1(2)+3(1)+4(1)+6(2)+8(1)+9(1)            = 8
+// alpha:  2(2)+4(1)+5(2)+7(2)+9(1)+10(2)           = 10
+// lambda: 3(2)+4(1)+8(2)+9(1)                      = 6
+// ev:     10 rounds × 2                            = 20
+const NORM_SIGMA = 8
+const NORM_ALPHA = 10
+const NORM_LAMBDA = 6
+const NORM_EV = 20
 
 export function normalizeScores(raw: Scores): NormalizedScores {
   return {
     sigma: clamp(raw.sigma / NORM_SIGMA, -1, 1),
     alpha: clamp(raw.alpha / NORM_ALPHA, -1, 1),
     lambda: clamp(raw.lambda / NORM_LAMBDA, -1, 1),
-    // liq: positive raw = lockup-tolerant = LOW liquidity preference. Negate so
-    // a high score = prefers liquidity, then map to [0, 1].
-    liq: clamp((-raw.liq / NORM_LIQ + 1) / 2, 0, 1),
+    ev: clamp(raw.ev / NORM_EV, -1, 1),
   }
 }
 
@@ -109,17 +103,22 @@ export function normalizeScores(raw: Scores): NormalizedScores {
 // Archetype classification
 // ---------------------------------------------------------------------------
 
-type CoreScores = { sigma: number; alpha: number; lambda: number }
+// The base archetype is decided by payoff SHAPE only — variance, skew, loss
+// aversion. EV-discipline is deliberately NOT part of these vectors (every
+// shape archetype is ev-neutral). The Optimizer is handled as an ADDITIVE
+// overlay on top of the shape result: it isn't a competing direction in the
+// same space, it's a separate reading of one axis.
+type ShapeScores = { sigma: number; alpha: number; lambda: number }
 
-export const ARCHETYPE_VECTORS: Record<ArchetypeKey, CoreScores> = {
+// The four shape archetypes (Optimizer is intentionally absent — see below).
+export const SHAPE_VECTORS: Record<Exclude<ArchetypeKey, 'optimizer'>, ShapeScores> = {
   protector: { sigma: -0.7, alpha: -0.2, lambda: +0.8 },
-  optimizer: { sigma: +0.3, alpha: +0.1, lambda: -0.3 },
-  lottery: { sigma: +0.6, alpha: +0.9, lambda: -0.5 },
+  pioneer: { sigma: +0.6, alpha: +0.9, lambda: -0.5 },
   carry: { sigma: +0.4, alpha: -0.8, lambda: 0.0 },
   agnostic: { sigma: -0.4, alpha: 0.0, lambda: +0.1 },
 }
 
-export function cosineSim(a: CoreScores, b: CoreScores): number {
+export function cosineSim(a: ShapeScores, b: ShapeScores): number {
   const dot = a.sigma * b.sigma + a.alpha * b.alpha + a.lambda * b.lambda
   const magA = Math.sqrt(a.sigma ** 2 + a.alpha ** 2 + a.lambda ** 2)
   const magB = Math.sqrt(b.sigma ** 2 + b.alpha ** 2 + b.lambda ** 2)
@@ -134,23 +133,52 @@ export type Classification = {
   isBlend: boolean
 }
 
-export function classify(scores: CoreScores): Classification {
-  const sims = (Object.keys(ARCHETYPE_VECTORS) as ArchetypeKey[])
-    .map((key) => ({ key, sim: cosineSim(scores, ARCHETYPE_VECTORS[key]) }))
+// Below this shape magnitude there's no real shape signal — the result is
+// driven by the EV axis (Optimizer) or, failing that, Agnostic.
+const SHAPE_MIN = 0.3
+// EV-discipline strong enough to surface the Optimizer overlay.
+const EV_TAG = 0.3
+
+export function classify(scores: { sigma: number; alpha: number; lambda: number; ev: number }): Classification {
+  const shape: ShapeScores = { sigma: scores.sigma, alpha: scores.alpha, lambda: scores.lambda }
+  const shapeMag = Math.sqrt(shape.sigma ** 2 + shape.alpha ** 2 + shape.lambda ** 2)
+  const evStrong = scores.ev >= EV_TAG
+  // Optimizer "match" is read straight off the EV axis (0..1).
+  const evSim = clamp(scores.ev, 0, 1)
+
+  const sims = (Object.keys(SHAPE_VECTORS) as Exclude<ArchetypeKey, 'optimizer'>[])
+    .map((key) => ({ key, sim: cosineSim(shape, SHAPE_VECTORS[key]) }))
     .sort((a, b) => b.sim - a.sim)
 
-  // No directional signal at all -> default to the Agnostic profile.
-  const magnitude = Math.sqrt(scores.sigma ** 2 + scores.alpha ** 2 + scores.lambda ** 2)
-  if (magnitude < 1e-6) {
+  // No meaningful shape preference: the EV axis decides. Strong EV-discipline =>
+  // a pure Optimizer; otherwise the Agnostic default.
+  if (shapeMag < SHAPE_MIN) {
+    if (evStrong) {
+      return { archetype: 'optimizer', secondary: null, primarySim: evSim, secondarySim: null, isBlend: false }
+    }
     return { archetype: 'agnostic', secondary: null, primarySim: 0, secondarySim: null, isBlend: false }
   }
 
+  // There is a shape preference, so a shape archetype leads. The Optimizer rides
+  // on top additively: when EV-discipline is high it becomes the secondary
+  // ("a Carry Collector who also chases expected value"); otherwise the
+  // runner-up shape archetype fills the secondary slot.
+  const primary = sims[0]
+  if (evStrong) {
+    return {
+      archetype: primary.key,
+      secondary: 'optimizer',
+      primarySim: primary.sim,
+      secondarySim: evSim,
+      isBlend: true,
+    }
+  }
   return {
-    archetype: sims[0].key,
+    archetype: primary.key,
     secondary: sims[1].key,
-    primarySim: sims[0].sim,
+    primarySim: primary.sim,
     secondarySim: sims[1].sim,
-    isBlend: sims[0].sim - sims[1].sim < 0.15,
+    isBlend: primary.sim - sims[1].sim < 0.15,
   }
 }
 
@@ -158,7 +186,11 @@ export function classify(scores: CoreScores): Classification {
 // Asset-class allocation engine
 // ---------------------------------------------------------------------------
 
-export const ASSET_CLASS_LOADINGS: Record<AssetClass, CoreScores> = {
+// Asset-class allocation is driven by payoff shape only (σ, α, λ); the ev axis
+// describes how the client decides, not what an asset class is.
+type ShapeVector = { sigma: number; alpha: number; lambda: number }
+
+export const ASSET_CLASS_LOADINGS: Record<AssetClass, ShapeVector> = {
   'Fixed income': { sigma: -0.333, alpha: -0.267, lambda: +0.283 },
   Equities: { sigma: +0.371, alpha: +0.171, lambda: -0.193 },
   'Income structures': { sigma: -0.1, alpha: -0.64, lambda: -0.2 },
@@ -172,12 +204,12 @@ export const ASSET_CLASS_LOADINGS: Record<AssetClass, CoreScores> = {
 const ALLOC_CAPS: Record<string, Partial<Record<AssetClass, number>>> = {
   protector: { Crypto: 0.0, 'Income structures': 0.12, 'Growth structures': 0.15 },
   optimizer: { Crypto: 0.08 },
-  lottery: { 'Income structures': 0.06, 'Cash/MMF': 0.05 },
+  pioneer: { 'Income structures': 0.06, 'Cash/MMF': 0.05 },
   carry: { Crypto: 0.05, 'Growth structures': 0.06, 'Cash/MMF': 0.05 },
   agnostic: { Crypto: 0.0, 'Income structures': 0.06, 'Growth structures': 0.06 },
 }
 
-function vecDistance(a: CoreScores, b: CoreScores): number {
+function vecDistance(a: ShapeVector, b: ShapeVector): number {
   return Math.sqrt((a.sigma - b.sigma) ** 2 + (a.alpha - b.alpha) ** 2 + (a.lambda - b.lambda) ** 2)
 }
 
@@ -203,7 +235,7 @@ export const SATELLITE_PENALTY = 10
 
 export function computeAllocation(
   archetype: string,
-  scores: { sigma: number; alpha: number; lambda: number; liq: number },
+  scores: { sigma: number; alpha: number; lambda: number },
 ): { assetClass: AssetClass; pct: number }[] {
   const target = { sigma: scores.sigma, alpha: scores.alpha, lambda: scores.lambda }
   const classes = Object.keys(ASSET_CLASS_LOADINGS) as AssetClass[]
@@ -238,10 +270,6 @@ export function computeAllocation(
     capped[cls] = Math.min(cap, raw[cls])
   }
 
-  // Step 3: liquidity penalty — liquidity-preferring clients get less locked-up exposure
-  capped['Income structures'] *= 1 - scores.liq * 0.4
-  capped['Growth structures'] *= 1 - scores.liq * 0.6
-
   // Step 4: renormalize
   const total = Object.values(capped).reduce((s, v) => s + v, 0)
   const norm: Record<string, number> = {}
@@ -272,9 +300,9 @@ export function computeAllocation(
 
 export function computeFitScore(
   instrument: Instrument,
-  scores: { sigma: number; alpha: number; lambda: number; liq: number },
+  scores: { sigma: number; alpha: number; lambda: number },
 ): number {
-  // Core fit: proximity in (sigma, alpha, lambda) space
+  // Fit: proximity in (sigma, alpha, lambda) space
   const sigmaMatch = 1 - Math.abs(scores.sigma - instrument.sigmaLoad) / 2
   const alphaMatch = 1 - Math.abs(scores.alpha - instrument.alphaLoad) / 2
   const lambdaMatch = 1 - Math.abs(scores.lambda - instrument.lambdaLoad) / 2
@@ -282,18 +310,13 @@ export function computeFitScore(
   // Alpha weighted highest — skew preference is the most differentiating axis
   const coreFit = (sigmaMatch * 0.3 + alphaMatch * 0.45 + lambdaMatch * 0.25) * 100
 
-  // Liquidity penalties: based on lockup length and liquidity tier
-  const lockupPenalty = scores.liq * (instrument.lockupMonths / 36) * 20
-  const illiqPenalty = scores.liq * ((instrument.liquidityTier - 1) / 3) * 10
-
-  return Math.round(Math.max(0, Math.min(100, coreFit - lockupPenalty - illiqPenalty)))
+  return Math.round(Math.max(0, Math.min(100, coreFit)))
 }
 
 export function getRankedInstruments(scores: {
   sigma: number
   alpha: number
   lambda: number
-  liq: number
 }): (Instrument & { fit: number })[] {
   return INSTRUMENTS.map((inst) => ({ ...inst, fit: computeFitScore(inst, scores) }))
     .filter((inst) => inst.fit >= 25)
@@ -315,7 +338,12 @@ export interface DashboardData {
 }
 
 export function buildDashboardData(normalized: NormalizedScores): DashboardData {
-  const c = classify({ sigma: normalized.sigma, alpha: normalized.alpha, lambda: normalized.lambda })
+  const c = classify({
+    sigma: normalized.sigma,
+    alpha: normalized.alpha,
+    lambda: normalized.lambda,
+    ev: normalized.ev,
+  })
   return {
     archetype: c.archetype,
     secondaryArchetype: c.secondary,

@@ -17,10 +17,10 @@ type Props = {
 }
 
 // The two sides carry a fixed identity across every round: X is always the
-// more aggressive "Growth" side (teal), Y the more conservative "Steady" side
+// more aggressive "Growth" side (teal), Y the more conservative "Anchor" side
 // (amber). Naming them — instead of bare X / Y — keeps the choice concrete.
 const X_NAME = 'Growth'
-const Y_NAME = 'Steady'
+const Y_NAME = 'Anchor'
 
 // Reference cards start expanded for the first few rounds, then collapse by
 // default once the format is familiar.
@@ -144,17 +144,15 @@ export default function RoundDecision({ round, index, total, runningPnl, onNext 
           <RoundProgress index={index} total={total} />
         </div>
 
-        {/* 2 — Round-specific question + context */}
-        <h2 className="text-2xl font-semibold leading-snug tracking-tight text-text">{round.q}</h2>
-        <p className="mt-2.5 text-base leading-relaxed text-muted">{round.sub}</p>
-
-        {/* 3 — Distribution card */}
-        <div className="mt-7 rounded-2xl border border-border bg-surface p-6 shadow-card">
+        {/* 2 — Distribution card. The round has no written prompt — the two
+            reference cards and the payoff bar carry the choice on their own. */}
+        <div className="mt-2 rounded-2xl border border-border bg-surface p-6 shadow-card">
           {/* Prominent running tally above the bar */}
           <Scoreboard capital={capital} pnl={pnl} draw={liveDraw} />
 
-          {/* Plain-language mix readout */}
-          <div className="mb-4 mt-4 flex items-baseline justify-between border-t border-border pt-4">
+          {/* Plain-language mix readout — sits right above the bar so the split
+              reads as a caption for the distribution. */}
+          <div className="mb-2 mt-5 flex items-baseline justify-between">
             <span className="text-sm font-medium text-text">Your mix</span>
             <span className="text-sm tnum">
               <span className="font-mono font-medium text-teal">{fmtMoney(xDollars)}</span>

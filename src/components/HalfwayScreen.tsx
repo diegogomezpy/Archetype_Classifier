@@ -17,8 +17,8 @@ export default function HalfwayScreen({ onContinue }: Props) {
         </h1>
 
         <p className="mt-5 text-lg leading-relaxed text-muted">
-          Nice work — 5 more decisions to go. The next set explores how you feel about
-          locking up your money.
+          Nice work — 5 more decisions to go. Same idea as before: look at both sides and
+          go with the one you'd actually want.
         </p>
 
         <button

@@ -31,7 +31,7 @@ const STEPS: Step[] = [
   {
     selector: '[data-tour="slider"]',
     title: 'Set your mix',
-    body: 'Drag to split your $10,000 between the Growth and Steady sides. The bar updates as you move it.',
+    body: 'Drag to split your $10,000 between the Growth and Anchor sides. The bar updates as you move it.',
   },
   {
     selector: '[data-tour="next"]',
