@@ -97,8 +97,18 @@ export default function RoundDecision({ round, index, total, onNext }: Props) {
       {showTutorial && <Coachmarks onClose={() => setShowTutorial(false)} />}
 
       <div className="flex w-full max-w-4xl flex-col">
-        {/* 1 — Segmented progress */}
-        <div className="mb-6 flex items-center justify-end font-mono text-xs uppercase tracking-[0.14em] text-muted">
+        {/* 1 — "How it works" replay + segmented progress */}
+        <div className="mb-6 flex items-center justify-between font-mono text-xs uppercase tracking-[0.14em] text-muted">
+          <button
+            type="button"
+            onClick={() => setShowTutorial(true)}
+            className="flex items-center gap-1.5 rounded-full bg-surface px-3 py-1 normal-case tracking-normal shadow-soft transition-colors hover:text-text"
+          >
+            <span aria-hidden className="text-sm leading-none">
+              ⓘ
+            </span>
+            How it works
+          </button>
           <RoundProgress index={index} total={total} />
         </div>
 
