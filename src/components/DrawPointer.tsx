@@ -17,9 +17,13 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
 // Strong deceleration: lots of travel up front, creeping to a stop at the end.
 const easeOutQuart = (t: number) => 1 - Math.pow(1 - t, 4)
 
+// How much faster the spin plays once the player taps to hurry it along.
+const SKIP_SPEED = 6
+
 type Props = {
   outcomes: Outcome[]
   active: boolean // true while the spin is running
+  skipSignal: number // increments when the player taps to speed the spin up
   onLand: (index: number) => void // reports the segment the pointer rests on
 }
 
@@ -28,13 +32,20 @@ type Props = {
 // decelerating to a genuinely random stop. Whichever segment it lands on is the
 // outcome (wider segment = more likely), so the position and the value can never
 // disagree. Positioned with PayoffBar's geometry so it lines up exactly.
-export default function DrawPointer({ outcomes, active, onLand }: Props) {
+export default function DrawPointer({ outcomes, active, skipSignal, onLand }: Props) {
   const ref = useRef<HTMLDivElement | null>(null)
   const [w, setW] = useState(0)
   const [left, setLeft] = useState<number | null>(null)
   const leftRef = useRef<number | null>(null)
   const landedRef = useRef<number | null>(null)
+  const speedRef = useRef(1) // spin speed multiplier (bumped on skip)
   const timers = useRef<number[]>([])
+
+  // A tap to hurry the draw bumps the spin speed; the pointer keeps travelling
+  // to the same landing spot, just faster (no teleport).
+  useEffect(() => {
+    if (skipSignal > 0) speedRef.current = SKIP_SPEED
+  }, [skipSignal])
 
   // The wrapper width drives the segment layout (the canvas is w-full).
   useEffect(() => {
@@ -84,7 +95,9 @@ export default function DrawPointer({ outcomes, active, onLand }: Props) {
     }
 
     // Spin: travel a random distance in one direction, bouncing off the edges
-    // (reflection / fold), decelerating to a stop wherever it ends up.
+    // (reflection / fold), decelerating to a stop wherever it ends up. Time is
+    // accumulated through a speed multiplier so a skip-tap can fast-forward the
+    // remaining travel without teleporting.
     const span = innerW || 1
     const start = leftRef.current ?? restX
     const dir = Math.random() < 0.5 ? 1 : -1
@@ -93,15 +106,19 @@ export default function DrawPointer({ outcomes, active, onLand }: Props) {
       let p = ((x - lo) % (2 * span) + 2 * span) % (2 * span)
       return p <= span ? lo + p : lo + (2 * span - p)
     }
+    const finalPos = clamp(fold(start + dir * distance), lo, hi)
 
-    const t0 = performance.now()
+    speedRef.current = 1 // reset; a skip during this spin bumps it
+    let elapsed = 0
+    let last = performance.now()
     const id = window.setInterval(() => {
-      const u = Math.min(1, (performance.now() - t0) / ROLL_MS)
-      const pos = fold(start + dir * distance * easeOutQuart(u))
-      setBoth(clamp(pos, lo, hi))
+      const now = performance.now()
+      elapsed += (now - last) * speedRef.current
+      last = now
+      const u = Math.min(1, elapsed / ROLL_MS)
+      setBoth(clamp(fold(start + dir * distance * easeOutQuart(u)), lo, hi))
       if (u >= 1) {
         clearInterval(id)
-        const finalPos = clamp(fold(start + dir * distance), lo, hi)
         setBoth(finalPos)
         landedRef.current = finalPos
         onLand(segmentAt(finalPos))

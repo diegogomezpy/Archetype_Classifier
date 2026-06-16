@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { AllocRound } from '../types'
 import PayoffBar from './PayoffBar'
 import RoundProgress from './RoundProgress'
@@ -101,12 +101,16 @@ function ReferenceCard({
 export default function RoundDecision({ round, index, total, runningPnl, onNext }: Props) {
   const [allocX, setAllocX] = useState(50)
   const [showTutorial, setShowTutorial] = useState(() => index === 1 && !tutorialSeen())
-  const { phase, delta, applied, start } = useDrawSequence()
+  const { phase, delta, applied, start, speedUp } = useDrawSequence()
   // The round's outcome distribution, captured on lock-in. The pointer spins to
   // a random spot and reports which segment it landed on (`handleLand`), and
   // that segment determines the drawn value — the position IS the result.
   const [outcomes, setOutcomes] = useState<Outcome[]>([])
   const [spinning, setSpinning] = useState(false)
+  // Bumps when the player taps to hurry the draw; forwarded to the pointer to
+  // accelerate the spin, and remembered so the count-up speeds up too.
+  const [skipSignal, setSkipSignal] = useState(0)
+  const skipRef = useRef(false)
 
   const xDollars = allocX * 100
   const yDollars = (100 - allocX) * 100
@@ -123,11 +127,23 @@ export default function RoundDecision({ round, index, total, runningPnl, onNext 
   }
 
   // Pointer has come to rest on segment `idx` — read off the value and run the
-  // Capital / Profit count-up.
+  // Capital / Profit count-up (sped up too if the player asked to hurry).
   const handleLand = (idx: number) => {
     setSpinning(false)
     const landed = outcomes[idx]
-    if (landed) start(landed.end - INPUT)
+    if (landed) {
+      start(landed.end - INPUT)
+      if (skipRef.current) speedUp()
+    }
+    skipRef.current = false
+  }
+
+  // Tap again mid-draw to hurry it along — speeds up the spin and the count-up
+  // (it still animates to the real landing; nothing teleports).
+  const handleSkip = () => {
+    skipRef.current = true
+    if (spinning) setSkipSignal((s) => s + 1)
+    else if (phase === 'ticking') speedUp()
   }
 
   const isLast = index === total
@@ -167,7 +183,12 @@ export default function RoundDecision({ round, index, total, runningPnl, onNext 
               it and lands on the drawn segment. */}
           <div data-tour="bar" className="relative">
             <PayoffBar round={round} allocX={allocX} />
-            <DrawPointer outcomes={outcomes} active={spinning} onLand={handleLand} />
+            <DrawPointer
+              outcomes={outcomes}
+              active={spinning}
+              skipSignal={skipSignal}
+              onLand={handleLand}
+            />
           </div>
 
           {/* Legend — shown only on the first round, while the format is new. */}
@@ -209,7 +230,7 @@ export default function RoundDecision({ round, index, total, runningPnl, onNext 
           <ReferenceCard side="y" name={Y_NAME} label={round.y.label} scenarios={round.y.scenarios} />
         </div>
 
-        {/* 5 — Action button: lock in → (spin + draw resolves) → advance */}
+        {/* 5 — Action button: lock in → (spin; tap again to hurry) → advance */}
         {(() => {
           const drawing = spinning || phase === 'ticking'
           const done = phase === 'done'
@@ -217,15 +238,14 @@ export default function RoundDecision({ round, index, total, runningPnl, onNext 
             <button
               data-tour="next"
               type="button"
-              disabled={drawing}
-              onClick={done ? () => onNext(allocX, delta) : !drawing ? lockIn : undefined}
+              onClick={done ? () => onNext(allocX, delta) : drawing ? handleSkip : lockIn}
               className={`mt-7 w-full rounded-2xl py-4 text-base font-semibold shadow-soft transition-all duration-200 ${
                 drawing
-                  ? 'cursor-default bg-surface2 text-muted'
+                  ? 'cursor-pointer bg-surface2 text-muted hover:text-text'
                   : 'bg-teal text-white hover:-translate-y-0.5 hover:shadow-card active:translate-y-0'
               }`}
             >
-              {drawing ? 'Drawing…' : done ? (isLast ? 'See my profile' : 'Next round') : 'Lock it in'}
+              {drawing ? 'Drawing… — tap to speed up' : done ? (isLast ? 'See my profile' : 'Next round') : 'Lock it in'}
             </button>
           )
         })()}

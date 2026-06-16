@@ -16,6 +16,7 @@ export function useDrawSequence() {
   const [phase, setPhase] = useState<DrawPhase>('idle')
   const [delta, setDelta] = useState(0) // the final drawn delta
   const [applied, setApplied] = useState(0) // animates 0 → delta during ticking
+  const speedRef = useRef(1) // count-up speed multiplier (bumped when skipping)
   const timers = useRef<number[]>([])
 
   const clearAll = () => {
@@ -31,8 +32,9 @@ export function useDrawSequence() {
     setPhase('ticking')
     let i = 0
     const id = window.setInterval(() => {
-      i++
-      setApplied(finalDelta * easeOutCubic(i / TICK_STEPS))
+      i += speedRef.current // advance faster while sped up
+      const t = Math.min(1, i / TICK_STEPS)
+      setApplied(finalDelta * easeOutCubic(t))
       if (i >= TICK_STEPS) {
         clearInterval(id)
         setApplied(finalDelta)
@@ -42,10 +44,11 @@ export function useDrawSequence() {
     timers.current.push(id)
   }
 
-  // Begin the sequence. `withRoll` runs the swing window first (allocation
-  // rounds); omit it for a deterministic draw (liquidity rounds just count up).
+  // Begin the sequence. `withRoll` runs the swing window first (unused now that
+  // the pointer owns the spin); the count-up always plays.
   const start = (finalDelta: number, withRoll = false) => {
     clearAll()
+    speedRef.current = 1
     setDelta(finalDelta)
     setApplied(0)
     if (withRoll) {
@@ -57,5 +60,11 @@ export function useDrawSequence() {
     }
   }
 
-  return { phase, delta, applied, start }
+  // Speed the count-up up (the player tapped to hurry the draw along). It still
+  // animates to the figure — just faster.
+  const speedUp = (factor = 5) => {
+    speedRef.current = factor
+  }
+
+  return { phase, delta, applied, start, speedUp }
 }
