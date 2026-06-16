@@ -8,17 +8,16 @@ import {
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
 
-export const EMPTY_SCORES: Scores = { sigma: 0, alpha: 0, lambda: 0, ambig: 0, liq: 0 }
+export const EMPTY_SCORES: Scores = { sigma: 0, alpha: 0, lambda: 0, liq: 0 }
 
 /**
- * Per-round scoring contributions for the core dimensions (16-round design).
- * X is the aggressive option in every round, so the signal is monotone:
- *   s = (allocX - 50) / 50 ∈ [-1, +1]; positive s = leaning aggressive.
- * Weights are signed — a positive weight means more X raises that dimension,
- * a negative weight means more X lowers it. Aggressive => higher sigma/alpha,
- * lower lambda, hence the negative lambda weights.
- * Ambiguity rounds (7, 11, 12, and half of 13) and liquidity rounds
- * (8, 13, 14, 15, 16) are handled separately in applyScore.
+ * Per-round scoring contributions for the core dimensions (13-round design).
+ * Growth (X) is the aggressive option in every round, so the signal is
+ * monotone: s = (allocX - 50) / 50 ∈ [-1, +1]; positive s = leaning aggressive.
+ * Weights are signed — a positive weight means more Growth raises that
+ * dimension, a negative weight means more Growth lowers it. Aggressive =>
+ * higher sigma/alpha, lower lambda, hence the negative lambda weights.
+ * Liquidity rounds (7, 10, 11, 12, 13) are handled separately in applyScore.
  */
 export const ROUND_SCORES: Record<
   number,
@@ -39,43 +38,28 @@ export const ROUND_SCORES: Record<
     { dim: 'lambda', weight: -3 },
     { dim: 'sigma', weight: 1 },
   ],
-  7: [], // ambiguity — handled separately
-  8: [], // liquidity — handled separately
-  9: [{ dim: 'alpha', weight: 3 }],
-  10: [
+  7: [], // liquidity — handled separately
+  8: [{ dim: 'alpha', weight: 3 }],
+  9: [
     { dim: 'sigma', weight: 2 },
     { dim: 'alpha', weight: 2 },
   ],
-  11: [], // ambiguity — handled separately
-  12: [], // ambiguity — handled separately
-  13: [], // ambiguity + liquidity — handled separately
-  14: [], // liquidity — handled separately
-  15: [], // liquidity — handled separately
-  16: [], // liquidity — handled separately
+  10: [], // liquidity — handled separately
+  11: [], // liquidity — handled separately
+  12: [], // liquidity — handled separately
+  13: [], // liquidity — handled separately
 }
 
-// Ambiguity rounds and their weights. The sign encodes which side is the
-// transparent / familiar / well-defined option, so that a positive contribution
-// to `ambig` always means "the client preferred the clearer option" =
-// ambiguity averse, regardless of which card that happens to be:
-//   R7  (+1.0): X is documented, Y is estimated      -> picking X = averse
-//   R11 (-1.0): X is a complex formula, Y a simple fund -> picking Y = averse
-//   R12 (-1.0): X is unfamiliar (Paraguay), Y familiar (US) -> picking Y = averse
-//   R13 (+0.5): X is the fully-defined hard lockup, Y has fuzzy exit optionality
-//               -> picking X = averse (shared half-weight with liquidity)
-const AMBIG_WEIGHTS: Record<number, number> = { 7: 1.0, 11: -1.0, 12: -1.0, 13: 0.5 }
 // Liquidity rounds and their weights. Picking X (lockup) is liquidity-tolerant.
-const LIQ_WEIGHTS: Record<number, number> = { 8: 1.0, 13: 0.5, 14: 1.0, 15: 1.0, 16: 1.0 }
+const LIQ_WEIGHTS: Record<number, number> = { 7: 1.0, 10: 1.0, 11: 1.0, 12: 1.0, 13: 1.0 }
 
 /**
  * Accumulate a round's contribution into the raw score accumulator.
  *
- * Liquidity rounds (type 'liq': 8, 13, 14, 15, 16): binary card pick — X is the
+ * Liquidity rounds (type 'liq': 7, 10, 11, 12, 13): binary card pick — X is the
  *   lockup option (RoundScreen passes allocX === 100), Y is the liquid option
  *   (allocX === 0). Picking X (lockup) adds +weight to liq (liquidity-tolerant),
- *   picking Y (liquid) adds -weight. R13 also contributes half weight to ambig.
- * Ambiguity rounds (7, 11, 12): signal = (allocX - 50) / 50 added to ambig
- *   (positive = preferred the documented / simple / familiar side X).
+ *   picking Y (liquid) adds -weight.
  * Core rounds: signal scaled by the signed ROUND_SCORES weights.
  */
 export function applyScore(acc: Scores, round: Round, allocX: number): Scores {
@@ -85,19 +69,10 @@ export function applyScore(acc: Scores, round: Round, allocX: number): Scores {
   if (round.type === 'liq') {
     const pickedX = allocX === 100 // X = lockup, Y = liquid
     next.liq += (LIQ_WEIGHTS[id] ?? 0) * (pickedX ? +1 : -1)
-    // R13 is a joint ambiguity + liquidity round.
-    if (AMBIG_WEIGHTS[id] !== undefined) {
-      next.ambig += AMBIG_WEIGHTS[id] * (pickedX ? +1 : -1)
-    }
     return next
   }
 
   const signal = (allocX - 50) / 50 // [-1, +1]
-
-  if (AMBIG_WEIGHTS[id] !== undefined) {
-    next.ambig += AMBIG_WEIGHTS[id] * signal
-    return next
-  }
 
   for (const { dim, weight } of ROUND_SCORES[id] ?? []) {
     next[dim] += weight * signal
@@ -109,29 +84,24 @@ export type NormalizedScores = {
   sigma: number // [-1, 1] variance tolerance
   alpha: number // [-1, 1] skew preference (positive = seeks positive skew)
   lambda: number // [-1, 1] loss aversion (positive = more loss averse)
-  ambig: number // [0, 1] ambiguity aversion
   liq: number // [0, 1] liquidity preference (positive = prefers liquidity)
 }
 
 // Normalization denominators = sum of |weights| per dimension.
-// sigma:  R1(3) + R2(2) + R4(1) + R6(1) + R10(2)  = 9
-// alpha:  R3(3) + R5(3) + R9(3) + R10(2)           = 11
-// lambda: R2(1) + R4(3) + R6(3)                    = 7
-// ambig:  R7(1) + R11(1) + R12(1) + R13(0.5)       = 3.5
-// liq:    R8(1) + R13(0.5) + R14(1) + R15(1) + R16(1) = 4.5
+// sigma:  R1(3) + R2(2) + R4(1) + R6(1) + R9(2)        = 9
+// alpha:  R3(3) + R5(3) + R8(3) + R9(2)                = 11
+// lambda: R2(1) + R4(3) + R6(3)                        = 7
+// liq:    R7(1) + R10(1) + R11(1) + R12(1) + R13(1)    = 5
 const NORM_SIGMA = 9
 const NORM_ALPHA = 11
 const NORM_LAMBDA = 7
-const NORM_AMBIG = 3.5
-const NORM_LIQ = 4.5
+const NORM_LIQ = 5
 
 export function normalizeScores(raw: Scores): NormalizedScores {
   return {
     sigma: clamp(raw.sigma / NORM_SIGMA, -1, 1),
     alpha: clamp(raw.alpha / NORM_ALPHA, -1, 1),
     lambda: clamp(raw.lambda / NORM_LAMBDA, -1, 1),
-    // ambig: positive raw = ambiguity averse; map to [0, 1].
-    ambig: clamp((raw.ambig / NORM_AMBIG + 1) / 2, 0, 1),
     // liq: positive raw = lockup-tolerant = LOW liquidity preference. Negate so
     // a high score = prefers liquidity, then map to [0, 1].
     liq: clamp((-raw.liq / NORM_LIQ + 1) / 2, 0, 1),
@@ -236,7 +206,7 @@ export const SATELLITE_PENALTY = 10
 
 export function computeAllocation(
   archetype: string,
-  scores: { sigma: number; alpha: number; lambda: number; ambig: number; liq: number },
+  scores: { sigma: number; alpha: number; lambda: number; liq: number },
 ): { assetClass: AssetClass; pct: number }[] {
   const target = { sigma: scores.sigma, alpha: scores.alpha, lambda: scores.lambda }
   const classes = Object.keys(ASSET_CLASS_LOADINGS) as AssetClass[]
@@ -271,20 +241,16 @@ export function computeAllocation(
     capped[cls] = Math.min(cap, raw[cls])
   }
 
-  // Step 3: ambiguity penalty — ambiguity-averse clients get less OTC/illiquid structures
-  capped['Income structures'] *= 1 - scores.ambig * 0.5
-  capped['Growth structures'] *= 1 - scores.ambig * 0.5
-
-  // Step 4: liquidity penalty — liquidity-preferring clients get less locked-up exposure
+  // Step 3: liquidity penalty — liquidity-preferring clients get less locked-up exposure
   capped['Income structures'] *= 1 - scores.liq * 0.4
   capped['Growth structures'] *= 1 - scores.liq * 0.6
 
-  // Step 5: renormalize
+  // Step 4: renormalize
   const total = Object.values(capped).reduce((s, v) => s + v, 0)
   const norm: Record<string, number> = {}
   for (const cls of classes) norm[cls] = total > 0 ? capped[cls] / total : 0
 
-  // Step 6: largest-remainder rounding to integers summing to 100
+  // Step 5: largest-remainder rounding to integers summing to 100
   const rawPcts: Record<string, number> = {}
   for (const cls of classes) rawPcts[cls] = norm[cls] * 100
 
@@ -309,7 +275,7 @@ export function computeAllocation(
 
 export function computeFitScore(
   instrument: Instrument,
-  scores: { sigma: number; alpha: number; lambda: number; ambig: number; liq: number },
+  scores: { sigma: number; alpha: number; lambda: number; liq: number },
 ): number {
   // Core fit: proximity in (sigma, alpha, lambda) space
   const sigmaMatch = 1 - Math.abs(scores.sigma - instrument.sigmaLoad) / 2
@@ -319,24 +285,17 @@ export function computeFitScore(
   // Alpha weighted highest — skew preference is the most differentiating axis
   const coreFit = (sigmaMatch * 0.3 + alphaMatch * 0.45 + lambdaMatch * 0.25) * 100
 
-  // Ambiguity penalty: ambiguity-averse clients penalized for OTC/formula-opaque instruments
-  const isOTC = instrument.ticker === 'OTC' || instrument.ticker === 'Listed'
-  const ambigPenalty = isOTC ? scores.ambig * 12 : 0
-
   // Liquidity penalties: based on lockup length and liquidity tier
   const lockupPenalty = scores.liq * (instrument.lockupMonths / 36) * 20
   const illiqPenalty = scores.liq * ((instrument.liquidityTier - 1) / 3) * 10
 
-  return Math.round(
-    Math.max(0, Math.min(100, coreFit - ambigPenalty - lockupPenalty - illiqPenalty)),
-  )
+  return Math.round(Math.max(0, Math.min(100, coreFit - lockupPenalty - illiqPenalty)))
 }
 
 export function getRankedInstruments(scores: {
   sigma: number
   alpha: number
   lambda: number
-  ambig: number
   liq: number
 }): (Instrument & { fit: number })[] {
   return INSTRUMENTS.map((inst) => ({ ...inst, fit: computeFitScore(inst, scores) }))

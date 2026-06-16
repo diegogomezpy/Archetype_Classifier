@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Round } from '../types'
 import RoundDecision from './RoundDecision'
 import LiqCards from './LiqCards'
+import RoundProgress from './RoundProgress'
 
 type Props = {
   round: Round
@@ -30,9 +31,7 @@ export default function RoundScreen({ round, index, total, onNext }: Props) {
         {/* Header */}
         <div className="mb-6 flex items-center justify-between font-mono text-xs uppercase tracking-[0.14em] text-muted">
           <span className="rounded-full bg-surface px-3 py-1 shadow-soft">{round.tag}</span>
-          <span className="tnum">
-            {index} / {total}
-          </span>
+          <RoundProgress index={index} total={total} />
         </div>
 
         {/* Question */}

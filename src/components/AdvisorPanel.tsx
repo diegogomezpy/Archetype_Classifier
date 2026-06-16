@@ -4,7 +4,6 @@ import {
   getSigmaLabel,
   getAlphaLabel,
   getLambdaLabel,
-  getAmbigLabel,
   getLiqLabel,
   getTalkingPoints,
   splitLabel,
@@ -59,7 +58,6 @@ export default function AdvisorPanel({ data }: Props) {
     { label: 'Variance tolerance', value: scores.sigma, interp: getSigmaLabel(scores.sigma) },
     { label: 'Skew preference', value: scores.alpha, interp: getAlphaLabel(scores.alpha) },
     { label: 'Loss resilience', value: scores.lambda, interp: getLambdaLabel(scores.lambda) },
-    { label: 'Ambiguity aversion', value: scores.ambig, interp: getAmbigLabel(scores.ambig) },
     { label: 'Liquidity tolerance', value: scores.liq, interp: getLiqLabel(scores.liq) },
   ]
 
@@ -129,11 +127,6 @@ export default function AdvisorPanel({ data }: Props) {
       <section>
         <h3 className={`${sectionLabel} mb-4`}>Accessory scores</h3>
         <div className="space-y-5">
-          <AccessoryScore
-            title="Ambiguity aversion"
-            value={scores.ambig}
-            label={getAmbigLabel(scores.ambig)}
-          />
           <AccessoryScore
             title="Liquidity tolerance"
             value={scores.liq}

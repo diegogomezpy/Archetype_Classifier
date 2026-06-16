@@ -6,13 +6,10 @@ export type Scenario = {
   note: string
 }
 
-// One side of an allocation round. Either side may carry an ambiguity flag /
-// note (e.g. the documented-vs-estimated, simple-vs-complex framing rounds).
+// One side of an allocation round.
 export type AllocSide = {
   label: string
   scenarios: Scenario[]
-  ambig?: boolean
-  ambigNote?: string
 }
 
 export type AllocRound = {
@@ -52,6 +49,5 @@ export type Scores = {
   sigma: number
   alpha: number
   lambda: number
-  ambig: number
   liq: number
 }

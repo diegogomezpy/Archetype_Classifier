@@ -1,18 +1,22 @@
 import type { Round } from '../types'
 
 // All amounts in USD, $10,000 input, 1-year horizon (multi-year where noted).
-// X is the more aggressive / higher-variance / more skew-seeking side; Y is the
-// more conservative / carry / protected side. The scoring signal is monotone:
-// more X = higher sigma, higher alpha, lower lambda.
+// "Growth" (X) is the more aggressive / higher-variance / more skew-seeking
+// side; "Steady" (Y) is the more conservative / carry / protected side. The
+// scoring signal is monotone: more Growth = higher sigma, higher alpha,
+// lower lambda.
 //
-// 16 rounds split across two screens of 8. The progress bar spans all 16.
+// 13 rounds split across two screens (7 + 6). The progress indicator spans all
+// 13 rounds.
 //
 // Allocation rounds render via RoundDecision + PayoffBar, which always show
 // outcomes as gains/losses vs the $10,000 input. (`displayMode` is retained on
 // the type for compatibility but the payoff bar is always relative.)
 //
 // Liquidity icons use the names the Icon component renders: 'lock' (lockup),
-// 'refresh' (fully liquid), and 'door-exit' (R13's soft-lockup / can-exit side).
+// 'refresh' (fully liquid), and 'door-exit' (the soft-lockup / can-exit side).
+// Liquidity premiums are kept modest so the lockup and liquid options sit
+// close together — the choice is a genuine trade-off, not an obvious win.
 export const ROUNDS: Round[] = [
   // ════════════════════ SCREEN 1 ════════════════════
 
@@ -24,17 +28,17 @@ export const ROUNDS: Round[] = [
     type: 'alloc',
     tag: 'Variance',
     displayMode: 'relative',
-    q: 'Both investments always return a profit. One has a larger potential upside.',
+    q: 'Both sides always return a profit. One has a larger potential upside.',
     sub: 'How do you split your $10,000?',
     x: {
-      label: 'Investment X',
+      label: 'Bigger upside',
       scenarios: [
         { p: '20%', amt: 12500, note: 'great year' },
         { p: '80%', amt: 10000, note: 'flat year' },
       ],
     },
     y: {
-      label: 'Investment Y',
+      label: 'Steady gain',
       scenarios: [
         { p: '80%', amt: 10625, note: 'good year' },
         { p: '20%', amt: 10000, note: 'flat year' },
@@ -42,7 +46,7 @@ export const ROUNDS: Round[] = [
     },
   },
 
-  // R2 — Downside. X can lose money, Y cannot. σ + λ signal.
+  // R2 — Downside. Growth can lose money, Steady cannot. σ + λ signal.
   // EV matched: X = 0.70×11500 + 0.30×8167 = 10500. Y = 0.80×10625 + 0.20×10000 = 10500.
   {
     id: 2,
@@ -50,17 +54,17 @@ export const ROUNDS: Round[] = [
     type: 'alloc',
     tag: 'Downside',
     displayMode: 'relative',
-    q: 'Investment X can lose money. Investment Y always returns a profit.',
+    q: 'The Growth side can lose money. The Steady side always returns a profit.',
     sub: 'Both have the same expected return.',
     x: {
-      label: 'Investment X',
+      label: 'Can lose money',
       scenarios: [
         { p: '70%', amt: 11500, note: 'good year' },
         { p: '30%', amt: 8167, note: 'loss' },
       ],
     },
     y: {
-      label: 'Investment Y',
+      label: 'Always profits',
       scenarios: [
         { p: '80%', amt: 10625, note: 'gain' },
         { p: '20%', amt: 10000, note: 'flat' },
@@ -68,7 +72,7 @@ export const ROUNDS: Round[] = [
     },
   },
 
-  // R3 — Skew, 20% tail. Positive skew X vs negative skew Y. Pure α.
+  // R3 — Skew, 20% tail. Positive skew Growth vs negative skew Steady. Pure α.
   // EV matched: X = 0.20×16500 + 0.80×9000 = 10500. Y = 0.80×11250 + 0.20×7500 = 10500.
   {
     id: 3,
@@ -76,17 +80,17 @@ export const ROUNDS: Round[] = [
     type: 'alloc',
     tag: 'Skew',
     displayMode: 'relative',
-    q: 'X has a rare large upside. Y has a frequent moderate gain but a larger rare loss.',
+    q: 'Growth has a rare large upside. Steady has frequent moderate gains but a larger rare loss.',
     sub: 'Same expected return. Which do you prefer?',
     x: {
-      label: 'Investment X',
+      label: 'Rare big win',
       scenarios: [
         { p: '20%', amt: 16500, note: 'rare big win' },
         { p: '80%', amt: 9000, note: 'most years' },
       ],
     },
     y: {
-      label: 'Investment Y',
+      label: 'Steady, rare big loss',
       scenarios: [
         { p: '80%', amt: 11250, note: 'most years' },
         { p: '20%', amt: 7500, note: 'rare big loss' },
@@ -94,7 +98,7 @@ export const ROUNDS: Round[] = [
     },
   },
 
-  // R4 — Loss aversion I. X: 50/50 with real loss. Y: guaranteed gain. Pure λ.
+  // R4 — Loss aversion I. Growth: 50/50 with real loss. Steady: guaranteed gain. Pure λ.
   // EV matched: X = 0.50×12000 + 0.50×9000 = 10500. Y = 10500 guaranteed.
   {
     id: 4,
@@ -102,17 +106,17 @@ export const ROUNDS: Round[] = [
     type: 'alloc',
     tag: 'Loss aversion',
     displayMode: 'relative',
-    q: 'Investment X is a 50/50 bet — you could gain $2,000 or lose $1,000.',
-    sub: 'Investment Y gives you a guaranteed $500 profit.',
+    q: 'The Growth side is a 50/50 bet — you could gain $2,000 or lose $1,000.',
+    sub: 'The Steady side gives you a guaranteed $500 profit.',
     x: {
-      label: 'Investment X',
+      label: '50/50 bet',
       scenarios: [
         { p: '50%', amt: 12000, note: 'win' },
         { p: '50%', amt: 9000, note: 'loss' },
       ],
     },
     y: {
-      label: 'Investment Y (guaranteed)',
+      label: 'Guaranteed +$500',
       scenarios: [{ p: '100%', amt: 10500, note: 'certain' }],
     },
   },
@@ -125,17 +129,17 @@ export const ROUNDS: Round[] = [
     type: 'alloc',
     tag: 'Lottery',
     displayMode: 'relative',
-    q: 'Investment X has a 1-in-20 chance of a very large gain.',
-    sub: 'Investment Y is more predictable. Same expected return.',
+    q: 'The Growth side has a 1-in-20 chance of a very large gain.',
+    sub: 'The Steady side is more predictable. Same expected return.',
     x: {
-      label: 'Investment X',
+      label: 'Lottery ticket',
       scenarios: [
         { p: '5%', amt: 29500, note: '1-in-20 chance' },
         { p: '95%', amt: 9500, note: 'most years' },
       ],
     },
     y: {
-      label: 'Investment Y',
+      label: 'Predictable',
       scenarios: [
         { p: '90%', amt: 10833, note: 'most years' },
         { p: '10%', amt: 7500, note: 'bad year' },
@@ -143,7 +147,7 @@ export const ROUNDS: Round[] = [
     },
   },
 
-  // R6 — Loss aversion II. Larger stakes. X: 50/50 bigger loss. Y: guaranteed. Pure λ.
+  // R6 — Loss aversion II. Larger stakes. Growth: 50/50 bigger loss. Steady: guaranteed. Pure λ.
   // EV matched: X = 0.50×14000 + 0.50×7000 = 10500. Y = 10500 guaranteed.
   {
     id: 6,
@@ -154,93 +158,63 @@ export const ROUNDS: Round[] = [
     q: 'Same structure as before — but the swings are much bigger.',
     sub: 'You could gain $4,000 or lose $3,000. Or take the guaranteed $500.',
     x: {
-      label: 'Investment X',
+      label: 'Big 50/50 swing',
       scenarios: [
         { p: '50%', amt: 14000, note: 'win' },
         { p: '50%', amt: 7000, note: 'loss' },
       ],
     },
     y: {
-      label: 'Investment Y (guaranteed)',
+      label: 'Guaranteed +$500',
       scenarios: [{ p: '100%', amt: 10500, note: 'certain' }],
     },
   },
 
-  // R7 — Ambiguity I. Known lower EV vs unknown higher EV. Probability uncertainty.
-  // Not EV-matched by design — the EV premium on Y is what makes the choice non-trivial.
+  // R7 — Liquidity I. 1-year lockup vs fully liquid, modest premium. Pure liq.
   {
     id: 7,
     screen: 1,
-    type: 'alloc',
-    tag: 'Uncertainty',
-    displayMode: 'relative',
-    q: 'Investment Y has a higher expected return — but the probabilities are estimated, not historical.',
-    sub: 'X is based on documented historical data.',
-    x: {
-      label: 'Investment X — documented',
-      scenarios: [
-        { p: '70%', amt: 11200, note: 'historically observed' },
-        { p: '30%', amt: 9071, note: 'historically observed' },
-      ],
-    },
-    y: {
-      label: 'Investment Y — estimated',
-      scenarios: [
-        { p: '~70%', amt: 11900, note: 'estimated' },
-        { p: '~30%', amt: 9471, note: 'estimated' },
-      ],
-      ambig: true,
-      ambigNote:
-        'Returns depend on Paraguayan agricultural export contracts — limited historical data. Probabilities are estimates.',
-    },
-  },
-
-  // R8 — Liquidity I. 1-year lockup vs fully liquid. Pure liq.
-  // Not EV-matched — the premium is the incentive to lock up.
-  {
-    id: 8,
-    screen: 1,
     type: 'liq',
     tag: 'Liquidity',
-    q: 'Would you lock up your money for a year for a higher return?',
+    q: 'Would you lock up your money for a year for a slightly higher return?',
     sub: 'You have $10,000 to invest.',
     x: {
       label: 'Lock in for 1 year',
-      ret: '+8%',
-      ev: 10800,
+      ret: '+5%',
+      ev: 10500,
       icon: 'lock',
-      sub: 'Cannot withdraw early. Earns $800.',
+      sub: 'Cannot withdraw early. Earns $500.',
     },
     y: {
       label: 'Withdraw anytime',
-      ret: '+3%',
-      ev: 10300,
+      ret: '+3.5%',
+      ev: 10350,
       icon: 'refresh',
-      sub: 'Fully liquid. Earns $300.',
+      sub: 'Fully liquid. Earns $350.',
     },
   },
 
   // ════════════════════ SCREEN 2 ════════════════════
 
-  // R9 — Skew, matched probabilities (25/75). The cleanest α test: mirror-flipped payoffs.
+  // R8 — Skew, matched probabilities (25/75). The cleanest α test: mirror-flipped payoffs.
   // EV matched: X = 0.25×16500 + 0.75×8500 = 10500. Y = 0.75×11500 + 0.25×7500 = 10500.
   {
-    id: 9,
+    id: 8,
     screen: 2,
     type: 'alloc',
     tag: 'Payoff shape',
     displayMode: 'relative',
-    q: 'Both investments have the same probabilities and the same expected return.',
+    q: 'Both sides have the same probabilities and the same expected return.',
     sub: 'Only the payoff shape differs. Which feels better?',
     x: {
-      label: 'Investment X',
+      label: 'Rare big win',
       scenarios: [
         { p: '25%', amt: 16500, note: 'good year' },
         { p: '75%', amt: 8500, note: 'most years' },
       ],
     },
     y: {
-      label: 'Investment Y',
+      label: 'Frequent gain',
       scenarios: [
         { p: '75%', amt: 11500, note: 'most years' },
         { p: '25%', amt: 7500, note: 'bad year' },
@@ -248,25 +222,25 @@ export const ROUNDS: Round[] = [
     },
   },
 
-  // R10 — Variance + skew combined. σ and α double contribution.
+  // R9 — Variance + skew combined. σ and α double contribution.
   // EV matched: X = 0.40×13750 + 0.60×8333 = 10500. Y = 0.60×12000 + 0.40×8250 = 10500.
   {
-    id: 10,
+    id: 9,
     screen: 2,
     type: 'alloc',
     tag: 'Risk profile',
     displayMode: 'relative',
-    q: 'Both investments are volatile. X leans toward upside, Y leans toward downside.',
+    q: 'Both sides are volatile. Growth leans toward upside, Steady leans toward downside.',
     sub: 'Same expected return.',
     x: {
-      label: 'Investment X',
+      label: 'Upside-leaning',
       scenarios: [
         { p: '40%', amt: 13750, note: 'gain' },
         { p: '60%', amt: 8333, note: 'loss' },
       ],
     },
     y: {
-      label: 'Investment Y',
+      label: 'Downside-leaning',
       scenarios: [
         { p: '60%', amt: 12000, note: 'gain' },
         { p: '40%', amt: 8250, note: 'loss' },
@@ -274,127 +248,68 @@ export const ROUNDS: Round[] = [
     },
   },
 
-  // R11 — Ambiguity II: product complexity. Identical payoffs, different product.
-  // EV matched: both = 0.60×11333 + 0.40×9250 = 10500.
+  // R10 — Liquidity II: penalty exit vs hard lockup, same premium. Pure liq (optionality).
   {
-    id: 11,
-    screen: 2,
-    type: 'alloc',
-    tag: 'Complexity',
-    displayMode: 'relative',
-    q: 'Both investments have identical payoffs. The difference is how they work.',
-    sub: 'X is a structured formula product. Y is a simple diversified fund.',
-    x: {
-      label: 'Investment X — structured formula',
-      scenarios: [
-        { p: '60%', amt: 11333, note: 'formula triggers' },
-        { p: '40%', amt: 9250, note: 'formula misses' },
-      ],
-      ambig: true,
-      ambigNote:
-        'Payoff defined by a multi-step barrier formula referencing three underlying assets. Complex but fully specified.',
-    },
-    y: {
-      label: 'Investment Y — diversified fund',
-      scenarios: [
-        { p: '60%', amt: 11333, note: 'good year' },
-        { p: '40%', amt: 9250, note: 'bad year' },
-      ],
-    },
-  },
-
-  // R12 — Ambiguity III: source / geography. Identical payoffs, different source.
-  // EV matched: both = 0.70×11200 + 0.30×8867 = 10500.
-  {
-    id: 12,
-    screen: 2,
-    type: 'alloc',
-    tag: 'Familiarity',
-    displayMode: 'relative',
-    q: 'Both investments have identical payoffs. The difference is where the return comes from.',
-    sub: 'Same expected return, same probabilities.',
-    x: {
-      label: 'Investment X — Paraguayan assets',
-      scenarios: [
-        { p: '70%', amt: 11200, note: 'good year' },
-        { p: '30%', amt: 8867, note: 'bad year' },
-      ],
-      ambig: true,
-      ambigNote:
-        'Returns generated by a basket of Paraguayan sovereign and corporate bonds listed on the BVA.',
-    },
-    y: {
-      label: 'Investment Y — US assets',
-      scenarios: [
-        { p: '70%', amt: 11200, note: 'good year' },
-        { p: '30%', amt: 8867, note: 'bad year' },
-      ],
-    },
-  },
-
-  // R13 — Ambiguity IV + Liquidity: penalty exit vs hard lockup. Ambig + liq joint signal.
-  // Not EV-matched — optionality has real value.
-  {
-    id: 13,
+    id: 10,
     screen: 2,
     type: 'liq',
     tag: 'Flexibility',
-    q: 'Both pay +8% if held for 1 year. The difference is what happens if you need to exit early.',
+    q: 'Both pay +6% if held for 1 year. The difference is what happens if you need to exit early.',
     sub: 'Would you pay for the option to leave?',
     x: {
       label: 'Hard lockup — 1 year',
-      ret: '+8%',
-      ev: 10800,
+      ret: '+6%',
+      ev: 10600,
       icon: 'lock',
-      sub: 'Cannot exit early under any circumstances. Earns $800 at maturity.',
+      sub: 'Cannot exit early under any circumstances. Earns $600 at maturity.',
     },
     y: {
       label: 'Soft lockup — exit with fee',
-      ret: '+8%',
-      ev: 10800,
+      ret: '+6%',
+      ev: 10600,
       icon: 'door-exit',
       sub: 'Can exit any time, but pay a 2% penalty on early exit. Same return if held to maturity.',
     },
   },
 
-  // R14 — Liquidity II. 3-year lockup vs fully liquid. Pure liq.
+  // R11 — Liquidity III. 3-year lockup vs fully liquid, modest premium. Pure liq.
   {
-    id: 14,
+    id: 11,
     screen: 2,
     type: 'liq',
     tag: 'Long lockup',
-    q: 'Would you lock up your money for 3 years for a much higher return?',
+    q: 'Would you lock up your money for 3 years for a somewhat higher return?',
     sub: 'You have $10,000 to invest.',
     x: {
       label: 'Lock in for 3 years',
-      ret: '+20%',
-      ev: 12000,
+      ret: '+9%',
+      ev: 10900,
       icon: 'lock',
-      sub: 'Cannot withdraw. Earns $2,000 over 3 years.',
+      sub: 'Cannot withdraw. Earns $900 over 3 years.',
     },
     y: {
       label: 'Withdraw anytime',
-      ret: '+3%',
-      ev: 10300,
+      ret: '+4%',
+      ev: 10400,
       icon: 'refresh',
-      sub: 'Fully liquid. Earns $300 per year.',
+      sub: 'Fully liquid. Earns $400.',
     },
   },
 
-  // R15 — Liquidity III. Low premium threshold ($200 gap). Minimum acceptable illiquidity premium.
+  // R12 — Liquidity IV. Low premium threshold ($100 gap). Minimum acceptable illiquidity premium.
   {
-    id: 15,
+    id: 12,
     screen: 2,
     type: 'liq',
     tag: 'Threshold',
     q: 'A small extra return for giving up liquidity for 1 year.',
-    sub: 'Is $200 extra worth losing access to your money for a year?',
+    sub: 'Is $100 extra worth losing access to your money for a year?',
     x: {
       label: 'Lock in for 1 year',
-      ret: '+7%',
-      ev: 10700,
+      ret: '+6%',
+      ev: 10600,
       icon: 'lock',
-      sub: 'Cannot withdraw. Earns $700.',
+      sub: 'Cannot withdraw. Earns $600.',
     },
     y: {
       label: 'Withdraw anytime',
@@ -405,27 +320,27 @@ export const ROUNDS: Round[] = [
     },
   },
 
-  // R16 — Liquidity IV. Longer lockup, higher premium. Completes the liquidity curve.
+  // R13 — Liquidity V. 2-year lockup, modest premium. Completes the liquidity curve.
   {
-    id: 16,
+    id: 13,
     screen: 2,
     type: 'liq',
     tag: 'Commitment',
-    q: 'A 2-year lockup with a strong return premium.',
+    q: 'A 2-year lockup with a modest return premium.',
     sub: 'How much does flexibility matter to you?',
     x: {
       label: 'Lock in for 2 years',
-      ret: '+15%',
-      ev: 11500,
+      ret: '+8%',
+      ev: 10800,
       icon: 'lock',
-      sub: 'Cannot withdraw. Earns $1,500 over 2 years.',
+      sub: 'Cannot withdraw. Earns $800 over 2 years.',
     },
     y: {
       label: 'Withdraw anytime',
-      ret: '+3%',
-      ev: 10300,
+      ret: '+5%',
+      ev: 10500,
       icon: 'refresh',
-      sub: 'Fully liquid. Earns $300 per year.',
+      sub: 'Fully liquid. Earns $500.',
     },
   },
 ]

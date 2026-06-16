@@ -26,12 +26,6 @@ export function getLambdaLabel(v: number): string {
   return 'high loss aversion'
 }
 
-export function getAmbigLabel(v: number): string {
-  if (v < 0.3) return 'low — comfortable with estimated probabilities'
-  if (v < 0.6) return 'moderate — prefers documented strategies'
-  return 'high — stick to transparent, formula-based products'
-}
-
 export function getLiqLabel(v: number): string {
   if (v < 0.3) return 'low — illiquidity-tolerant, lockups appropriate'
   if (v < 0.6) return 'moderate — standard liquid product mix'
@@ -51,9 +45,8 @@ export function splitLabel(label: string): { level: 'low' | 'moderate' | 'high';
 
 export function getTalkingPoints(
   archetype: string,
-  scores: { ambig: number; liq: number },
+  scores: { liq: number },
 ): string[] {
-  const ambigHigh = scores.ambig > 0.3
   const liqHigh = scores.liq > 0.3
   const liqLow = scores.liq < -0.3
 
@@ -61,17 +54,11 @@ export function getTalkingPoints(
     protector: [
       'Lead with capital protection — frame every recommendation downside first, upside second.',
       'Avoid products with gap risk or uncertain barriers even if the expected return is attractive.',
-      ambigHigh
-        ? 'Ambiguity aversion detected — stick to transparent formula-based structures, avoid discretionary mandates.'
-        : null,
       liqHigh ? 'Liquidity is important — avoid lockups even at meaningfully higher returns.' : null,
     ],
     optimizer: [
       'Lead with expected value and fee efficiency — this client responds to data, not narrative.',
       'Avoid over-engineering — complexity will feel like a fee extraction mechanism.',
-      ambigHigh
-        ? 'Some ambiguity aversion — explain model assumptions clearly before recommending estimated-scenario products.'
-        : null,
       liqLow
         ? 'Liquidity-tolerant — longer-dated instruments and illiquidity premia are appropriate.'
         : null,
@@ -82,16 +69,10 @@ export function getTalkingPoints(
       liqLow
         ? 'High liquidity tolerance — private market exposure or long-dated options viable for the satellite.'
         : null,
-      ambigHigh
-        ? 'Despite risk appetite, this client dislikes ambiguity — prefer listed instruments for the speculative sleeve.'
-        : null,
     ],
     carry: [
       'Frame recommendations around income and yield — this client thinks in terms of premium, not appreciation.',
       'Be explicit about gap risk in autocallables and reverse convertibles — low loss aversion does not mean uninformed.',
-      ambigHigh
-        ? 'Ambiguity aversion — use standardized structured products with clear barrier formulas rather than bespoke OTC.'
-        : null,
       liqHigh
         ? 'Liquidity preference — covered-call ETFs may suit better than illiquid OTC structures.'
         : null,
@@ -99,9 +80,6 @@ export function getTalkingPoints(
     agnostic: [
       'Lead with simplicity and transparency — product complexity creates friction and reduces trust.',
       'Build around well-known benchmarks the client can track independently.',
-      ambigHigh
-        ? 'Strong ambiguity aversion — avoid anything with estimated probabilities or opaque management.'
-        : null,
       liqHigh
         ? 'Liquidity is a priority — keep the portfolio fully liquid even at modest return cost.'
         : null,
