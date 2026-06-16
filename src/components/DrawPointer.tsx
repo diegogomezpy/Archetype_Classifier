@@ -1,16 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Outcome } from '../lib/outcomes'
-import type { DrawPhase } from '../hooks/useDrawSequence'
+import { type DrawPhase, ROLL_MS } from '../hooks/useDrawSequence'
 import { PAD_X, LIFT_H } from './PayoffBar'
 
 const POINTER_W = 20
 const POINTER_H = 24
-const SWING_INTERVAL = 28 // ms between swing frames
-const SWING_SPEED = 0.16 // radians advanced per frame
-const LAND_STEPS = 20 // frames to glide onto the target
-const LAND_INTERVAL = 22
+const FRAME_MS = 16 // animation step
+const N_OSC = 3.2 // how many swings before settling
+const DAMP = 3.4 // higher = settles faster / less wandering near the end
 
-const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3)
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
+// Fast at the start, slow at the end — drives how the swing's "time" advances.
+const easeOutQuart = (t: number) => 1 - Math.pow(1 - t, 4)
 
 type Props = {
   outcomes: Outcome[]
@@ -18,9 +19,10 @@ type Props = {
   phase: DrawPhase
 }
 
-// A pointer that hangs over the payoff bar, swings back and forth while the
-// draw is "rolling", then decelerates onto the drawn segment. Positioned in the
-// bar wrapper using PayoffBar's own geometry constants so it lines up exactly.
+// A pin that hangs over the payoff bar. It rests at the bar's center until a
+// draw begins, then swings across the bar — fast at first, decelerating — and
+// settles onto the drawn segment. Positioned with PayoffBar's geometry so it
+// lines up exactly.
 export default function DrawPointer({ outcomes, targetIndex, phase }: Props) {
   const ref = useRef<HTMLDivElement | null>(null)
   const [w, setW] = useState(0)
@@ -32,7 +34,7 @@ export default function DrawPointer({ outcomes, targetIndex, phase }: Props) {
   useEffect(() => {
     const el = ref.current?.parentElement
     if (!el) return
-    const update = () => setW(el.clientWidth)
+    const update = () => setW(el.getBoundingClientRect().width)
     update()
     const ro = new ResizeObserver(update)
     ro.observe(el)
@@ -44,8 +46,8 @@ export default function DrawPointer({ outcomes, targetIndex, phase }: Props) {
     setLeft(x)
   }
 
-  // Horizontal center (px) of segment `idx`, matching PayoffBar's layout.
   const innerW = Math.max(0, w - 2 * PAD_X)
+  const restX = PAD_X + innerW / 2
   const total = outcomes.reduce((s, o) => s + o.p, 0) || 1
   const centerOf = (idx: number) => {
     let cum = 0
@@ -54,51 +56,53 @@ export default function DrawPointer({ outcomes, targetIndex, phase }: Props) {
   }
 
   useEffect(() => {
-    const clear = () => {
-      timers.current.forEach((id) => {
-        clearInterval(id)
-        clearTimeout(id)
-      })
+    const clearTimers = () => {
+      timers.current.forEach((id) => clearInterval(id))
       timers.current = []
     }
-    clear()
-    if (targetIndex === null || w === 0) {
-      setBoth(PAD_X + innerW / 2)
-      return clear
+    clearTimers()
+    if (w === 0) return clearTimers
+
+    // Idle (or no draw yet): rest at the bar's center.
+    if (phase === 'idle' || targetIndex === null) {
+      setBoth(restX)
+      return clearTimers
     }
 
+    const target = centerOf(targetIndex)
+
     if (phase === 'rolling') {
-      let t = Math.PI / 2 // start mid-bar
+      // Damped oscillation that begins at the current rest position and decays
+      // onto the target. Amplitude shrinks and the angular sweep slows (driven
+      // by an ease-out clock), so it starts fast and eases to a stop.
+      const from = leftRef.current ?? restX
+      const amp = Math.max(Math.abs(from - target), innerW * 0.5)
+      const phi = Math.acos(clamp((from - target) / amp, -1, 1)) // so pos(0) = from
+      const t0 = performance.now()
       const id = window.setInterval(() => {
-        t += SWING_SPEED
-        setBoth(PAD_X + innerW / 2 + (innerW / 2) * Math.sin(t))
-      }, SWING_INTERVAL)
-      timers.current.push(id)
-    } else if (phase === 'ticking' || phase === 'done') {
-      const target = centerOf(targetIndex)
-      const from = leftRef.current ?? target
-      let i = 0
-      const id = window.setInterval(() => {
-        i++
-        setBoth(from + (target - from) * easeOutCubic(i / LAND_STEPS))
-        if (i >= LAND_STEPS) {
+        const u = Math.min(1, (performance.now() - t0) / ROLL_MS)
+        const e = easeOutQuart(u)
+        const pos = target + amp * Math.exp(-DAMP * e) * Math.cos(2 * Math.PI * N_OSC * e + phi)
+        setBoth(clamp(pos, PAD_X, w - PAD_X))
+        if (u >= 1) {
           clearInterval(id)
           setBoth(target)
         }
-      }, LAND_INTERVAL)
+      }, FRAME_MS)
       timers.current.push(id)
+    } else {
+      // ticking / done — pinned on the target.
+      setBoth(target)
     }
-    return clear
+    return clearTimers
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, targetIndex, w])
 
-  // The wrapper stays mounted (even when idle) so its width can be measured;
-  // only the pointer itself is shown once a draw is in progress.
-  const visible = left !== null && phase !== 'idle'
-
+  // The wrapper stays mounted so its width can be measured; the pin shows once
+  // a resting position has been computed.
   return (
     <div ref={ref} className="pointer-events-none absolute inset-x-0 top-0 z-10">
-      {visible && (
+      {left !== null && (
         <div className="absolute" style={{ left: left - POINTER_W / 2, top: LIFT_H - POINTER_H + 2 }}>
           <svg width={POINTER_W} height={POINTER_H} viewBox="0 0 20 24" aria-hidden>
             <g style={{ filter: 'drop-shadow(0 2px 3px rgba(20,22,28,0.35))' }}>

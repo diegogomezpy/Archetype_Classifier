@@ -113,8 +113,7 @@ export default function RoundDecision({ round, index, total, runningPnl, onNext 
     const drawn = sampleOutcome(outs)
     setOutcomes(outs)
     setTargetIndex(outs.indexOf(drawn))
-    const pool = outs.map((o) => o.end - INPUT)
-    start(drawn.end - INPUT, pool)
+    start(drawn.end - INPUT, true)
   }
 
   const isLast = index === total

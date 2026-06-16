@@ -2,7 +2,6 @@ type Props = {
   capital: number // current balance ($10,000 + cumulative profit)
   pnl: number // cumulative profit
   draw: number | null // the live "This draw" figure during the animation, else null
-  drawPulsing?: boolean // subtle flicker while the draw is still cycling
 }
 
 function fmtMoney(n: number): string {
@@ -22,32 +21,28 @@ function deltaColor(n: number): string {
 
 const label = 'font-mono text-[11px] uppercase tracking-[0.14em] text-muted'
 
-// Prominent running tally shown above the payoff bar: current capital on the
-// left, cumulative profit on the right, and the live draw figure between them
-// while a round is being resolved.
-export default function Scoreboard({ capital, pnl, draw, drawPulsing }: Props) {
+// Running tally above the payoff bar. Capital is the headline (your balance);
+// profit rides underneath as a smaller signed sub-line. The live draw figure
+// appears on the right while a round is being resolved.
+export default function Scoreboard({ capital, pnl, draw }: Props) {
   return (
-    <div className="flex items-end justify-between gap-4">
+    <div className="flex items-start justify-between gap-4">
       <div>
         <div className={label}>Capital</div>
         <div className="font-mono text-3xl font-semibold tnum text-text">{fmtMoney(capital)}</div>
+        <div className={`mt-0.5 font-mono text-sm font-medium tnum ${deltaColor(pnl)}`}>
+          {fmtDelta(pnl)} profit
+        </div>
       </div>
 
       {draw !== null && (
-        <div className={`text-center transition-opacity duration-100 ${drawPulsing ? 'opacity-70' : 'opacity-100'}`}>
+        <div className="text-right">
           <div className={label}>This draw</div>
           <div className={`font-mono text-3xl font-semibold tnum ${deltaColor(draw)}`}>
             {fmtDelta(draw)}
           </div>
         </div>
       )}
-
-      <div className="text-right">
-        <div className={label}>Profit</div>
-        <div className={`font-mono text-3xl font-semibold tnum ${deltaColor(pnl)}`}>
-          {fmtDelta(pnl)}
-        </div>
-      </div>
     </div>
   )
 }
