@@ -49,7 +49,10 @@ function run(plays: Record<number, number>) {
   return { ...normalizeScores(raw), lambda: computeLossAversion(ans) }
 }
 
-const shapeKeys = Object.keys(SHAPE_VECTORS) as Exclude<ArchetypeKey, 'quant'>[]
+// Cosine competitors (banker/venture/insurer); the Indexer is the low-conviction
+// outcome, not a vector — but we still test it as a persona below.
+const shapeKeys = Object.keys(SHAPE_VECTORS) as (keyof typeof SHAPE_VECTORS)[]
+const personaKeys = ['banker', 'venture', 'insurer', 'indexer'] as const
 function topShape(n: { sigma: number; alpha: number; lambda: number }) {
   return shapeKeys
     .map((k) => ({ k, s: cosineSim(n, SHAPE_VECTORS[k]) }))
@@ -61,17 +64,19 @@ function show(label: string, plays: Record<number, number>) {
   const c = classify(n)
   const rep = topShape(n)
   const margin = (rep[0].s - rep[1].s).toFixed(2)
+  const tag = c.tentative ? ' [tentative]' : ''
   console.log(
     `${label.padEnd(26)} -> ${(c.archetype + (c.isBlend && c.secondary ? ' + ' + c.secondary : '')).padEnd(24)} ` +
-      `σ=${n.sigma.toFixed(2)} α=${n.alpha.toFixed(2)} λ=${n.lambda.toFixed(2)} ev=${n.ev.toFixed(2)}  (shape margin ${margin})`,
+      `σ=${n.sigma.toFixed(2)} α=${n.alpha.toFixed(2)} λ=${n.lambda.toFixed(2)} ev=${n.ev.toFixed(2)}  ` +
+      `conf=${c.confidence.toFixed(2)}${tag}`,
   )
 }
 
 console.log('=== PURE SHAPE (answers each pair identically; ev should be ~0, no Quant) ===')
-for (const a of shapeKeys) show(`pure ${a}`, answers(pureShape[a], 0))
+for (const a of personaKeys) show(`pure ${a}`, answers(pureShape[a], 0))
 
 console.log('\n=== MODERATE EV-DISCIPLINE (push 35; expect <archetype> + quant) ===')
-for (const a of shapeKeys) show(`disciplined ${a}`, answers(pureShape[a], 35))
+for (const a of personaKeys) show(`disciplined ${a}`, answers(pureShape[a], 35))
 
 console.log('\n=== DISCIPLINE SWEEP (banker, push 0->80) ===')
 for (let p = 0; p <= 80; p += 10) show(`banker push ${p}`, answers(pureShape.banker, p))

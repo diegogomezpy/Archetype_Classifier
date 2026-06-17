@@ -174,12 +174,17 @@ export function computeLossAversion(answers: Answer[]): number {
 // same space, it's a separate reading of one axis.
 type ShapeScores = { sigma: number; alpha: number; lambda: number }
 
-// The four shape archetypes (the Quant is intentionally absent — see below).
-export const SHAPE_VECTORS: Record<Exclude<ArchetypeKey, 'quant'>, ShapeScores> = {
+// Archetypes that compete on payoff SHAPE via cosine similarity. The Quant
+// (EV overlay) and the Indexer are both intentionally absent. The Indexer is
+// NOT a direction in shape space — its old vector sat ~0.81 collinear with the
+// Banker, so the Banker-vs-Indexer result was really decided by magnitude,
+// which cosine discards. The Indexer is instead the LOW-CONVICTION outcome
+// (see classify): when no shape tilt is strong enough, "own the market" wins.
+export type ShapeArchetype = Exclude<ArchetypeKey, 'quant' | 'indexer'>
+export const SHAPE_VECTORS: Record<ShapeArchetype, ShapeScores> = {
   banker: { sigma: -0.7, alpha: -0.2, lambda: +0.8 },
   venture: { sigma: +0.6, alpha: +0.9, lambda: -0.5 },
   insurer: { sigma: +0.4, alpha: -0.8, lambda: 0.0 },
-  indexer: { sigma: -0.4, alpha: 0.0, lambda: +0.1 },
 }
 
 export function cosineSim(a: ShapeScores, b: ShapeScores): number {
@@ -195,13 +200,24 @@ export type Classification = {
   primarySim: number
   secondarySim: number | null
   isBlend: boolean
+  confidence: number // 0..1 — how trustworthy the call is (conviction + separation)
+  tentative: boolean // true when confidence is low enough to caveat the result
 }
 
-// Below this shape magnitude there's no real shape signal — the result is
-// driven by the EV axis (the Quant) or, failing that, the Indexer.
+// Below this shape magnitude there's no real shape tilt — the result is the
+// Indexer ("own the market"), unless EV-discipline is strong enough to make it
+// a pure Quant.
 const SHAPE_MIN = 0.3
-// EV-discipline strong enough to surface the Quant overlay.
-const EV_TAG = 0.3
+// EV-discipline strong enough to surface the Quant overlay. Set above the noise
+// floor so "+ Quant" means a genuinely EV-disciplined player, not someone who
+// chased the richer side once or twice. (See scripts/coverage.ts.)
+const EV_TAG = 0.45
+// Confidence calibration: a shape tilt of this magnitude — and a top-2 cosine
+// margin of this size — each count as fully convincing on their own.
+const CONVICTION_FULL = 0.6
+const MARGIN_FULL = 0.25
+// Below this composite confidence the result is flagged tentative.
+const TENTATIVE_BELOW = 0.4
 
 export function classify(scores: { sigma: number; alpha: number; lambda: number; ev: number }): Classification {
   const shape: ShapeScores = { sigma: scores.sigma, alpha: scores.alpha, lambda: scores.lambda }
@@ -210,39 +226,47 @@ export function classify(scores: { sigma: number; alpha: number; lambda: number;
   // The Quant "match" is read straight off the EV axis (0..1).
   const evSim = clamp(scores.ev, 0, 1)
 
-  const sims = (Object.keys(SHAPE_VECTORS) as Exclude<ArchetypeKey, 'quant'>[])
-    .map((key) => ({ key, sim: cosineSim(shape, SHAPE_VECTORS[key]) }))
-    .sort((a, b) => b.sim - a.sim)
-
-  // No meaningful shape preference: the EV axis decides. Strong EV-discipline =>
-  // a pure Quant; otherwise the Indexer default.
+  // No meaningful shape tilt: low conviction. Strong EV-discipline => a pure
+  // Quant; otherwise the Indexer. The closer to dead-center, the more confidently
+  // "balanced"; a near-threshold tilt is a borderline call, so flag it tentative.
   if (shapeMag < SHAPE_MIN) {
     if (evStrong) {
-      return { archetype: 'quant', secondary: null, primarySim: evSim, secondarySim: null, isBlend: false }
+      return {
+        archetype: 'quant', secondary: null, primarySim: evSim, secondarySim: null,
+        isBlend: false, confidence: evSim, tentative: evSim < 0.5,
+      }
     }
-    return { archetype: 'indexer', secondary: null, primarySim: 0, secondarySim: null, isBlend: false }
+    const confidence = clamp(1 - shapeMag / SHAPE_MIN, 0, 1)
+    return {
+      archetype: 'indexer', secondary: null, primarySim: 0, secondarySim: null,
+      isBlend: false, confidence, tentative: confidence < TENTATIVE_BELOW,
+    }
   }
 
-  // There is a shape preference, so a shape archetype leads. The Quant rides on
-  // top additively: when EV-discipline is high it becomes the secondary ("an
-  // Insurer who also chases expected value"); otherwise the runner-up shape
-  // archetype fills the secondary slot.
+  const sims = (Object.keys(SHAPE_VECTORS) as ShapeArchetype[])
+    .map((key) => ({ key, sim: cosineSim(shape, SHAPE_VECTORS[key]) }))
+    .sort((a, b) => b.sim - a.sim)
   const primary = sims[0]
+  const margin = primary.sim - sims[1].sim
+
+  // Confidence = how strongly the player tilted (conviction) and how clearly one
+  // archetype won (separation).
+  const conviction = clamp(shapeMag / CONVICTION_FULL, 0, 1)
+  const separation = clamp(margin / MARGIN_FULL, 0, 1)
+  const confidence = 0.6 * conviction + 0.4 * separation
+  const tentative = confidence < TENTATIVE_BELOW
+
+  // The Quant rides on top additively when EV-discipline is strong; otherwise the
+  // runner-up shape archetype fills the secondary slot (a blend when it's close).
   if (evStrong) {
     return {
-      archetype: primary.key,
-      secondary: 'quant',
-      primarySim: primary.sim,
-      secondarySim: evSim,
-      isBlend: true,
+      archetype: primary.key, secondary: 'quant', primarySim: primary.sim,
+      secondarySim: evSim, isBlend: true, confidence, tentative,
     }
   }
   return {
-    archetype: primary.key,
-    secondary: sims[1].key,
-    primarySim: primary.sim,
-    secondarySim: sims[1].sim,
-    isBlend: primary.sim - sims[1].sim < 0.15,
+    archetype: primary.key, secondary: sims[1].key, primarySim: primary.sim,
+    secondarySim: sims[1].sim, isBlend: margin < 0.15, confidence, tentative,
   }
 }
 
@@ -409,6 +433,8 @@ export interface DashboardData {
   isBlend: boolean
   primarySimilarity: number
   secondarySimilarity: number | null
+  confidence: number
+  tentative: boolean
   scores: NormalizedScores
 }
 
@@ -425,6 +451,8 @@ export function buildDashboardData(
     isBlend: c.isBlend,
     primarySimilarity: c.primarySim,
     secondarySimilarity: c.secondarySim,
+    confidence: c.confidence,
+    tentative: c.tentative,
     scores,
   }
 }

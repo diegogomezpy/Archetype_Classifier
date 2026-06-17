@@ -38,6 +38,13 @@ export default function ClientPanel({ data, totalPnl, onRetake }: Props) {
             <span className="font-medium text-amber">{secondary.name}</span>
           </p>
         )}
+        {data.tentative && (
+          <p className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-amber/40 bg-amber/[0.07] px-3 py-1 text-xs font-medium text-amber">
+            <span aria-hidden>≈</span>
+            Tentative read — your choices didn't lean strongly, so this is a best fit rather than a
+            clear call
+          </p>
+        )}
         <p className="mt-4 max-w-xl text-base leading-relaxed text-muted">{archetype.desc}</p>
         <div className="mt-5 flex flex-wrap gap-2.5">
           {archetype.traits.map((t) => (
