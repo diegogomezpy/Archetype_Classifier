@@ -9,6 +9,7 @@ import {
   applyScore,
   buildDashboardData,
   normalizeScores,
+  type Answer,
   type DashboardData,
 } from './lib/scoring'
 import type { Scores } from './types'
@@ -23,6 +24,8 @@ export default function App() {
   const [state, setState] = useState<AppState>('intro')
   const [roundIndex, setRoundIndex] = useState(0)
   const [rawScores, setRawScores] = useState<Scores>(EMPTY_SCORES)
+  // Per-round (round, allocX) answers — needed to derive λ from realized downside.
+  const [answers, setAnswers] = useState<Answer[]>([])
   const [totalPnl, setTotalPnl] = useState(0) // cumulative drawn P&L across rounds
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null)
 
@@ -33,6 +36,7 @@ export default function App() {
 
   const start = () => {
     setRawScores(EMPTY_SCORES)
+    setAnswers([])
     setTotalPnl(0)
     setRoundIndex(0)
     setDashboardData(null)
@@ -44,14 +48,16 @@ export default function App() {
   const handleNext = (allocX: number, drawDelta: number) => {
     const round = ROUNDS[roundIndex]
     const nextRaw = applyScore(rawScores, round, allocX)
+    const nextAnswers = [...answers, { round, allocX }]
     setRawScores(nextRaw)
+    setAnswers(nextAnswers)
     setTotalPnl((t) => t + drawDelta)
 
     const nextIndex = roundIndex + 1
 
     if (nextIndex >= total) {
       // Final round complete — compute everything synchronously and transition.
-      const data = buildDashboardData(normalizeScores(nextRaw))
+      const data = buildDashboardData(normalizeScores(nextRaw), nextAnswers)
       setDashboardData(data)
       setState('dashboard')
     } else if (nextIndex === SCREEN2_START) {
@@ -67,6 +73,7 @@ export default function App() {
 
   const retake = () => {
     setRawScores(EMPTY_SCORES)
+    setAnswers([])
     setTotalPnl(0)
     setRoundIndex(0)
     setDashboardData(null)

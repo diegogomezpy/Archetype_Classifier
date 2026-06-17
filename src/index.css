@@ -129,6 +129,14 @@ body {
 .payoff-range:focus-visible::-moz-range-thumb {
   box-shadow: 0 0 0 4px rgba(10, 160, 136, 0.3);
 }
+/* Untouched: hide the thumb until the player makes their first move, so the
+   slider can't suggest a pre-set default (which would anchor the answer). */
+.payoff-range--untouched::-webkit-slider-thumb {
+  opacity: 0;
+}
+.payoff-range--untouched::-moz-range-thumb {
+  opacity: 0;
+}
 
 /* ---- Entrance animations ---- */
 @keyframes fadeSlideUp {

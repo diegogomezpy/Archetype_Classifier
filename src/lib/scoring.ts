@@ -5,6 +5,7 @@ import {
   type AssetClass,
   type Instrument,
 } from './instruments'
+import { computeOutcomes, INPUT } from './outcomes'
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
 
@@ -19,8 +20,8 @@ export const EMPTY_SCORES: Scores = { sigma: 0, alpha: 0, lambda: 0, ev: 0 }
  * Rounds come in pairs sharing a shape contrast (ids n and n+5):
  *   1/6  variance (σ), gain-only
  *   2/7  skew (α)
- *   3/8  loss aversion (λ, + a little σ)
- *   4/9  combined risk profile (σ + α + λ)
+ *   3/8  loss aversion (a little σ; λ read separately — see below)
+ *   4/9  combined risk profile (σ + α; λ read separately)
  *   5/10 lottery skew (α)
  * Both rounds of a pair carry IDENTICAL shape weights (X is the aggressive side
  * in both), so the shape signal is the pair's average. The `ev` weight FLIPS
@@ -29,6 +30,10 @@ export const EMPTY_SCORES: Scores = { sigma: 0, alpha: 0, lambda: 0, ev: 0 }
  * pure shape gives the same slider both times → the ev contributions cancel; a
  * player who chases the richer side splits them → ev accumulates. That's the
  * EV-discipline (Optimizer) signal, isolated from shape.
+ *
+ * NOTE: λ (loss aversion) is NOT scored here. A linear slider weight conflated
+ * it with σ, so λ is instead read from the realized downside the player took on
+ * — expected shortfall — in computeLossAversion() below.
  */
 export const ROUND_SCORES: Record<
   number,
@@ -37,22 +42,20 @@ export const ROUND_SCORES: Record<
   // ── screen 1: the "a" rounds, aggressive side (X) is the richer one ──
   1: [{ dim: 'sigma', weight: 2 }, { dim: 'ev', weight: 2 }],
   2: [{ dim: 'alpha', weight: 2 }, { dim: 'ev', weight: 2 }],
-  3: [{ dim: 'lambda', weight: -2 }, { dim: 'sigma', weight: 1 }, { dim: 'ev', weight: 2 }],
+  3: [{ dim: 'sigma', weight: 1 }, { dim: 'ev', weight: 2 }],
   4: [
     { dim: 'sigma', weight: 1 },
     { dim: 'alpha', weight: 1 },
-    { dim: 'lambda', weight: -1 },
     { dim: 'ev', weight: 2 },
   ],
   5: [{ dim: 'alpha', weight: 2 }, { dim: 'ev', weight: 2 }],
   // ── screen 2: the "b" rounds, calm side (Y) is the richer one (ev flips) ──
   6: [{ dim: 'sigma', weight: 2 }, { dim: 'ev', weight: -2 }],
   7: [{ dim: 'alpha', weight: 2 }, { dim: 'ev', weight: -2 }],
-  8: [{ dim: 'lambda', weight: -2 }, { dim: 'sigma', weight: 1 }, { dim: 'ev', weight: -2 }],
+  8: [{ dim: 'sigma', weight: 1 }, { dim: 'ev', weight: -2 }],
   9: [
     { dim: 'sigma', weight: 1 },
     { dim: 'alpha', weight: 1 },
-    { dim: 'lambda', weight: -1 },
     { dim: 'ev', weight: -2 },
   ],
   10: [{ dim: 'alpha', weight: 2 }, { dim: 'ev', weight: -2 }],
@@ -83,20 +86,81 @@ export type NormalizedScores = {
 // Normalization denominators = sum of |weights| per dimension across all rounds.
 // sigma:  1(2)+3(1)+4(1)+6(2)+8(1)+9(1)            = 8
 // alpha:  2(2)+4(1)+5(2)+7(2)+9(1)+10(2)           = 10
-// lambda: 3(2)+4(1)+8(2)+9(1)                      = 6
 // ev:     10 rounds × 2                            = 20
+// (λ is NOT accumulated linearly — see computeLossAversion below.)
 const NORM_SIGMA = 8
 const NORM_ALPHA = 10
-const NORM_LAMBDA = 6
 const NORM_EV = 20
 
 export function normalizeScores(raw: Scores): NormalizedScores {
   return {
     sigma: clamp(raw.sigma / NORM_SIGMA, -1, 1),
     alpha: clamp(raw.alpha / NORM_ALPHA, -1, 1),
-    lambda: clamp(raw.lambda / NORM_LAMBDA, -1, 1),
+    // Placeholder — λ is derived from realized downside (expected shortfall) in
+    // buildDashboardData via computeLossAversion, not from a linear weight sum.
+    lambda: 0,
     ev: clamp(raw.ev / NORM_EV, -1, 1),
   }
+}
+
+// ---------------------------------------------------------------------------
+// Loss aversion (λ) from realized downside — expected shortfall
+// ---------------------------------------------------------------------------
+
+export type Answer = { round: Round; allocX: number }
+
+// λ is read from how much downside the player actually took on, via EXPECTED
+// SHORTFALL — the probability-weighted expected loss below the $10k input. We
+// compute each side's standalone shortfall (esX = all-Growth, esY = all-Anchor)
+// and score how far the player leaned toward the SAFER (lower-shortfall) side.
+// Leaning to the safer side = loss-averse; leaning to the riskier side = loss-
+// tolerant; a neutral 50/50 split is exactly λ-neutral.
+//
+// Why the per-side reading, not the shortfall of the actual mix: shortfall of
+// the blended portfolio is convex in the split, so a diversified ~50/50 player
+// can sit at (or below) the downside minimum purely from decorrelation — and a
+// naive "took the least loss available" reading would mislabel them as maximally
+// loss-averse. Scoring the lean between the two sides is linear in the split, so
+// diversification can't masquerade as loss aversion.
+//
+// The two SKEW contrasts (tags 'Skew' and 'Long shot') are deliberately
+// EXCLUDED: there the loss tail is a frequency/size trade driven by skew taste
+// (e.g. the lottery's aggressive side carries a small, frequent loss), so its
+// shortfall reflects α, not loss aversion. λ is read only from the genuine
+// depth-of-loss rounds (loss-aversion + combined risk-profile contrasts);
+// gain-only rounds have equal (zero) shortfall on both sides and drop out.
+const LAMBDA_EXCLUDED_TAGS = new Set(['Skew', 'Long shot'])
+
+// Expected shortfall of a split: Σ p·max(0, INPUT − outcome).
+export function expectedShortfall(round: Round, allocX: number): number {
+  return computeOutcomes(round, allocX).reduce(
+    (s, o) => s + o.p * Math.max(0, INPUT - o.end),
+    0,
+  )
+}
+
+export function computeLossAversion(answers: Answer[]): number {
+  let weightedTol = 0
+  let weightSum = 0
+  for (const { round, allocX } of answers) {
+    if (LAMBDA_EXCLUDED_TAGS.has(round.tag)) continue
+    const esX = expectedShortfall(round, 100) // all-Growth standalone shortfall
+    const esY = expectedShortfall(round, 0) // all-Anchor standalone shortfall
+    const gap = Math.abs(esX - esY)
+    if (gap < 1) continue // both sides equally safe: no loss-aversion signal
+    // Weight-implied shortfall the player signed up for, normalized between the
+    // safer side (0) and the riskier side (1). Linear in the split by design.
+    const p = allocX / 100
+    const lo = Math.min(esX, esY)
+    const hi = Math.max(esX, esY)
+    const tol = clamp((p * esX + (1 - p) * esY - lo) / (hi - lo), 0, 1)
+    // Weight by the dollar shortfall gap so rounds with a bigger downside
+    // decision count for more.
+    weightedTol += tol * gap
+    weightSum += gap
+  }
+  if (weightSum === 0) return 0
+  return clamp(1 - 2 * (weightedTol / weightSum), -1, 1) // high = loss-averse
 }
 
 // ---------------------------------------------------------------------------
@@ -348,19 +412,19 @@ export interface DashboardData {
   scores: NormalizedScores
 }
 
-export function buildDashboardData(normalized: NormalizedScores): DashboardData {
-  const c = classify({
-    sigma: normalized.sigma,
-    alpha: normalized.alpha,
-    lambda: normalized.lambda,
-    ev: normalized.ev,
-  })
+export function buildDashboardData(
+  normalized: NormalizedScores,
+  answers: Answer[],
+): DashboardData {
+  // Fill in λ from realized downside (the normalized λ is a placeholder).
+  const scores: NormalizedScores = { ...normalized, lambda: computeLossAversion(answers) }
+  const c = classify(scores)
   return {
     archetype: c.archetype,
     secondaryArchetype: c.secondary,
     isBlend: c.isBlend,
     primarySimilarity: c.primarySim,
     secondarySimilarity: c.secondarySim,
-    scores: normalized,
+    scores,
   }
 }

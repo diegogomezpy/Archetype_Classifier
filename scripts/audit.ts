@@ -5,7 +5,9 @@ import {
   normalizeScores,
   classify,
   cosineSim,
+  computeLossAversion,
   SHAPE_VECTORS,
+  type Answer,
 } from '../src/lib/scoring'
 import type { ArchetypeKey } from '../src/data/archetypes'
 
@@ -37,8 +39,14 @@ function answers(shape: ShapeAlloc, push: number): Record<number, number> {
 
 function run(plays: Record<number, number>) {
   let raw = EMPTY_SCORES
-  for (const r of ROUNDS) raw = applyScore(raw, r, plays[r.id] ?? 50)
-  return normalizeScores(raw)
+  const ans: Answer[] = []
+  for (const r of ROUNDS) {
+    const allocX = plays[r.id] ?? 50
+    raw = applyScore(raw, r, allocX)
+    ans.push({ round: r, allocX })
+  }
+  // Mirror buildDashboardData: λ comes from realized downside, not the linear sum.
+  return { ...normalizeScores(raw), lambda: computeLossAversion(ans) }
 }
 
 const shapeKeys = Object.keys(SHAPE_VECTORS) as Exclude<ArchetypeKey, 'quant'>[]

@@ -99,7 +99,10 @@ function ReferenceCard({
 }
 
 export default function RoundDecision({ round, index, total, runningPnl, onNext }: Props) {
-  const [allocX, setAllocX] = useState(50)
+  // No default split: the player must actively choose. Until they touch the
+  // slider, allocX is null (no thumb, lock-in disabled) so a non-answer can't be
+  // recorded as a real 50/50 — which used to bias everyone toward the Indexer.
+  const [allocX, setAllocX] = useState<number | null>(null)
   const [showTutorial, setShowTutorial] = useState(() => index === 1 && !tutorialSeen())
   const { phase, delta, applied, start, speedUp } = useDrawSequence()
   // The round's outcome distribution, captured on lock-in. The pointer spins to
@@ -112,8 +115,12 @@ export default function RoundDecision({ round, index, total, runningPnl, onNext 
   const [skipSignal, setSkipSignal] = useState(0)
   const skipRef = useRef(false)
 
-  const xDollars = allocX * 100
-  const yDollars = (100 - allocX) * 100
+  // The player has committed to a split once allocX is non-null. displayX drives
+  // the live preview (bar / dollars) at a neutral 50 before that first touch.
+  const chosen = allocX !== null
+  const displayX = allocX ?? 50
+  const xDollars = displayX * 100
+  const yDollars = (100 - displayX) * 100
 
   const locked = spinning || phase !== 'idle'
   const capital = INPUT + runningPnl + applied
@@ -122,7 +129,8 @@ export default function RoundDecision({ round, index, total, runningPnl, onNext 
   const liveDraw = phase === 'ticking' || phase === 'done' ? delta : null
 
   const lockIn = () => {
-    setOutcomes(computeOutcomes(round, allocX))
+    if (!chosen) return // can't lock in without an explicit choice
+    setOutcomes(computeOutcomes(round, displayX))
     setSpinning(true)
   }
 
@@ -182,7 +190,7 @@ export default function RoundDecision({ round, index, total, runningPnl, onNext 
               absolute-anchored color = P&L magnitude). The draw pointer overlays
               it and lands on the drawn segment. */}
           <div data-tour="bar" className="relative">
-            <PayoffBar round={round} allocX={allocX} />
+            <PayoffBar round={round} allocX={displayX} />
             <DrawPointer
               outcomes={outcomes}
               active={spinning}
@@ -208,20 +216,30 @@ export default function RoundDecision({ round, index, total, runningPnl, onNext 
             <span className="text-amber">all {Y_NAME} →</span>
           </div>
           {/* Raw slider value is the Y-share so the thumb's left end = all Growth
-              (matching the labels); allocX = 100 - value. */}
+              (matching the labels); allocX = 100 - value. The thumb stays hidden
+              (payoff-range--untouched) until the player makes their first move. */}
           <input
             data-tour="slider"
             type="range"
             min={0}
             max={100}
             step={1}
-            value={100 - allocX}
+            value={100 - displayX}
             disabled={locked}
             onChange={(e) => setAllocX(100 - Number(e.target.value))}
             aria-label={`Allocation between ${X_NAME} and ${Y_NAME}`}
-            aria-valuetext={`${fmtMoney(xDollars)} into ${X_NAME}, ${fmtMoney(yDollars)} into ${Y_NAME}`}
-            className={`payoff-range w-full ${locked ? 'opacity-50' : ''}`}
+            aria-valuetext={
+              chosen
+                ? `${fmtMoney(xDollars)} into ${X_NAME}, ${fmtMoney(yDollars)} into ${Y_NAME}`
+                : 'No split chosen yet — drag to set your allocation'
+            }
+            className={`payoff-range w-full ${locked ? 'opacity-50' : ''} ${
+              chosen ? '' : 'payoff-range--untouched'
+            }`}
           />
+          {!chosen && !locked && (
+            <p className="mt-2 text-center text-xs text-muted">Drag the slider to set your split</p>
+          )}
         </div>
 
         {/* 4 — Read-only reference cards: each side's outcomes, always shown. */}
@@ -234,18 +252,31 @@ export default function RoundDecision({ round, index, total, runningPnl, onNext 
         {(() => {
           const drawing = spinning || phase === 'ticking'
           const done = phase === 'done'
+          // Before a draw, the button is inert until the player has chosen a split.
+          const waiting = !drawing && !done && !chosen
           return (
             <button
               data-tour="next"
               type="button"
-              onClick={done ? () => onNext(allocX, delta) : drawing ? handleSkip : lockIn}
+              disabled={waiting}
+              onClick={done ? () => onNext(displayX, delta) : drawing ? handleSkip : lockIn}
               className={`mt-7 w-full rounded-2xl py-4 text-base font-semibold shadow-soft transition-all duration-200 ${
-                drawing
-                  ? 'cursor-pointer bg-surface2 text-muted hover:text-text'
-                  : 'bg-teal text-white hover:-translate-y-0.5 hover:shadow-card active:translate-y-0'
+                waiting
+                  ? 'cursor-not-allowed bg-surface2 text-muted/60'
+                  : drawing
+                    ? 'cursor-pointer bg-surface2 text-muted hover:text-text'
+                    : 'bg-teal text-white hover:-translate-y-0.5 hover:shadow-card active:translate-y-0'
               }`}
             >
-              {drawing ? 'Drawing… — tap to speed up' : done ? (isLast ? 'See my profile' : 'Next round') : 'Lock it in'}
+              {drawing
+                ? 'Drawing… — tap to speed up'
+                : done
+                  ? isLast
+                    ? 'See my profile'
+                    : 'Next round'
+                  : chosen
+                    ? 'Lock it in'
+                    : 'Choose your split first'}
             </button>
           )
         })()}
