@@ -18,12 +18,14 @@ export function getAlphaLabel(v: number): string {
   return 'strong positive-skew preference (lottery-oriented)'
 }
 
-export function getLambdaLabel(v: number): string {
-  if (v < -0.6) return 'very low loss aversion'
-  if (v < -0.2) return 'below-average loss aversion'
-  if (v < 0.2) return 'moderate loss aversion'
-  if (v < 0.6) return 'above-average loss aversion'
-  return 'high loss aversion'
+// Takes LOSS TOLERANCE (= −λ), so polarity matches the other risk axes:
+// positive = risk-on (loss-tolerant), negative = risk-off (loss-averse).
+export function getLossToleranceLabel(v: number): string {
+  if (v < -0.6) return 'strongly loss-averse'
+  if (v < -0.2) return 'mildly loss-averse'
+  if (v < 0.2) return 'approximately loss-neutral'
+  if (v < 0.6) return 'mildly loss-tolerant'
+  return 'strongly loss-tolerant'
 }
 
 export function getEvLabel(v: number): string {
