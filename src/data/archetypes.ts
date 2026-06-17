@@ -1,11 +1,11 @@
 // Archetype keys are the internal identifiers used throughout scoring; the
-// `name` field is what the client sees. They map to fixed payoff-shape
-// signatures (σ, α, λ) — the Quant is the EV-discipline overlay (see scoring.ts).
+// `name` field is what the client sees. The payoff-shape signatures (σ, α, λ)
+// live in SHAPE_VECTORS in scoring.ts — the single source of truth — so they're
+// intentionally NOT duplicated here.
 export type ArchetypeKey = 'banker' | 'quant' | 'venture' | 'insurer' | 'indexer'
 
 export type Archetype = {
   name: string
-  vec: { sigma: number; alpha: number; lambda: number; ev: number }
   desc: string
   traits: string[]
   products: string[]
@@ -14,7 +14,6 @@ export type Archetype = {
 export const ARCHETYPES: Record<ArchetypeKey, Archetype> = {
   banker: {
     name: 'The Banker',
-    vec: { sigma: -0.7, alpha: -0.2, lambda: 0.8, ev: 0 },
     desc: "You safeguard capital first. Losses weigh heavily, and you'll give up expected return for certainty — better to protect what you've built than to reach for more.",
     traits: ['Capital-preserving', 'Prefers certainty', 'Conservative', 'Low drawdown'],
     products: [
@@ -26,7 +25,6 @@ export const ARCHETYPES: Record<ArchetypeKey, Archetype> = {
   },
   quant: {
     name: 'The Quant',
-    vec: { sigma: 0.0, alpha: 0.0, lambda: 0.0, ev: 1.0 },
     desc: "You follow the expected value. When one option pays more on average you take it — risky, safe, flashy or dull doesn't sway you. Models over narrative, math over feel. This is less a risk personality than a discipline that sits on top of one.",
     traits: ['EV-driven', 'Shape-indifferent', 'Systematic', 'Low behavioral bias'],
     products: [
@@ -38,7 +36,6 @@ export const ARCHETYPES: Record<ArchetypeKey, Archetype> = {
   },
   venture: {
     name: 'The Venture Capitalist',
-    vec: { sigma: 0.6, alpha: 0.9, lambda: -0.5, ev: 0 },
     desc: "You back bold bets for the chance at an outsized win. Asymmetric upside is worth more to you than its expected value suggests — a few big winners justify the ones that go nowhere, and you'll pass on a safer, richer option to keep the long-shot.",
     traits: ['Upside-oriented', 'Risk-tolerant', 'Conviction-driven', 'Loss-resilient'],
     products: [
@@ -50,7 +47,6 @@ export const ARCHETYPES: Record<ArchetypeKey, Archetype> = {
   },
   insurer: {
     name: 'The Insurer',
-    vec: { sigma: 0.4, alpha: -0.8, lambda: 0.0, ev: 0 },
     desc: "Like an underwriter, you collect a steady premium for taking on the risks others want to avoid. You're comfortable with the occasional large loss in exchange for reliable income — the professional's trade.",
     traits: ['Premium-collecting', 'Negative-skew tolerant', 'Yield-seeking', 'Underwrites risk'],
     products: [
@@ -62,7 +58,6 @@ export const ARCHETYPES: Record<ArchetypeKey, Archetype> = {
   },
   indexer: {
     name: 'The Indexer',
-    vec: { sigma: -0.4, alpha: 0.0, lambda: 0.1, ev: 0.0 },
     desc: "You'd rather own the market than try to outguess it. No strong view on direction or payoff shape — you favor simple, transparent, low-cost exposure you can understand and track.",
     traits: ['Transparency-first', 'Low-cost', 'Broad-market', 'Low complexity'],
     products: [

@@ -182,9 +182,14 @@ type ShapeScores = { sigma: number; alpha: number; lambda: number }
 // (see classify): when no shape tilt is strong enough, "own the market" wins.
 export type ShapeArchetype = Exclude<ArchetypeKey, 'quant' | 'indexer'>
 export const SHAPE_VECTORS: Record<ShapeArchetype, ShapeScores> = {
-  banker: { sigma: -0.7, alpha: -0.2, lambda: +0.8 },
+  // Low variance + high loss aversion; no skew view (a Banker shuns both the
+  // rare-big-loss side and the lottery, so α nets to ~0).
+  banker: { sigma: -0.7, alpha: 0.0, lambda: +0.8 },
+  // High variance, strong positive skew, loss-tolerant.
   venture: { sigma: +0.6, alpha: +0.9, lambda: -0.5 },
-  insurer: { sigma: +0.4, alpha: -0.8, lambda: 0.0 },
+  // Strong negative skew (premium for taking the rare big loss); mildly variance-
+  // averse (wants steady income); loss-neutral (accepts the tail).
+  insurer: { sigma: -0.2, alpha: -0.8, lambda: 0.0 },
 }
 
 export function cosineSim(a: ShapeScores, b: ShapeScores): number {
@@ -204,10 +209,13 @@ export type Classification = {
   tentative: boolean // true when confidence is low enough to caveat the result
 }
 
-// Below this shape magnitude there's no real shape tilt — the result is the
-// Indexer ("own the market"), unless EV-discipline is strong enough to make it
-// a pure Quant.
-const SHAPE_MIN = 0.3
+// Below this STYLE magnitude — skew + loss-shape, √(α²+λ²) — there's no archetype
+// identity. Variance tolerance (σ) alone is a dial, not a style: a player who
+// just accepts market volatility with no skew or loss view is an Indexer, not a
+// weak Venture. So the gate looks only at α and λ; σ still refines the cosine
+// (and drives the asset mix) for players who DO have a style. Result is the
+// Indexer ("own the market"), unless EV-discipline is strong enough for a Quant.
+const STYLE_MIN = 0.3
 // EV-discipline strong enough to surface the Quant overlay. Set above the noise
 // floor so "+ Quant" means a genuinely EV-disciplined player, not someone who
 // chased the richer side once or twice. (See scripts/coverage.ts.)
@@ -221,22 +229,23 @@ const TENTATIVE_BELOW = 0.4
 
 export function classify(scores: { sigma: number; alpha: number; lambda: number; ev: number }): Classification {
   const shape: ShapeScores = { sigma: scores.sigma, alpha: scores.alpha, lambda: scores.lambda }
-  const shapeMag = Math.sqrt(shape.sigma ** 2 + shape.alpha ** 2 + shape.lambda ** 2)
+  const styleMag = Math.sqrt(shape.alpha ** 2 + shape.lambda ** 2) // skew + loss-shape only
+  const shapeMag = Math.sqrt(shape.sigma ** 2 + shape.alpha ** 2 + shape.lambda ** 2) // overall tilt
   const evStrong = scores.ev >= EV_TAG
   // The Quant "match" is read straight off the EV axis (0..1).
   const evSim = clamp(scores.ev, 0, 1)
 
-  // No meaningful shape tilt: low conviction. Strong EV-discipline => a pure
-  // Quant; otherwise the Indexer. The closer to dead-center, the more confidently
-  // "balanced"; a near-threshold tilt is a borderline call, so flag it tentative.
-  if (shapeMag < SHAPE_MIN) {
+  // No style signal (flat skew & loss-shape): no archetype identity. Strong EV-
+  // discipline => a pure Quant; otherwise the Indexer. The flatter the style, the
+  // more confidently an Indexer; a near-threshold tilt is borderline → tentative.
+  if (styleMag < STYLE_MIN) {
     if (evStrong) {
       return {
         archetype: 'quant', secondary: null, primarySim: evSim, secondarySim: null,
         isBlend: false, confidence: evSim, tentative: evSim < 0.5,
       }
     }
-    const confidence = clamp(1 - shapeMag / SHAPE_MIN, 0, 1)
+    const confidence = clamp(1 - styleMag / STYLE_MIN, 0, 1)
     return {
       archetype: 'indexer', secondary: null, primarySim: 0, secondarySim: null,
       isBlend: false, confidence, tentative: confidence < TENTATIVE_BELOW,

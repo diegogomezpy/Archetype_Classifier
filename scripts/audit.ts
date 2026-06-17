@@ -18,9 +18,15 @@ import type { ArchetypeKey } from '../src/data/archetypes'
 type ShapeAlloc = Record<number, number> // contrast 1..5 -> allocX (0..100)
 
 const pureShape: Record<Exclude<ArchetypeKey, 'quant'>, ShapeAlloc> = {
-  banker: { 1: 25, 2: 40, 3: 0, 4: 25, 5: 15 },
-  venture: { 1: 75, 2: 100, 3: 65, 4: 85, 5: 100 },
-  insurer: { 1: 60, 2: 0, 3: 50, 4: 35, 5: 15 },
+  // Banker: low variance, shuns the rare-big-loss side AND the lottery (α nets
+  // ~0), strongly loss-averse (all-safe on the loss round).
+  banker: { 1: 20, 2: 70, 3: 0, 4: 30, 5: 30 },
+  // Venture: high variance, chases positive skew, loss-tolerant.
+  venture: { 1: 80, 2: 95, 3: 70, 4: 85, 5: 95 },
+  // Insurer: mildly low variance, strong negative skew (leans Anchor on skew
+  // rounds), loss-neutral.
+  insurer: { 1: 40, 2: 5, 3: 50, 4: 35, 5: 15 },
+  // Indexer: dead-center (no tilt at all).
   indexer: { 1: 50, 2: 50, 3: 50, 4: 50, 5: 50 },
 }
 
@@ -74,6 +80,9 @@ function show(label: string, plays: Record<number, number>) {
 
 console.log('=== PURE SHAPE (answers each pair identically; ev should be ~0, no Quant) ===')
 for (const a of personaKeys) show(`pure ${a}`, answers(pureShape[a], 0))
+
+console.log('\n=== MARKET BETA (high variance tolerance, flat skew & loss view -> Indexer) ===')
+show('market beta', answers({ 1: 95, 2: 50, 3: 50, 4: 50, 5: 50 }, 0))
 
 console.log('\n=== MODERATE EV-DISCIPLINE (push 35; expect <archetype> + quant) ===')
 for (const a of personaKeys) show(`disciplined ${a}`, answers(pureShape[a], 35))
