@@ -36,6 +36,9 @@ export default function AdminNav() {
         <NavLink to="/admin/archetypes" className={({ isActive }) => tab(isActive)}>
           {t.adminNav.archetypes}
         </NavLink>
+        <NavLink to="/admin/advisors" className={({ isActive }) => tab(isActive)}>
+          {t.adminNav.advisors}
+        </NavLink>
       </div>
     </div>
   )

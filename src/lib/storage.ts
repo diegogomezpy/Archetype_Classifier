@@ -17,7 +17,9 @@ export type SessionAnswer = { roundId: number; allocX: number }
 export type SessionRecord = DashboardData & {
   id: string
   createdAt: string // ISO timestamp
-  clientLabel: string | null // optional name the client entered at the start
+  clientLabel: string | null // the name the client entered at the start
+  advisorId: string | null // the advisor this session is linked to (if any)
+  clientId: string | null // the client record replays accumulate under (if any)
   answers: SessionAnswer[]
 }
 

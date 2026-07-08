@@ -26,18 +26,37 @@ Hash-based routing (works on static hosting with no server rewrites):
 
 | Route | Audience | What |
 |-------|----------|------|
-| `#/` | Client (public) | The 10-round test → the client's archetype + brief description only. Completing it saves a session. |
-| `#/advisor` | Advisor | List of completed client sessions (deletable), newest first. |
-| `#/advisor/session/:id` | Advisor | One session's dashboard: classification, allocation, and recommended instruments with per-asset detail drill-down. Strictly advisor-facing. |
+| `#/` | Client (public) | The 10-round test. Client enters their name and picks their advisor, then gets their archetype + brief description only. Completing it saves a session. |
+| `#/advisor` | Advisor | Sign-in (pick account + passcode) → **that advisor's clients only**, each with their play history. |
+| `#/advisor/client/:clientId` | Advisor | One client's session history, newest first (replays accumulate here). |
+| `#/advisor/session/:id` | Advisor | One session's dashboard: classification, allocation, and recommended instruments with per-asset detail drill-down. Strictly advisor-facing, scoped to the signed-in advisor. |
 | `#/admin` | Admin | Instrument catalog console: curate everything offerable to clients — risk vectors (σ/α/λ), visibility, "house pick" emphasis, and per-asset-class details. |
 | `#/admin/archetypes` | Admin | Archetype console: edit the classification shape vectors (Banker/Venture/Insurer) and each archetype's recommended model asset mix. |
+| `#/admin/advisors` | Admin | Advisor accounts: create the advisors clients pick from (name + passcode). |
 
-Sessions, the instrument catalog, and the archetype config are persisted to
-`localStorage` behind async storage interfaces (`src/lib/storage.ts`,
-`src/lib/catalog.tsx`, `src/lib/archetypeConfig.tsx`); a Firebase/Firestore
-backend (with passcode-gated advisor/admin access) is the planned next phase and
-swaps in behind the same interfaces. The drawn game P&L is deliberately **not**
+Everything (sessions, instrument catalog, archetype config, advisors, clients,
+advisor login) is persisted to `localStorage` behind async storage interfaces
+(`src/lib/storage.ts`, `src/lib/catalog.tsx`, `src/lib/archetypeConfig.tsx`,
+`src/lib/directory.tsx`); a Firebase/Firestore backend swaps in behind the same
+interfaces in the planned next phase. The drawn game P&L is deliberately **not**
 persisted — it's an engagement mechanic, not profile data.
+
+### Advisor accounts & client linking
+
+Admins create advisor accounts. When a client plays, they enter their name and
+select their advisor, which links the session to both. **Replays re-link to the
+same client** — a client is matched by (advisor + normalized name), and the
+browser also remembers the last client for a one-tap "continuing as…" on the
+intro. An advisor signs in (account + passcode) and sees only *their* clients,
+each with full play history; the client-history and session routes are scoped to
+the signed-in advisor and redirect otherwise.
+
+> **Security note.** On this static build the scoping and passcodes are
+> **demo-grade** — all data lives in the browser and is readable there, so this
+> is functional isolation, not enforced isolation. Real enforcement (and real
+> logins) arrive with the Phase-2 backend: Firebase Auth + Firestore security
+> rules. The data model and UI built here carry over unchanged; only the storage
+> and the access check move server-side.
 
 ### Admin-configurable engine
 
@@ -206,16 +225,18 @@ src/
 ├── index.css               # Tailwind layers + animations + print styles
 ├── pages/
 │   ├── TestFlowPage.tsx    # Client flow: intro → rounds → interstitial → own profile
-│   ├── AdvisorListPage.tsx # Advisor: completed-session list (with delete)
-│   ├── AdvisorSessionPage.tsx # Advisor: one session's dashboard
+│   ├── AdvisorListPage.tsx # Advisor: sign-in gate + their client list
+│   ├── AdvisorClientPage.tsx # Advisor: one client's session history
+│   ├── AdvisorSessionPage.tsx # Advisor: one session's dashboard (scoped)
 │   ├── AdminPage.tsx       # Admin: instrument catalog console (CRUD + details)
-│   └── AdminArchetypesPage.tsx # Admin: archetype vectors + model asset mixes
+│   ├── AdminArchetypesPage.tsx # Admin: archetype vectors + model asset mixes
+│   └── AdminAdvisorsPage.tsx # Admin: advisor account management
 ├── i18n/
 │   ├── i18n.tsx            # Language context/provider + hooks (en/es)
 │   ├── strings.ts          # UI chrome strings, both languages
 │   └── content.ts          # Round/archetype/asset-class translations + helpers
 ├── components/
-│   ├── IntroScreen.tsx     # Landing screen (+ optional client name)
+│   ├── IntroScreen.tsx     # Landing screen (name + advisor pick, "continue as")
 │   ├── ClientResult.tsx    # Client end screen: archetype + description only
 │   ├── LanguageToggle.tsx  # Fixed EN/ES switch (all routes)
 │   ├── RoundScreen.tsx     # Thin per-round wrapper → RoundDecision
@@ -245,6 +266,7 @@ src/
     ├── storage.ts          # Session store interface + localStorage implementation
     ├── catalog.tsx         # Managed instrument catalog: field specs, store, provider
     ├── archetypeConfig.tsx # Editable shape vectors + per-archetype model mixes
+    ├── directory.tsx       # Advisors + clients + advisor login (demo-grade)
     ├── marketData.ts       # Autofill provider seam (no-op now; backend in Phase 2)
     ├── outcomes.ts         # Joint payoff distribution + weighted draw sampling
     ├── instruments.ts      # Bundled instrument universe (seeds the catalog)

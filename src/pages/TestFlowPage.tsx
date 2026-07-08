@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import IntroScreen from '../components/IntroScreen'
+import IntroScreen, { type StartInfo } from '../components/IntroScreen'
 import RoundScreen from '../components/RoundScreen'
 import HalfwayScreen from '../components/HalfwayScreen'
 import ClientResult from '../components/ClientResult'
@@ -13,6 +13,7 @@ import {
   type DashboardData,
 } from '../lib/scoring'
 import { getSessionStore } from '../lib/storage'
+import { useDirectory } from '../lib/directory'
 import type { Scores } from '../types'
 
 type FlowState = 'intro' | 'playing' | 'interstitial' | 'result'
@@ -25,8 +26,10 @@ const SCREEN2_START = ROUNDS.findIndex((r) => r.screen === 2)
 // client's own profile. The advisor dashboard is NOT shown here — a completed
 // test is saved as a session and reviewed on the #/advisor route.
 export default function TestFlowPage() {
+  const { findOrCreateClient, rememberClient } = useDirectory()
   const [state, setState] = useState<FlowState>('intro')
   const [clientLabel, setClientLabel] = useState<string | null>(null)
+  const [advisorId, setAdvisorId] = useState<string | null>(null)
   const [roundIndex, setRoundIndex] = useState(0)
   const [rawScores, setRawScores] = useState<Scores>(EMPTY_SCORES)
   // Per-round (round, allocX) answers — needed to derive λ from realized downside.
@@ -39,8 +42,9 @@ export default function TestFlowPage() {
   const progress =
     state === 'intro' ? 0 : state === 'result' ? 100 : (roundIndex / total) * 100
 
-  const start = (label: string | null) => {
-    setClientLabel(label)
+  const start = (info: StartInfo) => {
+    setClientLabel(info.name)
+    setAdvisorId(info.advisorId)
     setRawScores(EMPTY_SCORES)
     setAnswers([])
     setTotalPnl(0)
@@ -68,10 +72,22 @@ export default function TestFlowPage() {
       const data = buildDashboardData(normalizeScores(nextRaw), nextAnswers)
       setDashboardData(data)
       setState('result')
+
+      // Link this play to the client's record (replays re-link to the same
+      // client under this advisor) and remember them on this device.
+      let clientId: string | null = null
+      if (advisorId && clientLabel) {
+        const client = findOrCreateClient(advisorId, clientLabel)
+        clientId = client.id
+        rememberClient({ advisorId, clientId, name: client.name })
+      }
+
       getSessionStore()
         .saveSession({
           ...data,
           clientLabel,
+          advisorId,
+          clientId,
           answers: nextAnswers.map((a) => ({ roundId: a.round.id, allocX: a.allocX })),
         })
         .catch((err) => console.warn('Failed to save session:', err))
@@ -88,6 +104,7 @@ export default function TestFlowPage() {
 
   const retake = () => {
     setClientLabel(null)
+    setAdvisorId(null)
     setRawScores(EMPTY_SCORES)
     setAnswers([])
     setTotalPnl(0)

@@ -20,7 +20,10 @@ const en = {
     statTime: 'To complete',
     statTimeValue: '~2 min',
     statProfiles: 'Profiles',
-    namePlaceholder: 'Your name (optional)',
+    namePlaceholder: 'Your name',
+    selectAdvisor: 'Select your advisor',
+    welcomeBack: (name: string) => `Continuing as ${name}.`,
+    startFresh: 'Not you?',
     start: 'Start',
     footnote: 'Each round takes under 30 seconds. There are no wrong choices.',
     advisorAccess: 'Advisor access',
@@ -204,6 +207,7 @@ const en = {
   adminNav: {
     instruments: 'Instruments',
     archetypes: 'Archetypes',
+    advisors: 'Advisors',
   },
   adminArch: {
     title: 'Archetypes',
@@ -229,6 +233,52 @@ const en = {
     resetDefaults: 'Reset archetypes to defaults',
     resetConfirm: 'Reset all archetype vectors and mixes to the built-in defaults?',
   },
+  adminAdvisors: {
+    title: 'Advisors',
+    subtitle:
+      'Create the advisor accounts clients pick from. Each advisor only sees clients linked to them.',
+    demoNote:
+      'On this build the passcode is demo-grade (stored in the browser). Real login lands with the backend.',
+    count: (n: number) => `${n} ${n === 1 ? 'advisor' : 'advisors'}`,
+    add: 'Add advisor',
+    name: 'Advisor name',
+    passcode: 'Passcode',
+    passcodeHint: 'Optional — leave blank to allow login by selection alone.',
+    noPasscode: 'no passcode',
+    clients: (n: number) => `${n} ${n === 1 ? 'client' : 'clients'}`,
+    edit: 'Edit',
+    delete: 'Delete',
+    deleteConfirm: (name: string) =>
+      `Delete advisor "${name}"? Their clients' sessions stay but become unassigned.`,
+    save: 'Save',
+    cancel: 'Cancel',
+    empty: 'No advisors yet — add one so clients can pick it at the start.',
+  },
+  advisorAuth: {
+    title: 'Advisor sign-in',
+    subtitle: 'Choose your account to see your clients.',
+    selectAdvisor: 'Select advisor',
+    passcode: 'Passcode',
+    signIn: 'Sign in',
+    wrongPasscode: 'Incorrect passcode.',
+    noAdvisors: 'No advisor accounts exist yet. Ask an admin to create one.',
+    goAdmin: 'Admin console',
+  },
+  advisorClients: {
+    title: 'Your clients',
+    count: (n: number) => `${n} ${n === 1 ? 'client' : 'clients'}`,
+    empty: 'No clients yet. They appear here once someone completes the test with your name selected.',
+    sessions: (n: number) => `${n} ${n === 1 ? 'session' : 'sessions'}`,
+    lastPlayed: 'Last played',
+    logout: 'Sign out',
+    signedInAs: 'Signed in as',
+  },
+  clientHistory: {
+    back: '← Your clients',
+    sessions: 'Sessions',
+    sessionsSub: 'Each play, newest first. Replays link to this client automatically.',
+    open: 'Open',
+  },
 }
 
 const es: UIStrings = {
@@ -247,7 +297,10 @@ const es: UIStrings = {
     statTime: 'Para completar',
     statTimeValue: '~2 min',
     statProfiles: 'Perfiles',
-    namePlaceholder: 'Tu nombre (opcional)',
+    namePlaceholder: 'Tu nombre',
+    selectAdvisor: 'Selecciona tu asesor',
+    welcomeBack: (name: string) => `Continuando como ${name}.`,
+    startFresh: '¿No eres tú?',
     start: 'Comenzar',
     footnote: 'Cada ronda toma menos de 30 segundos. No hay elecciones incorrectas.',
     advisorAccess: 'Acceso asesor',
@@ -433,6 +486,7 @@ const es: UIStrings = {
   adminNav: {
     instruments: 'Instrumentos',
     archetypes: 'Arquetipos',
+    advisors: 'Asesores',
   },
   adminArch: {
     title: 'Arquetipos',
@@ -457,6 +511,52 @@ const es: UIStrings = {
     saved: 'Guardado',
     resetDefaults: 'Restaurar arquetipos por defecto',
     resetConfirm: '¿Restaurar todos los vectores y mezclas de arquetipos a los valores por defecto?',
+  },
+  adminAdvisors: {
+    title: 'Asesores',
+    subtitle:
+      'Crea las cuentas de asesor que los clientes eligen. Cada asesor solo ve los clientes vinculados a él.',
+    demoNote:
+      'En esta versión la contraseña es de demostración (guardada en el navegador). El login real llega con el backend.',
+    count: (n: number) => `${n} ${n === 1 ? 'asesor' : 'asesores'}`,
+    add: 'Agregar asesor',
+    name: 'Nombre del asesor',
+    passcode: 'Contraseña',
+    passcodeHint: 'Opcional — déjala en blanco para permitir el ingreso solo por selección.',
+    noPasscode: 'sin contraseña',
+    clients: (n: number) => `${n} ${n === 1 ? 'cliente' : 'clientes'}`,
+    edit: 'Editar',
+    delete: 'Eliminar',
+    deleteConfirm: (name: string) =>
+      `¿Eliminar al asesor "${name}"? Las sesiones de sus clientes se conservan pero quedan sin asignar.`,
+    save: 'Guardar',
+    cancel: 'Cancelar',
+    empty: 'Aún no hay asesores — agrega uno para que los clientes puedan elegirlo al inicio.',
+  },
+  advisorAuth: {
+    title: 'Ingreso de asesor',
+    subtitle: 'Elige tu cuenta para ver tus clientes.',
+    selectAdvisor: 'Selecciona asesor',
+    passcode: 'Contraseña',
+    signIn: 'Ingresar',
+    wrongPasscode: 'Contraseña incorrecta.',
+    noAdvisors: 'Aún no hay cuentas de asesor. Pídele a un administrador que cree una.',
+    goAdmin: 'Consola de administración',
+  },
+  advisorClients: {
+    title: 'Tus clientes',
+    count: (n: number) => `${n} ${n === 1 ? 'cliente' : 'clientes'}`,
+    empty: 'Aún no hay clientes. Aparecen aquí cuando alguien completa el test con tu nombre seleccionado.',
+    sessions: (n: number) => `${n} ${n === 1 ? 'sesión' : 'sesiones'}`,
+    lastPlayed: 'Última vez',
+    logout: 'Cerrar sesión',
+    signedInAs: 'Sesión de',
+  },
+  clientHistory: {
+    back: '← Tus clientes',
+    sessions: 'Sesiones',
+    sessionsSub: 'Cada partida, la más reciente primero. Las repeticiones se vinculan a este cliente automáticamente.',
+    open: 'Abrir',
   },
 }
 

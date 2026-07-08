@@ -1,16 +1,36 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useT } from '../i18n/i18n'
+import { useDirectory } from '../lib/directory'
+
+export type StartInfo = { name: string; advisorId: string | null }
 
 type Props = {
-  onStart: (clientLabel: string | null) => void
+  onStart: (info: StartInfo) => void
 }
 
 export default function IntroScreen({ onStart }: Props) {
   const t = useT()
-  const [name, setName] = useState('')
+  const { advisors, lastClient } = useDirectory()
 
-  const start = () => onStart(name.trim() || null)
+  // Prefill from the device-remembered client (if their advisor still exists).
+  const rememberedAdvisor =
+    lastClient && advisors.some((a) => a.id === lastClient.advisorId) ? lastClient : null
+  const [name, setName] = useState(rememberedAdvisor?.name ?? '')
+  const [advisorId, setAdvisorId] = useState<string>(rememberedAdvisor?.advisorId ?? '')
+
+  const hasAdvisors = advisors.length > 0
+  const ready = name.trim().length > 0 && (!hasAdvisors || advisorId !== '')
+
+  const start = () => {
+    if (!ready) return
+    onStart({ name: name.trim(), advisorId: advisorId || null })
+  }
+
+  const startFresh = () => {
+    setName('')
+    setAdvisorId('')
+  }
 
   const stats = [
     { value: '10', label: t.intro.statDecisions },
@@ -43,22 +63,58 @@ export default function IntroScreen({ onStart }: Props) {
           ))}
         </div>
 
-        {/* Optional label so the advisor can identify this session later. */}
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && start()}
-          placeholder={t.intro.namePlaceholder}
-          aria-label={t.intro.namePlaceholder}
-          maxLength={60}
-          className="mt-12 w-full max-w-sm rounded-2xl border border-border bg-surface px-5 py-3.5 text-center text-base text-text shadow-soft outline-none transition-shadow placeholder:text-muted/70 focus:shadow-card focus:ring-2 focus:ring-teal/40"
-        />
+        {/* Client identity: name + advisor. */}
+        <div className="mt-12 flex w-full max-w-sm flex-col gap-3">
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && start()}
+            placeholder={t.intro.namePlaceholder}
+            aria-label={t.intro.namePlaceholder}
+            maxLength={60}
+            className="w-full rounded-2xl border border-border bg-surface px-5 py-3.5 text-center text-base text-text shadow-soft outline-none transition-shadow placeholder:text-muted/70 focus:shadow-card focus:ring-2 focus:ring-teal/40"
+          />
+
+          {hasAdvisors && (
+            <select
+              value={advisorId}
+              onChange={(e) => setAdvisorId(e.target.value)}
+              aria-label={t.intro.selectAdvisor}
+              className={`w-full rounded-2xl border border-border bg-surface px-5 py-3.5 text-center text-base shadow-soft outline-none transition-shadow focus:shadow-card focus:ring-2 focus:ring-teal/40 ${
+                advisorId ? 'text-text' : 'text-muted/70'
+              }`}
+            >
+              <option value="" disabled>
+                {t.intro.selectAdvisor}
+              </option>
+              {advisors.map((a) => (
+                <option key={a.id} value={a.id} className="text-text">
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+
+        {rememberedAdvisor && (
+          <p className="mt-3 text-xs text-muted">
+            {t.intro.welcomeBack(rememberedAdvisor.name)}{' '}
+            <button
+              type="button"
+              onClick={startFresh}
+              className="font-medium text-teal underline-offset-2 hover:underline"
+            >
+              {t.intro.startFresh}
+            </button>
+          </p>
+        )}
 
         <button
           type="button"
           onClick={start}
-          className="mt-4 w-full max-w-sm rounded-2xl bg-teal py-4 text-base font-semibold text-white shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card active:translate-y-0"
+          disabled={!ready}
+          className="mt-4 w-full max-w-sm rounded-2xl bg-teal py-4 text-base font-semibold text-white shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {t.intro.start}
         </button>

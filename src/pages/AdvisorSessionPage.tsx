@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, Navigate, useParams } from 'react-router-dom'
 import AdvisorDashboard from '../components/AdvisorDashboard'
 import { getSessionStore, type SessionRecord } from '../lib/storage'
 import { reclassifyScores } from '../lib/scoring'
 import { useArchetypeConfig } from '../lib/archetypeConfig'
+import { useDirectory } from '../lib/directory'
 import { dateLocale, useLang, useT } from '../i18n/i18n'
 
 function fmtDate(iso: string, locale: string): string {
@@ -18,6 +19,7 @@ export default function AdvisorSessionPage() {
   const t = useT()
   const { lang } = useLang()
   const { config } = useArchetypeConfig()
+  const { loggedInAdvisorId } = useDirectory()
   const { id } = useParams<{ id: string }>()
   const [session, setSession] = useState<SessionRecord | null | 'loading'>('loading')
 
@@ -36,8 +38,16 @@ export default function AdvisorSessionPage() {
     }
   }, [id])
 
+  // Must be signed in to view any session.
+  if (!loggedInAdvisorId) return <Navigate to="/advisor" replace />
+
   if (session === 'loading') {
     return <div className="p-10 text-sm text-muted">{t.advisorSession.loading}</div>
+  }
+
+  // Scoped: an advisor can only open their own clients' sessions.
+  if (session && session !== null && session.advisorId !== loggedInAdvisorId) {
+    return <Navigate to="/advisor" replace />
   }
 
   if (session === null) {
@@ -63,7 +73,10 @@ export default function AdvisorSessionPage() {
     <div>
       {/* Session header bar — advisor navigation, hidden from the print report */}
       <div className="no-print mx-auto flex w-full max-w-6xl items-center gap-3 px-8 pt-6">
-        <Link to="/advisor" className="text-sm text-muted transition-colors hover:text-text">
+        <Link
+          to={session.clientId ? `/advisor/client/${session.clientId}` : '/advisor'}
+          className="text-sm text-muted transition-colors hover:text-text"
+        >
           {t.advisorSession.allSessions}
         </Link>
         <span className="ml-auto text-sm text-muted">{fmtDate(session.createdAt, dateLocale(lang))}</span>
