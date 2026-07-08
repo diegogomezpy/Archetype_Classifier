@@ -1,5 +1,3 @@
-export type DisplayMode = 'relative' | 'absolute'
-
 export type Scenario = {
   p: string
   amt: number
@@ -17,12 +15,11 @@ export type AllocRound = {
   screen: number
   type: 'alloc'
   tag: string
-  displayMode: DisplayMode
-  // EV-matched rounds (both sides average $10,500) measure pure payoff shape.
-  // EV-mismatched rounds (`evGap` set) have one richer side; choosing it
-  // signals EV-discipline (the Optimizer axis). `evGap` is the dollar EV
-  // advantage of side X over side Y (negative if Y is the richer side).
-  evGap?: number
+  // The dollar EV advantage of side X (Growth) over side Y (Anchor): positive
+  // when Growth is the richer side, negative when Anchor is. This is the single
+  // source of truth for the EV-discipline (ev) axis — each round's ev signal is
+  // weighted by its gap, so bigger-gap rounds count more (see applyScore).
+  evGap: number
   q: string
   sub: string
   x: AllocSide

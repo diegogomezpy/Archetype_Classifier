@@ -1,0 +1,75 @@
+import { useEffect, useState } from 'react'
+import { Link, useParams } from 'react-router-dom'
+import AdvisorDashboard from '../components/AdvisorDashboard'
+import { getSessionStore, type SessionRecord } from '../lib/storage'
+import { reclassifyScores } from '../lib/scoring'
+import { useArchetypeConfig } from '../lib/archetypeConfig'
+import { dateLocale, useLang, useT } from '../i18n/i18n'
+
+function fmtDate(iso: string, locale: string): string {
+  const d = new Date(iso)
+  return d.toLocaleDateString(locale, { month: 'short', day: 'numeric', year: 'numeric' }) +
+    ' · ' +
+    d.toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' })
+}
+
+// One client session, rendered as the full two-panel advisor dashboard.
+export default function AdvisorSessionPage() {
+  const t = useT()
+  const { lang } = useLang()
+  const { config } = useArchetypeConfig()
+  const { id } = useParams<{ id: string }>()
+  const [session, setSession] = useState<SessionRecord | null | 'loading'>('loading')
+
+  useEffect(() => {
+    let alive = true
+    if (!id) {
+      setSession(null)
+      return
+    }
+    getSessionStore()
+      .getSession(id)
+      .then((s) => alive && setSession(s))
+      .catch(() => alive && setSession(null))
+    return () => {
+      alive = false
+    }
+  }, [id])
+
+  if (session === 'loading') {
+    return <div className="p-10 text-sm text-muted">{t.advisorSession.loading}</div>
+  }
+
+  if (session === null) {
+    return (
+      <div className="mx-auto w-full max-w-3xl px-6 py-16 text-center">
+        <p className="text-base font-medium text-text">{t.advisorSession.notFound}</p>
+        <p className="mt-2 text-sm text-muted">{t.advisorSession.notFoundBody}</p>
+        <Link
+          to="/advisor"
+          className="mt-6 inline-block rounded-2xl bg-teal px-6 py-3 text-sm font-semibold text-white shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card"
+        >
+          {t.advisorSession.allSessions}
+        </Link>
+      </div>
+    )
+  }
+
+  // Classification reflects the current admin vectors; the mix (inside the
+  // dashboard) reflects the current model portfolios. Any admin change shows here.
+  const live = reclassifyScores(session.scores, config.shapeVectors)
+
+  return (
+    <div>
+      {/* Session header bar — advisor navigation, hidden from the print report */}
+      <div className="no-print mx-auto flex w-full max-w-6xl items-center gap-3 px-8 pt-6">
+        <Link to="/advisor" className="text-sm text-muted transition-colors hover:text-text">
+          {t.advisorSession.allSessions}
+        </Link>
+        <span className="ml-auto text-sm text-muted">{fmtDate(session.createdAt, dateLocale(lang))}</span>
+      </div>
+
+      <AdvisorDashboard data={live} clientName={session.clientLabel} />
+    </div>
+  )
+}

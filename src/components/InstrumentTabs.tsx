@@ -1,12 +1,10 @@
 import { useMemo, useState } from 'react'
-import {
-  ASSET_CLASS_COLORS,
-  INSTRUMENTS,
-  type AssetClass,
-  type Instrument,
-} from '../lib/instruments'
+import { ASSET_CLASS_COLORS, type AssetClass } from '../lib/instruments'
 import { computeFitScore } from '../lib/scoring'
 import type { NormalizedScores } from '../lib/scoring'
+import { useCatalog, type ManagedInstrument } from '../lib/catalog'
+import { useLang, useT } from '../i18n/i18n'
+import { assetClassLabel } from '../i18n/content'
 import InstrumentList from './InstrumentList'
 
 type Props = {
@@ -25,22 +23,28 @@ function hexAlpha(hex: string, alpha: number): string {
 }
 
 export default function InstrumentTabs({ allocation, scores, perClassLimit = Infinity }: Props) {
+  const t = useT()
+  const { lang } = useLang()
+  // Admin-curated universe: hidden instruments never surface; emphasized ones
+  // ("house picks") pin to the top of their class regardless of fit.
+  const { instruments } = useCatalog()
   // Tabs cover the asset classes present in the suggested allocation, ordered
   // by allocation weight desc (allocation is already sorted that way).
   const classes = allocation.map((a) => a.assetClass)
   const [active, setActive] = useState<AssetClass>(classes[0])
 
-  // Per-class top instruments by fit, computed via the fixed scoring helper.
+  // Per-class instruments: visible only, scored by fit, house picks first.
   const byClass = useMemo(() => {
-    const map = {} as Record<AssetClass, (Instrument & { fit: number })[]>
+    const map = {} as Record<AssetClass, (ManagedInstrument & { fit: number })[]>
     for (const cls of classes) {
-      map[cls] = INSTRUMENTS.filter((i) => i.assetClass === cls)
+      map[cls] = instruments
+        .filter((i) => i.assetClass === cls && i.visible)
         .map((i) => ({ ...i, fit: computeFitScore(i, scores) }))
-        .sort((a, b) => b.fit - a.fit)
+        .sort((a, b) => (b.emphasized ? 1 : 0) - (a.emphasized ? 1 : 0) || b.fit - a.fit)
         .slice(0, perClassLimit)
     }
     return map
-  }, [classes.join('|'), scores, perClassLimit])
+  }, [classes.join('|'), instruments, scores, perClassLimit])
 
   // Guard: if for any reason the active tab fell out of the class list, reset.
   const activeClass = classes.includes(active) ? active : classes[0]
@@ -52,7 +56,7 @@ export default function InstrumentTabs({ allocation, scores, perClassLimit = Inf
       <div className="screen-only">
       <div
         role="tablist"
-        aria-label="Recommended instruments by asset class"
+        aria-label={t.instruments.tabsAria}
         className="-mx-1 mb-5 flex flex-wrap gap-2 px-1"
       >
         {classes.map((cls) => {
@@ -77,7 +81,7 @@ export default function InstrumentTabs({ allocation, scores, perClassLimit = Inf
                 className="h-2 w-2 shrink-0 rounded-full"
                 style={{ backgroundColor: color }}
               />
-              <span className="font-medium">{cls}</span>
+              <span className="font-medium">{assetClassLabel(cls, lang)}</span>
               <span
                 className="rounded-md px-1.5 py-0.5 font-mono text-[11px] font-medium tnum"
                 style={
@@ -101,11 +105,11 @@ export default function InstrumentTabs({ allocation, scores, perClassLimit = Inf
         {byClass[activeClass] && byClass[activeClass].length > 0 ? (
           // Fixed-height scroll area so a long class list (e.g. all equities)
           // doesn't balloon the page — scrolls internally instead.
-          <div className="max-h-80 overflow-y-auto pr-2">
-            <InstrumentList instruments={byClass[activeClass]} showClassBadge={false} />
+          <div className="max-h-96 overflow-y-auto pr-2">
+            <InstrumentList instruments={byClass[activeClass]} />
           </div>
         ) : (
-          <p className="py-4 text-sm text-muted">No matching instruments in this class.</p>
+          <p className="py-4 text-sm text-muted">{t.instruments.noneInClass}</p>
         )}
       </div>
       </div>
@@ -119,13 +123,13 @@ export default function InstrumentTabs({ allocation, scores, perClassLimit = Inf
                 className="h-2.5 w-2.5 shrink-0 rounded-full"
                 style={{ backgroundColor: ASSET_CLASS_COLORS[cls] }}
               />
-              <span className="text-sm font-semibold text-text">{cls}</span>
+              <span className="text-sm font-semibold text-text">{assetClassLabel(cls, lang)}</span>
               <span className="font-mono text-xs text-muted tnum">{pctOf(cls)}%</span>
             </div>
             {byClass[cls] && byClass[cls].length > 0 ? (
-              <InstrumentList instruments={byClass[cls]} showClassBadge={false} />
+              <InstrumentList instruments={byClass[cls]} />
             ) : (
-              <p className="text-sm text-muted">No matching instruments in this class.</p>
+              <p className="text-sm text-muted">{t.instruments.noneInClass}</p>
             )}
           </div>
         ))}

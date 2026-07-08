@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 
-export type DrawPhase = 'idle' | 'rolling' | 'ticking' | 'done'
+export type DrawPhase = 'idle' | 'ticking' | 'done'
 
-// Draw sequence: an optional "rolling" window (during which the bar pointer
-// swings and lands), then a count-up of the applied delta so the Capital /
-// Profit figures climb into place. Timer-based so it runs regardless of tab
-// visibility. ROLL_MS is shared with the pointer so they finish together.
+// Draw sequence: the bar pointer swings and lands (owned by DrawPointer), then a
+// count-up of the applied delta runs here so the Capital / Profit figures climb
+// into place. Timer-based so it runs regardless of tab visibility. ROLL_MS is
+// shared with the pointer so the spin and this sequence stay in step.
 export const ROLL_MS = 2600 // duration of the pointer's travel-and-settle
 const TICK_STEPS = 26 // count-up frames
 const TICK_INTERVAL = 22 // ms per count-up frame
@@ -44,20 +44,14 @@ export function useDrawSequence() {
     timers.current.push(id)
   }
 
-  // Begin the sequence. `withRoll` runs the swing window first (unused now that
-  // the pointer owns the spin); the count-up always plays.
-  const start = (finalDelta: number, withRoll = false) => {
+  // Begin the sequence: the pointer owns the spin, so we go straight to the
+  // count-up of the drawn delta.
+  const start = (finalDelta: number) => {
     clearAll()
     speedRef.current = 1
     setDelta(finalDelta)
     setApplied(0)
-    if (withRoll) {
-      setPhase('rolling')
-      const stop = window.setTimeout(() => tickUp(finalDelta), ROLL_MS)
-      timers.current.push(stop)
-    } else {
-      tickUp(finalDelta)
-    }
+    tickUp(finalDelta)
   }
 
   // Speed the count-up up (the player tapped to hurry the draw along). It still

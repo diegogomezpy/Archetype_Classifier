@@ -1,10 +1,7 @@
 import type { Round, Scores } from '../types'
 import type { ArchetypeKey } from '../data/archetypes'
-import {
-  INSTRUMENTS,
-  type AssetClass,
-  type Instrument,
-} from './instruments'
+import { ROUNDS } from '../data/rounds'
+import { type AssetClass, type Instrument } from './instruments'
 import { computeOutcomes, INPUT } from './outcomes'
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
@@ -12,7 +9,7 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
 export const EMPTY_SCORES: Scores = { sigma: 0, alpha: 0, lambda: 0, ev: 0 }
 
 /**
- * Per-round scoring contributions (10-round paired all-mismatched design).
+ * Per-round SHAPE scoring contributions (10-round paired all-mismatched design).
  * Every round is an allocation slider: Growth (X) is always the more aggressive
  * side, so the signal is monotone: s = (allocX - 50) / 50 ∈ [-1, +1]; positive
  * s = leaning toward X. Shape weights are signed in the X-direction.
@@ -24,41 +21,42 @@ export const EMPTY_SCORES: Scores = { sigma: 0, alpha: 0, lambda: 0, ev: 0 }
  *   4/9  combined risk profile (σ + α; λ read separately)
  *   5/10 lottery skew (α)
  * Both rounds of a pair carry IDENTICAL shape weights (X is the aggressive side
- * in both), so the shape signal is the pair's average. The `ev` weight FLIPS
- * sign between them: +2 when the richer side is X (the "a"/screen-1 round), -2
- * when the richer side is Y (the "b"/screen-2 round). A player who answers on
- * pure shape gives the same slider both times → the ev contributions cancel; a
- * player who chases the richer side splits them → ev accumulates. That's the
- * EV-discipline (Optimizer) signal, isolated from shape.
+ * in both), so the shape signal is the pair's average.
  *
- * NOTE: λ (loss aversion) is NOT scored here. A linear slider weight conflated
- * it with σ, so λ is instead read from the realized downside the player took on
- * — expected shortfall — in computeLossAversion() below.
+ * EV-discipline (ev) is NOT in this table — it's scored from each round's actual
+ * EV gap (`round.evGap`, the single source of truth) in applyScore: the
+ * contribution is evGap · s. The richer side is sign(evGap), so leaning toward
+ * it accumulates positive ev, and bigger-gap rounds count more. evGap flips sign
+ * between a pair (+ on the screen-1 round, − on the screen-2 round), so a
+ * pure-shape player (same slider both times) nets ~0 on ev while an EV-chaser
+ * accumulates it.
+ *
+ * NOTE: λ (loss aversion) is NOT scored here either. A linear slider weight
+ * conflated it with σ, so λ is read from the realized downside the player took
+ * on — expected shortfall — in computeLossAversion() below.
  */
 export const ROUND_SCORES: Record<
   number,
-  { dim: 'sigma' | 'alpha' | 'lambda' | 'ev'; weight: number }[]
+  { dim: 'sigma' | 'alpha'; weight: number }[]
 > = {
   // ── screen 1: the "a" rounds, aggressive side (X) is the richer one ──
-  1: [{ dim: 'sigma', weight: 2 }, { dim: 'ev', weight: 2 }],
-  2: [{ dim: 'alpha', weight: 2 }, { dim: 'ev', weight: 2 }],
-  3: [{ dim: 'sigma', weight: 1 }, { dim: 'ev', weight: 2 }],
+  1: [{ dim: 'sigma', weight: 2 }],
+  2: [{ dim: 'alpha', weight: 2 }],
+  3: [{ dim: 'sigma', weight: 1 }],
   4: [
     { dim: 'sigma', weight: 1 },
     { dim: 'alpha', weight: 1 },
-    { dim: 'ev', weight: 2 },
   ],
-  5: [{ dim: 'alpha', weight: 2 }, { dim: 'ev', weight: 2 }],
-  // ── screen 2: the "b" rounds, calm side (Y) is the richer one (ev flips) ──
-  6: [{ dim: 'sigma', weight: 2 }, { dim: 'ev', weight: -2 }],
-  7: [{ dim: 'alpha', weight: 2 }, { dim: 'ev', weight: -2 }],
-  8: [{ dim: 'sigma', weight: 1 }, { dim: 'ev', weight: -2 }],
+  5: [{ dim: 'alpha', weight: 2 }],
+  // ── screen 2: the "b" rounds, calm side (Y) is the richer one ──
+  6: [{ dim: 'sigma', weight: 2 }],
+  7: [{ dim: 'alpha', weight: 2 }],
+  8: [{ dim: 'sigma', weight: 1 }],
   9: [
     { dim: 'sigma', weight: 1 },
     { dim: 'alpha', weight: 1 },
-    { dim: 'ev', weight: -2 },
   ],
-  10: [{ dim: 'alpha', weight: 2 }, { dim: 'ev', weight: -2 }],
+  10: [{ dim: 'alpha', weight: 2 }],
 }
 
 /**
@@ -70,9 +68,14 @@ export function applyScore(acc: Scores, round: Round, allocX: number): Scores {
   const next: Scores = { ...acc }
   const signal = (allocX - 50) / 50 // [-1, +1]
 
+  // Shape axes (σ, α) from the fixed per-round weights.
   for (const { dim, weight } of ROUND_SCORES[round.id] ?? []) {
     next[dim] += weight * signal
   }
+  // EV-discipline: weighted by the round's actual EV gap. Leaning toward the
+  // richer side (the sign of evGap) accumulates positive ev; bigger gaps count
+  // more. Normalized by Σ|evGap| in normalizeScores.
+  next.ev += round.evGap * signal
   return next
 }
 
@@ -83,14 +86,15 @@ export type NormalizedScores = {
   ev: number // [-1, 1] EV-discipline (positive = chases higher expected value)
 }
 
-// Normalization denominators = sum of |weights| per dimension across all rounds.
-// sigma:  1(2)+3(1)+4(1)+6(2)+8(1)+9(1)            = 8
-// alpha:  2(2)+4(1)+5(2)+7(2)+9(1)+10(2)           = 10
-// ev:     10 rounds × 2                            = 20
+// Normalization denominators = max attainable |raw| per dimension.
+// sigma:  Σ|weights| = 1(2)+3(1)+4(1)+6(2)+8(1)+9(1)  = 8
+// alpha:  Σ|weights| = 2(2)+4(1)+5(2)+7(2)+9(1)+10(2) = 10
+// ev:     Σ|evGap| across all rounds — computed from ROUNDS so it stays in sync
+//         with the data (evGap is the source of truth for the ev axis).
 // (λ is NOT accumulated linearly — see computeLossAversion below.)
 const NORM_SIGMA = 8
 const NORM_ALPHA = 10
-const NORM_EV = 20
+const NORM_EV = ROUNDS.reduce((sum, r) => sum + Math.abs(r.evGap), 0)
 
 export function normalizeScores(raw: Scores): NormalizedScores {
   return {
@@ -172,7 +176,7 @@ export function computeLossAversion(answers: Answer[]): number {
 // shape archetype is ev-neutral). The Optimizer is handled as an ADDITIVE
 // overlay on top of the shape result: it isn't a competing direction in the
 // same space, it's a separate reading of one axis.
-type ShapeScores = { sigma: number; alpha: number; lambda: number }
+export type ShapeScores = { sigma: number; alpha: number; lambda: number }
 
 // Archetypes that compete on payoff SHAPE via cosine similarity. The Quant
 // (EV overlay) and the Indexer are both intentionally absent. The Indexer is
@@ -190,6 +194,20 @@ export const SHAPE_VECTORS: Record<ShapeArchetype, ShapeScores> = {
   // Strong negative skew (premium for taking the rare big loss); mildly variance-
   // averse (wants steady income); loss-neutral (accepts the tail).
   insurer: { sigma: -0.2, alpha: -0.8, lambda: 0.0 },
+}
+
+// The shape vectors classification ACTUALLY uses. Defaults to the built-ins
+// above; the admin console overrides it at runtime via setActiveShapeVectors so
+// the archetype geometry can be retuned without a code change. Scripts and tests
+// that never call the setter keep using SHAPE_VECTORS unchanged.
+let ACTIVE_SHAPE_VECTORS: Record<ShapeArchetype, ShapeScores> = SHAPE_VECTORS
+
+export function setActiveShapeVectors(vectors: Record<ShapeArchetype, ShapeScores>): void {
+  ACTIVE_SHAPE_VECTORS = vectors
+}
+
+export function getActiveShapeVectors(): Record<ShapeArchetype, ShapeScores> {
+  return ACTIVE_SHAPE_VECTORS
 }
 
 export function cosineSim(a: ShapeScores, b: ShapeScores): number {
@@ -227,7 +245,10 @@ const MARGIN_FULL = 0.25
 // Below this composite confidence the result is flagged tentative.
 const TENTATIVE_BELOW = 0.4
 
-export function classify(scores: { sigma: number; alpha: number; lambda: number; ev: number }): Classification {
+export function classify(
+  scores: { sigma: number; alpha: number; lambda: number; ev: number },
+  vectors: Record<ShapeArchetype, ShapeScores> = ACTIVE_SHAPE_VECTORS,
+): Classification {
   const shape: ShapeScores = { sigma: scores.sigma, alpha: scores.alpha, lambda: scores.lambda }
   const styleMag = Math.sqrt(shape.alpha ** 2 + shape.lambda ** 2) // skew + loss-shape only
   const shapeMag = Math.sqrt(shape.sigma ** 2 + shape.alpha ** 2 + shape.lambda ** 2) // overall tilt
@@ -252,8 +273,8 @@ export function classify(scores: { sigma: number; alpha: number; lambda: number;
     }
   }
 
-  const sims = (Object.keys(SHAPE_VECTORS) as ShapeArchetype[])
-    .map((key) => ({ key, sim: cosineSim(shape, SHAPE_VECTORS[key]) }))
+  const sims = (Object.keys(vectors) as ShapeArchetype[])
+    .map((key) => ({ key, sim: cosineSim(shape, vectors[key]) }))
     .sort((a, b) => b.sim - a.sim)
   const primary = sims[0]
   const margin = primary.sim - sims[1].sim
@@ -421,17 +442,6 @@ export function computeFitScore(
   return Math.round(Math.max(0, Math.min(100, coreFit)))
 }
 
-export function getRankedInstruments(scores: {
-  sigma: number
-  alpha: number
-  lambda: number
-}): (Instrument & { fit: number })[] {
-  return INSTRUMENTS.map((inst) => ({ ...inst, fit: computeFitScore(inst, scores) }))
-    .filter((inst) => inst.fit >= 25)
-    .sort((a, b) => b.fit - a.fit)
-    .slice(0, 12)
-}
-
 // ---------------------------------------------------------------------------
 // Dashboard data assembly
 // ---------------------------------------------------------------------------
@@ -447,13 +457,7 @@ export interface DashboardData {
   scores: NormalizedScores
 }
 
-export function buildDashboardData(
-  normalized: NormalizedScores,
-  answers: Answer[],
-): DashboardData {
-  // Fill in λ from realized downside (the normalized λ is a placeholder).
-  const scores: NormalizedScores = { ...normalized, lambda: computeLossAversion(answers) }
-  const c = classify(scores)
+function classificationToDashboard(scores: NormalizedScores, c: Classification): DashboardData {
   return {
     archetype: c.archetype,
     secondaryArchetype: c.secondary,
@@ -464,4 +468,24 @@ export function buildDashboardData(
     tentative: c.tentative,
     scores,
   }
+}
+
+export function buildDashboardData(
+  normalized: NormalizedScores,
+  answers: Answer[],
+): DashboardData {
+  // Fill in λ from realized downside (the normalized λ is a placeholder).
+  const scores: NormalizedScores = { ...normalized, lambda: computeLossAversion(answers) }
+  return classificationToDashboard(scores, classify(scores))
+}
+
+// Re-derive a session's classification from its stored SCORES using the given
+// shape vectors. Scores are language- and vector-independent (they come from the
+// player's answers), so a saved session always reflects the CURRENT admin config
+// when re-classified this way — the advisor dashboard never shows a stale call.
+export function reclassifyScores(
+  scores: NormalizedScores,
+  vectors?: Record<ShapeArchetype, ShapeScores>,
+): DashboardData {
+  return classificationToDashboard(scores, classify(scores, vectors))
 }

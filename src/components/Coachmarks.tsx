@@ -1,6 +1,7 @@
 import { useLayoutEffect, useState } from 'react'
+import { useT } from '../i18n/i18n'
 
-const STORAGE_KEY = 'cadiem_tutorial_seen_v1'
+const STORAGE_KEY = 'ip_tutorial_seen_v1'
 
 export function tutorialSeen(): boolean {
   try {
@@ -18,36 +19,15 @@ function markSeen() {
   }
 }
 
-type Step = { selector: string; title: string; body: string }
-
 // One step per element on the round screen (each tagged with a matching
 // data-tour attribute in RoundDecision), walked through in reading order.
-const STEPS: Step[] = [
-  {
-    selector: '[data-tour="capital"]',
-    title: 'This is your money',
-    body: 'You start with $10,000. Every round we draw one real outcome from your choice and add it to your capital — so your decisions actually play out as you go.',
-  },
-  {
-    selector: '[data-tour="cards"]',
-    title: 'Two options each round',
-    body: 'Every round pits a bolder “Growth” side against a calmer “Anchor” side. Each card lists that side’s possible results and how likely each one is.',
-  },
-  {
-    selector: '[data-tour="bar"]',
-    title: 'Your combined odds',
-    body: 'This bar is everything that could happen given your split. Each block is a possible result — wider means more likely, green is a gain, red is a loss.',
-  },
-  {
-    selector: '[data-tour="slider"]',
-    title: 'Set your split',
-    body: 'Drag to divide your $10,000 between the two sides. The bar above updates live as you move it, so you can see how the mix changes your odds.',
-  },
-  {
-    selector: '[data-tour="next"]',
-    title: 'Lock it in',
-    body: 'Happy with your mix? Lock it in — a pointer spins and lands on one real outcome, which is added to your capital. There are no wrong answers; go with your gut.',
-  },
+// Titles/bodies come from the i18n table (t.coach.steps, same order).
+const STEP_SELECTORS = [
+  '[data-tour="capital"]',
+  '[data-tour="cards"]',
+  '[data-tour="bar"]',
+  '[data-tour="slider"]',
+  '[data-tour="next"]',
 ]
 
 const CARD_W = 340 // px
@@ -66,18 +46,19 @@ type Props = {
 // edge — top when the target sits low, bottom when it sits high — so the card
 // never covers the thing it's describing and never needs fragile anchor math.
 export default function Coachmarks({ onClose }: Props) {
+  const t = useT()
   const [step, setStep] = useState(0)
   const [box, setBox] = useState<Box | null>(null)
 
   useLayoutEffect(() => {
-    const el = document.querySelector(STEPS[step].selector)
+    const el = document.querySelector(STEP_SELECTORS[step])
     // Center the target in the viewport, then read its (post-scroll) position.
     el?.scrollIntoView({ block: 'center', behavior: 'auto' })
 
     const measure = () => {
-      const t = document.querySelector(STEPS[step].selector)
-      if (!t) return
-      const r = t.getBoundingClientRect()
+      const target = document.querySelector(STEP_SELECTORS[step])
+      if (!target) return
+      const r = target.getBoundingClientRect()
       if (r.width === 0 && r.height === 0) return
       setBox({ top: r.top, left: r.left, width: r.width, height: r.height })
     }
@@ -96,7 +77,7 @@ export default function Coachmarks({ onClose }: Props) {
     }
   }, [step])
 
-  const last = step === STEPS.length - 1
+  const last = step === STEP_SELECTORS.length - 1
   const first = step === 0
   const finish = () => {
     markSeen()
@@ -105,7 +86,7 @@ export default function Coachmarks({ onClose }: Props) {
   const next = () => (last ? finish() : setStep((s) => s + 1))
   const back = () => setStep((s) => Math.max(0, s - 1))
 
-  const { title, body } = STEPS[step]
+  const { title, body } = t.coach.steps[step]
 
   // Pin the card to the bottom edge, unless the spotlight sits low on screen —
   // then pin it to the top so it can't overlap the highlighted element.
@@ -143,10 +124,10 @@ export default function Coachmarks({ onClose }: Props) {
         <div className="rounded-2xl border border-border bg-surface p-5 shadow-card">
           <div className="flex items-center justify-between">
             <span className="font-mono text-xs uppercase tracking-[0.16em] text-teal">
-              How it works
+              {t.coach.header}
             </span>
             <span className="font-mono text-xs text-muted tnum">
-              {step + 1} / {STEPS.length}
+              {step + 1} / {STEP_SELECTORS.length}
             </span>
           </div>
 
@@ -155,7 +136,7 @@ export default function Coachmarks({ onClose }: Props) {
 
           {/* Step dots */}
           <div className="mt-4 flex items-center gap-1.5">
-            {STEPS.map((_, i) => (
+            {STEP_SELECTORS.map((_, i) => (
               <span
                 key={i}
                 className={`h-1.5 rounded-full transition-all duration-300 ${
@@ -171,7 +152,7 @@ export default function Coachmarks({ onClose }: Props) {
               onClick={finish}
               className="text-sm font-medium text-muted transition-colors hover:text-text"
             >
-              Skip
+              {t.coach.skip}
             </button>
             <div className="flex items-center gap-2">
               {!first && (
@@ -180,7 +161,7 @@ export default function Coachmarks({ onClose }: Props) {
                   onClick={back}
                   className="rounded-xl px-4 py-2.5 text-sm font-medium text-muted transition-colors hover:text-text"
                 >
-                  Back
+                  {t.coach.back}
                 </button>
               )}
               <button
@@ -188,7 +169,7 @@ export default function Coachmarks({ onClose }: Props) {
                 onClick={next}
                 className="rounded-xl bg-teal px-5 py-2.5 text-sm font-semibold text-white shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card active:translate-y-0"
               >
-                {last ? 'Got it' : 'Next'}
+                {last ? t.coach.gotIt : t.coach.next}
               </button>
             </div>
           </div>

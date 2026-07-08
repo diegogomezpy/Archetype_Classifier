@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import type { AllocRound } from '../types'
 import { INPUT, computeOutcomes, type Outcome } from '../lib/outcomes'
+import { useT } from '../i18n/i18n'
 
 interface PayoffBarProps {
   round: AllocRound
@@ -114,8 +115,14 @@ const FONT = (size: number, weight = 400) =>
   `${weight} ${size}px Inter, system-ui, -apple-system, sans-serif`
 
 export default function PayoffBar({ round, allocX }: PayoffBarProps) {
+  const t = useT()
+  const probabilityWord = t.payoffBar.probability
+  const startLabel = t.payoffBar.startLabel
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  // Holds the latest draw closure so the (mount-once) ResizeObserver can always
+  // invoke the current one without being torn down on every slider move.
+  const drawRef = useRef<() => void>(() => {})
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -186,7 +193,7 @@ export default function PayoffBar({ round, allocX }: PayoffBarProps) {
       ctx.font = FONT(11.5, 500)
       ctx.fillStyle = muted
       ctx.textBaseline = 'alphabetic'
-      const blLabel = '$10,000 start'
+      const blLabel = startLabel
       const blW = ctx.measureText(blLabel).width
       ctx.textAlign = 'left'
       const blX = Math.max(PAD_X, Math.min(w - PAD_X - blW, baseX - blW / 2))
@@ -255,7 +262,7 @@ export default function PayoffBar({ round, allocX }: PayoffBarProps) {
         ctx.font = FONT(16, 500)
         const a = ctx.measureText(pctTexts[i]).width
         ctx.font = FONT(13, 400)
-        const b = ctx.measureText('probability').width
+        const b = ctx.measureText(probabilityWord).width
         return Math.max(a, b) / 2 + 6
       })
       const centers = segs.map((s) => (s.x0 + s.x1) / 2)
@@ -302,15 +309,23 @@ export default function PayoffBar({ round, allocX }: PayoffBarProps) {
         ctx.fillText(pctTexts[i], labelX, pctY)
         ctx.fillStyle = muted
         ctx.font = FONT(13, 400)
-        ctx.fillText('probability', labelX, wordY)
+        ctx.fillText(probabilityWord, labelX, wordY)
       })
     }
 
+    drawRef.current = draw
     draw()
-    const ro = new ResizeObserver(draw)
+  }, [round, allocX, probabilityWord, startLabel])
+
+  // Redraw on container resize. Set up once on mount (not per data change) so a
+  // slider drag doesn't churn the observer; it always calls the latest draw.
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+    const ro = new ResizeObserver(() => drawRef.current())
     ro.observe(container)
     return () => ro.disconnect()
-  }, [round, allocX])
+  }, [])
 
   return (
     <div ref={containerRef} className="relative w-full" style={{ height: LIFT_H + BAR_H + PROB_H }}>

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ASSET_CLASS_COLORS, type AssetClass } from '../lib/instruments'
+import { useLang } from '../i18n/i18n'
+import { assetClassLabel } from '../i18n/content'
 
 type Props = {
   data: { assetClass: AssetClass; pct: number }[]
@@ -7,6 +9,7 @@ type Props = {
 }
 
 export default function DonutChart({ data, size = 200 }: Props) {
+  const { lang } = useLang()
   const [mounted, setMounted] = useState(false)
   useEffect(() => {
     const id = requestAnimationFrame(() => setMounted(true))
@@ -54,7 +57,7 @@ export default function DonutChart({ data, size = 200 }: Props) {
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
           <span className="font-mono text-2xl font-medium text-text tnum">{top.pct}%</span>
           <span className="mt-0.5 max-w-[6rem] text-[11px] leading-tight text-muted">
-            {top.assetClass}
+            {assetClassLabel(top.assetClass, lang)}
           </span>
         </div>
       )}

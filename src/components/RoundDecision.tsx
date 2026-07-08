@@ -7,6 +7,8 @@ import Scoreboard from './Scoreboard'
 import DrawPointer from './DrawPointer'
 import { INPUT, computeOutcomes, type Outcome } from '../lib/outcomes'
 import { useDrawSequence } from '../hooks/useDrawSequence'
+import { useLang, useT } from '../i18n/i18n'
+import { localizeRound } from '../i18n/content'
 
 type Props = {
   round: AllocRound
@@ -15,12 +17,6 @@ type Props = {
   runningPnl: number
   onNext: (allocX: number, drawDelta: number) => void
 }
-
-// The two sides carry a fixed identity across every round: X is always the
-// more aggressive "Growth" side (teal), Y the more conservative "Anchor" side
-// (amber). Naming them — instead of bare X / Y — keeps the choice concrete.
-const X_NAME = 'Growth'
-const Y_NAME = 'Anchor'
 
 function fmtMoney(n: number): string {
   return '$' + n.toLocaleString('en-US')
@@ -99,6 +95,11 @@ function ReferenceCard({
 }
 
 export default function RoundDecision({ round, index, total, runningPnl, onNext }: Props) {
+  const t = useT()
+  const { lang } = useLang()
+  // Display copy (side labels, scenario notes) in the active language; the
+  // scoring fields (id, probabilities, amounts) are identical across languages.
+  const displayRound = localizeRound(round, lang)
   // No default split: the player must actively choose. Until they touch the
   // slider, allocX is null (no thumb, lock-in disabled) so a non-answer can't be
   // recorded as a real 50/50 — which used to bias everyone toward the Indexer.
@@ -171,7 +172,7 @@ export default function RoundDecision({ round, index, total, runningPnl, onNext 
             <span aria-hidden className="text-sm leading-none">
               ⓘ
             </span>
-            How it works
+            {t.round.howItWorks}
           </button>
           <RoundProgress index={index} total={total} />
         </div>
@@ -202,8 +203,8 @@ export default function RoundDecision({ round, index, total, runningPnl, onNext 
           {/* Legend — shown only on the first round, while the format is new. */}
           {index === 1 && (
             <p className="mt-3 text-center text-xs text-muted">
-              Wider = more likely · <span className="text-teal">green = gain</span> ·{' '}
-              <span className="text-red">red = loss</span>
+              {t.round.legendWider} · <span className="text-teal">{t.round.legendGain}</span> ·{' '}
+              <span className="text-red">{t.round.legendLoss}</span>
             </p>
           )}
 
@@ -212,8 +213,8 @@ export default function RoundDecision({ round, index, total, runningPnl, onNext 
 
           {/* Slider section — locked once the draw is rolling */}
           <div className="mb-2 flex items-center justify-between text-sm font-medium">
-            <span className="text-teal">← all {X_NAME}</span>
-            <span className="text-amber">all {Y_NAME} →</span>
+            <span className="text-teal">{t.round.allGrowth}</span>
+            <span className="text-amber">{t.round.allAnchor}</span>
           </div>
           {/* Raw slider value is the Y-share so the thumb's left end = all Growth
               (matching the labels); allocX = 100 - value. The thumb stays hidden
@@ -227,25 +228,35 @@ export default function RoundDecision({ round, index, total, runningPnl, onNext 
             value={100 - displayX}
             disabled={locked}
             onChange={(e) => setAllocX(100 - Number(e.target.value))}
-            aria-label={`Allocation between ${X_NAME} and ${Y_NAME}`}
+            aria-label={t.round.sliderAria}
             aria-valuetext={
               chosen
-                ? `${fmtMoney(xDollars)} into ${X_NAME}, ${fmtMoney(yDollars)} into ${Y_NAME}`
-                : 'No split chosen yet — drag to set your allocation'
+                ? t.round.splitAria(fmtMoney(xDollars), fmtMoney(yDollars))
+                : t.round.noSplitAria
             }
             className={`payoff-range w-full ${locked ? 'opacity-50' : ''} ${
               chosen ? '' : 'payoff-range--untouched'
             }`}
           />
           {!chosen && !locked && (
-            <p className="mt-2 text-center text-xs text-muted">Drag the slider to set your split</p>
+            <p className="mt-2 text-center text-xs text-muted">{t.round.dragHint}</p>
           )}
         </div>
 
         {/* 4 — Read-only reference cards: each side's outcomes, always shown. */}
         <div data-tour="cards" className="mt-5 flex items-stretch gap-4">
-          <ReferenceCard side="x" name={X_NAME} label={round.x.label} scenarios={round.x.scenarios} />
-          <ReferenceCard side="y" name={Y_NAME} label={round.y.label} scenarios={round.y.scenarios} />
+          <ReferenceCard
+            side="x"
+            name={t.round.growth}
+            label={displayRound.x.label}
+            scenarios={displayRound.x.scenarios}
+          />
+          <ReferenceCard
+            side="y"
+            name={t.round.anchor}
+            label={displayRound.y.label}
+            scenarios={displayRound.y.scenarios}
+          />
         </div>
 
         {/* 5 — Action button: lock in → (spin; tap again to hurry) → advance */}
@@ -269,14 +280,14 @@ export default function RoundDecision({ round, index, total, runningPnl, onNext 
               }`}
             >
               {drawing
-                ? 'Drawing… — tap to speed up'
+                ? t.round.drawing
                 : done
                   ? isLast
-                    ? 'See my profile'
-                    : 'Next round'
+                    ? t.round.seeProfile
+                    : t.round.nextRound
                   : chosen
-                    ? 'Lock it in'
-                    : 'Choose your split first'}
+                    ? t.round.lockIn
+                    : t.round.chooseFirst}
             </button>
           )
         })()}
