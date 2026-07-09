@@ -125,6 +125,25 @@ export const ASSET_FIELD_SPECS: Record<AssetClass, FieldSpec[]> = {
   ],
 }
 
+// ── Autofill coverage ────────────────────────────────────────────────────────
+// Which detail fields the "Fetch data" autofill can populate, per asset class.
+// This MUST track what the server actually returns (see server/src/marketData.ts):
+// Yahoo for equities/ETFs, CoinGecko + Deribit for crypto. Classes absent here
+// have no market-data source at all — the Fetch button is hidden for them.
+export const FETCHABLE_FIELDS: Partial<Record<AssetClass, string[]>> = {
+  Equities: [
+    'description', 'kind', 'sectorIndex', 'exchange', 'lastPrice', 'change1Y',
+    'range52w', 'avgVolume', 'marketCapAum', 'dividendYield', 'peRatio', 'beta',
+    'impliedVol3m', 'asOf',
+  ],
+  Crypto: ['lastPrice', 'change1Y', 'marketCap', 'avgVolume', 'impliedVol3m', 'asOf'],
+}
+
+/** True if this asset class has any market-data autofill source. */
+export const supportsFetch = (ac: AssetClass): boolean => (FETCHABLE_FIELDS[ac]?.length ?? 0) > 0
+/** The set of detail keys Fetch can fill for this class (empty if none). */
+export const fetchableFields = (ac: AssetClass): Set<string> => new Set(FETCHABLE_FIELDS[ac] ?? [])
+
 // ── Seeding ──────────────────────────────────────────────────────────────────
 
 // Stable id for a bundled instrument (ticker alone isn't unique — OTC repeats).
@@ -156,7 +175,8 @@ type CatalogContextValue = {
   /** Insert or replace by id, then persist. */
   upsert: (item: ManagedInstrument) => void
   remove: (id: string) => void
-  reset: () => void
+  /** Delete many by id in one go (used by the admin's bulk "delete filtered"). */
+  removeMany: (ids: string[]) => void
 }
 
 const CatalogContext = createContext<CatalogContextValue>({
@@ -164,27 +184,24 @@ const CatalogContext = createContext<CatalogContextValue>({
   loading: true,
   upsert: () => {},
   remove: () => {},
-  reset: () => {},
+  removeMany: () => {},
 })
 
 export function CatalogProvider({ children }: { children: ReactNode }) {
   const [instruments, setInstruments] = useState<ManagedInstrument[]>([])
   const [loading, setLoading] = useState(true)
 
+  // Load whatever's in the catalog. No auto-seeding: the catalog starts empty
+  // and the admin builds it up (a fresh start, by request). On a backend error
+  // we also show nothing rather than resurrecting the bundled sample set.
   useEffect(() => {
     let alive = true
     ;(async () => {
       try {
-        let items = await api.get<ManagedInstrument[]>('/catalog')
-        // First run: seed the catalog from the bundled defaults.
-        if (!items || items.length === 0) {
-          const res = await api.post<{ items: ManagedInstrument[] }>('/catalog/seed', seedCatalog())
-          items = res.items
-        }
-        if (alive) setInstruments(items)
+        const items = await api.get<ManagedInstrument[]>('/catalog')
+        if (alive) setInstruments(items ?? [])
       } catch {
-        // Backend unreachable — fall back to the bundled defaults (read-only).
-        if (alive) setInstruments(seedCatalog())
+        if (alive) setInstruments([])
       } finally {
         if (alive) setLoading(false)
       }
@@ -210,10 +227,12 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
         setInstruments((prev) => prev.filter((i) => i.id !== id))
         void api.del(`/catalog/${id}`).catch((e) => console.warn('catalog delete:', e))
       },
-      reset: () => {
-        const seed = seedCatalog()
-        setInstruments(seed)
-        void api.post('/catalog/reset', seed).catch((e) => console.warn('catalog reset:', e))
+      removeMany: (ids) => {
+        const drop = new Set(ids)
+        setInstruments((prev) => prev.filter((i) => !drop.has(i.id)))
+        void Promise.all(
+          ids.map((id) => api.del(`/catalog/${id}`).catch((e) => console.warn('catalog delete:', id, e))),
+        )
       },
     }),
     [instruments, loading],

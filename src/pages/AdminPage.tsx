@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react'
 import { ASSET_CLASSES, ASSET_CLASS_COLORS, type AssetClass } from '../lib/instruments'
 import {
   ASSET_FIELD_SPECS,
+  fetchableFields,
+  supportsFetch,
   useCatalog,
   type ManagedInstrument,
 } from '../lib/catalog'
@@ -91,6 +93,7 @@ function InstrumentForm({
   }
 
   const specs = ASSET_FIELD_SPECS[draft.assetClass]
+  const fetchSet = fetchableFields(draft.assetClass)
 
   const save = () => {
     if (!draft.name.trim()) return
@@ -152,18 +155,20 @@ function InstrumentForm({
             ))}
           </select>
         </div>
-        {/* Autofill from a market-data source (backend-powered — Phase 2) */}
-        <div className="flex items-center gap-3 sm:col-span-2">
-          <button
-            type="button"
-            onClick={autofill}
-            disabled={fetching || (!draft.ticker.trim() && !(draft.isin ?? '').trim())}
-            className="shrink-0 rounded-xl border border-teal/40 bg-teal/10 px-4 py-2 text-sm font-medium text-teal transition-all duration-200 hover:bg-teal/15 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {fetching ? t.admin.autofillFetching : t.admin.autofill}
-          </button>
-          <span className="text-xs leading-snug text-muted">{fetchMsg ?? t.admin.autofillHint}</span>
-        </div>
+        {/* Autofill from a market-data source — only for classes that have one. */}
+        {supportsFetch(draft.assetClass) && (
+          <div className="flex items-center gap-3 sm:col-span-2">
+            <button
+              type="button"
+              onClick={autofill}
+              disabled={fetching || (!draft.ticker.trim() && !(draft.isin ?? '').trim())}
+              className="shrink-0 rounded-xl border border-teal/40 bg-teal/10 px-4 py-2 text-sm font-medium text-teal transition-all duration-200 hover:bg-teal/15 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {fetching ? t.admin.autofillFetching : t.admin.autofill}
+            </button>
+            <span className="text-xs leading-snug text-muted">{fetchMsg ?? t.admin.autofillHint}</span>
+          </div>
+        )}
         <div>
           <label className={labelCls}>{t.admin.sigma}</label>
           <input
@@ -256,7 +261,17 @@ function InstrumentForm({
           const long = s.key === 'description' || s.key === 'worstCase' || s.key === 'diversificationNote' || s.key === 'volatilityNote'
           return (
             <div key={s.key} className={long ? 'sm:col-span-2' : undefined}>
-              <label className={labelCls}>{label}</label>
+              <label className={labelCls}>
+                {label}
+                {fetchSet.has(s.key) && (
+                  <span
+                    title={t.admin.fetchTagTitle}
+                    className="ml-1.5 inline-block rounded bg-teal/12 px-1 py-0.5 align-middle text-[9px] font-semibold uppercase tracking-wide text-teal"
+                  >
+                    ⚡ {t.admin.fetchTag}
+                  </span>
+                )}
+              </label>
               {long ? (
                 <textarea
                   rows={2}
@@ -302,14 +317,22 @@ function InstrumentForm({
 export default function AdminPage() {
   const t = useT()
   const { lang } = useLang()
-  const { instruments, upsert, remove, reset } = useCatalog()
+  const { instruments, upsert, remove, removeMany } = useCatalog()
   const [filter, setFilter] = useState<AssetClass | 'all'>('all')
+  const [visFilter, setVisFilter] = useState<'all' | 'visible' | 'hidden'>('all')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
+  const [bulkOpen, setBulkOpen] = useState(false)
+  const [confirmText, setConfirmText] = useState('')
 
   const shown = useMemo(
-    () => (filter === 'all' ? instruments : instruments.filter((i) => i.assetClass === filter)),
-    [instruments, filter],
+    () =>
+      instruments.filter(
+        (i) =>
+          (filter === 'all' || i.assetClass === filter) &&
+          (visFilter === 'all' || (visFilter === 'visible' ? i.visible : !i.visible)),
+      ),
+    [instruments, filter, visFilter],
   )
 
   const handleDelete = (inst: ManagedInstrument) => {
@@ -318,11 +341,15 @@ export default function AdminPage() {
     if (editingId === inst.id) setEditingId(null)
   }
 
-  const handleReset = () => {
-    if (!window.confirm(t.admin.resetConfirm)) return
+  // Bulk-delete everything currently in view, guarded by typing the confirm word.
+  const confirmWordOk = confirmText.trim().toLowerCase() === t.admin.bulkWord.toLowerCase()
+  const runBulkDelete = () => {
+    if (!confirmWordOk || shown.length === 0) return
+    removeMany(shown.map((i) => i.id))
+    setBulkOpen(false)
+    setConfirmText('')
     setEditingId(null)
     setAdding(false)
-    reset()
   }
 
   const vec = (i: ManagedInstrument) =>
@@ -340,7 +367,7 @@ export default function AdminPage() {
         {t.admin.count(shown.length, instruments.length)}
       </p>
 
-      {/* Controls */}
+      {/* Filters: asset class */}
       <div className="mt-6 flex flex-wrap items-center gap-2">
         <button
           type="button"
@@ -371,26 +398,89 @@ export default function AdminPage() {
             {assetClassLabel(c, lang)}
           </button>
         ))}
-        <div className="ml-auto flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleReset}
-            className="rounded-full border border-border bg-surface px-3.5 py-1.5 text-sm text-muted transition-colors hover:text-red"
-          >
-            {t.admin.resetDefaults}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setAdding(true)
-              setEditingId(null)
-            }}
-            className="rounded-full bg-teal px-4 py-1.5 text-sm font-semibold text-white shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card"
-          >
-            + {t.admin.add}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setAdding(true)
+            setEditingId(null)
+          }}
+          className="ml-auto rounded-full bg-teal px-4 py-1.5 text-sm font-semibold text-white shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card"
+        >
+          + {t.admin.add}
+        </button>
       </div>
+
+      {/* Filters: visibility + bulk delete of the filtered selection */}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <div className="inline-flex rounded-full border border-border bg-surface p-0.5">
+          {(['all', 'visible', 'hidden'] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setVisFilter(v)}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${
+                visFilter === v ? 'bg-teal/15 text-teal shadow-soft' : 'text-muted hover:text-text'
+              }`}
+            >
+              {v === 'all'
+                ? t.admin.visAll
+                : v === 'visible'
+                  ? t.admin.visVisible
+                  : t.admin.visHidden}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setConfirmText('')
+            setBulkOpen(true)
+          }}
+          disabled={shown.length === 0}
+          className="ml-auto rounded-full border border-red/40 bg-red/5 px-3.5 py-1.5 text-sm font-medium text-red transition-colors hover:bg-red/10 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {t.admin.deleteFiltered(shown.length)}
+        </button>
+      </div>
+
+      {/* Bulk-delete confirmation — must type the word to arm the button */}
+      {bulkOpen && (
+        <div className="mt-3 rounded-2xl border border-red/30 bg-red/[0.04] p-5 shadow-soft">
+          <h3 className="text-sm font-semibold text-text">{t.admin.bulkTitle}</h3>
+          <p className="mt-1 text-sm text-muted">{t.admin.bulkBody(shown.length)}</p>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <input
+              autoFocus
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && runBulkDelete()}
+              placeholder={t.admin.bulkWord}
+              className="w-48 rounded-xl border border-border bg-surface px-3.5 py-2 text-sm text-text shadow-soft outline-none focus:ring-2 focus:ring-red/40"
+            />
+            <span className="text-xs text-muted">{t.admin.bulkPrompt(t.admin.bulkWord)}</span>
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setBulkOpen(false)
+                  setConfirmText('')
+                }}
+                className="rounded-xl px-4 py-2 text-sm font-medium text-muted transition-colors hover:text-text"
+              >
+                {t.admin.cancel}
+              </button>
+              <button
+                type="button"
+                onClick={runBulkDelete}
+                disabled={!confirmWordOk || shown.length === 0}
+                className="rounded-xl bg-red px-5 py-2 text-sm font-semibold text-white shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {t.admin.bulkConfirm(shown.length)}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* New-instrument form */}
       {adding && (
@@ -417,6 +507,14 @@ export default function AdminPage() {
                 inst.visible ? 'border-border' : 'border-border/60 opacity-60'
               }`}
             >
+              <input
+                type="checkbox"
+                checked={inst.visible}
+                onChange={() => upsert({ ...inst, visible: !inst.visible })}
+                title={t.admin.visibleTitle}
+                aria-label={t.admin.visibleTitle}
+                className="h-4 w-4 shrink-0 accent-teal"
+              />
               <span
                 className="h-2.5 w-2.5 shrink-0 rounded-full"
                 style={{ backgroundColor: ASSET_CLASS_COLORS[inst.assetClass] }}
@@ -450,13 +548,6 @@ export default function AdminPage() {
                   className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-surface2 hover:text-text"
                 >
                   {t.admin.edit}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => upsert({ ...inst, visible: !inst.visible })}
-                  className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-surface2 hover:text-text"
-                >
-                  {inst.visible ? t.admin.hide : t.admin.show}
                 </button>
                 <button
                   type="button"

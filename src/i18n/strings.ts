@@ -211,6 +211,22 @@ const en = {
     save: 'Save',
     cancel: 'Cancel',
     noInstruments: 'No instruments in this class.',
+    // Visibility filter
+    visAll: 'All',
+    visVisible: 'Visible',
+    visHidden: 'Hidden',
+    visibleTitle: 'Visible to advisors',
+    // Bulk delete (type-to-confirm)
+    deleteFiltered: (n: number) => `Delete filtered (${n})`,
+    bulkTitle: 'Delete these instruments?',
+    bulkBody: (n: number) =>
+      `This permanently deletes the ${n} instrument${n === 1 ? '' : 's'} currently shown. It can't be undone.`,
+    bulkPrompt: (word: string) => `Type “${word}” to confirm`,
+    bulkWord: 'delete',
+    bulkConfirm: (n: number) => `Delete ${n}`,
+    // Autofill coverage
+    fetchTag: 'Auto',
+    fetchTagTitle: 'Can be filled by “Fetch data”',
   },
   adminNav: {
     instruments: 'Instruments',
@@ -489,6 +505,22 @@ const es: UIStrings = {
     save: 'Guardar',
     cancel: 'Cancelar',
     noInstruments: 'No hay instrumentos en esta clase.',
+    // Filtro de visibilidad
+    visAll: 'Todos',
+    visVisible: 'Visibles',
+    visHidden: 'Ocultos',
+    visibleTitle: 'Visible para asesores',
+    // Eliminación masiva (confirmación escrita)
+    deleteFiltered: (n: number) => `Eliminar filtrados (${n})`,
+    bulkTitle: '¿Eliminar estos instrumentos?',
+    bulkBody: (n: number) =>
+      `Esto elimina permanentemente ${n} instrumento${n === 1 ? '' : 's'} mostrado${n === 1 ? '' : 's'}. No se puede deshacer.`,
+    bulkPrompt: (word: string) => `Escribe «${word}» para confirmar`,
+    bulkWord: 'eliminar',
+    bulkConfirm: (n: number) => `Eliminar ${n}`,
+    // Cobertura de autocompletado
+    fetchTag: 'Auto',
+    fetchTagTitle: 'Se puede completar con «Obtener datos»',
   },
   adminNav: {
     instruments: 'Instrumentos',
