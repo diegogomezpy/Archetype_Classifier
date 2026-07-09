@@ -101,11 +101,13 @@ admin curates and the advisor sees when drilling into a recommendation:
 - **Cash/MMF** — current yield, average maturity, minimum investment, expense
   ratio
 
-The bundled universe is a deliberately small **bare-bones example set** (~25
-instruments across the classes, `src/lib/instruments.ts`), each shipping with an
-illustrative sample detail sheet (`src/data/instrumentDetails.ts`, all marked
-with a "data as of" field). It seeds the admin-managed catalog; admins add,
-edit, hide, and emphasize from there.
+The catalog **starts empty** — the admin builds it up from scratch. (A bundled
+sample set still lives in `src/lib/instruments.ts` / `src/data/instrumentDetails.ts`
+for reference, but it is no longer auto-seeded.) Admins add, edit, hide, and
+emphasize instruments; a **visibility filter** (All / Visible / Hidden) plus a
+per-row "visible to advisors" checkbox manage what clients can be offered, and
+**"Delete filtered (N)"** bulk-deletes the current selection behind a
+type-the-word confirmation.
 
 **Autofill.** When adding an instrument, the admin enters a ticker (or ISIN) and
 hits "Fetch data". The browser posts the identity to the backend
