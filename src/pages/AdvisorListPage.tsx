@@ -74,39 +74,48 @@ export default function AdvisorListPage() {
   const t = useT()
   const { lang } = useLang()
   const { config } = useArchetypeConfig()
-  const { advisors, loggedInAdvisorId, logout, clientsForAdvisor } = useDirectory()
+  const { advisors, loggedInAdvisorId, logout } = useDirectory()
   const [sessions, setSessions] = useState<SessionRecord[] | null>(null)
 
   useEffect(() => {
+    if (!loggedInAdvisorId) {
+      setSessions(null)
+      return
+    }
     let alive = true
     getSessionStore()
-      .listSessions()
+      .listSessions({ advisorId: loggedInAdvisorId })
       .then((s) => alive && setSessions(s))
       .catch(() => alive && setSessions([]))
     return () => {
       alive = false
     }
-  }, [])
+  }, [loggedInAdvisorId])
 
   const advisor = advisors.find((a) => a.id === loggedInAdvisorId) ?? null
 
   // If the selected advisor was deleted, clear the selection.
   useEffect(() => {
-    if (loggedInAdvisorId && !advisor) logout()
-  }, [loggedInAdvisorId, advisor, logout])
+    if (loggedInAdvisorId && advisors.length > 0 && !advisor) logout()
+  }, [loggedInAdvisorId, advisors, advisor, logout])
 
+  // Roll the advisor's sessions up into one row per client (newest first).
+  // Clients are created server-side on submit, so every client has ≥1 session.
   const rows = useMemo(() => {
-    if (!advisor) return []
-    const all = sessions ?? []
-    return clientsForAdvisor(advisor.id)
-      .map((client) => {
-        const cs = all
-          .filter((s) => s.clientId === client.id)
-          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-        return { client, count: cs.length, latest: cs[0] ?? null }
+    const byClient = new Map<string, { name: string; sessions: SessionRecord[] }>()
+    for (const s of sessions ?? []) {
+      if (!s.clientId) continue
+      const entry = byClient.get(s.clientId) ?? { name: s.clientLabel ?? '—', sessions: [] }
+      entry.sessions.push(s)
+      byClient.set(s.clientId, entry)
+    }
+    return [...byClient.entries()]
+      .map(([clientId, { name, sessions: cs }]) => {
+        cs.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        return { clientId, name, count: cs.length, latest: cs[0] ?? null }
       })
       .sort((a, b) => (b.latest?.createdAt ?? '').localeCompare(a.latest?.createdAt ?? ''))
-  }, [advisor, sessions, clientsForAdvisor])
+  }, [sessions])
 
   return (
     <div>
@@ -144,18 +153,18 @@ export default function AdvisorListPage() {
           )}
 
           <ul className="mt-8 space-y-3">
-            {rows.map(({ client, count, latest }) => {
+            {rows.map(({ clientId, name, count, latest }) => {
               const live = latest ? reclassifyScores(latest.scores, config.shapeVectors) : null
               const archetype = live ? localizedArchetype(live.archetype, lang) : null
               return (
-                <li key={client.id}>
+                <li key={clientId}>
                   <Link
-                    to={`/advisor/client/${client.id}`}
+                    to={`/advisor/client/${clientId}`}
                     className="flex items-center gap-4 rounded-2xl border border-border bg-surface p-5 shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card"
                   >
                     <div className="min-w-0 flex-1">
                       <span className="truncate text-base font-semibold text-text">
-                        {client.name}
+                        {name}
                       </span>
                       <p className="mt-1 text-sm text-muted">
                         {archetype ? archetype.name : '—'}

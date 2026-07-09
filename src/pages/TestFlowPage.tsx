@@ -27,7 +27,7 @@ const SCREEN2_START = ROUNDS.findIndex((r) => r.screen === 2)
 // client's own profile. The advisor dashboard is NOT shown here — a completed
 // test is saved as a session and reviewed on the #/advisor route.
 export default function TestFlowPage() {
-  const { findOrCreateClient, rememberClient } = useDirectory()
+  const { rememberClient } = useDirectory()
   const [state, setState] = useState<FlowState>('intro')
   const [clientLabel, setClientLabel] = useState<string | null>(null)
   const [advisorId, setAdvisorId] = useState<string | null>(null)
@@ -74,22 +74,24 @@ export default function TestFlowPage() {
       setDashboardData(data)
       setState('result')
 
-      // Link this play to the client's record (replays re-link to the same
-      // client under this advisor) and remember them on this device.
-      let clientId: string | null = null
-      if (advisorId && clientLabel) {
-        const client = findOrCreateClient(advisorId, clientLabel)
-        clientId = client.id
-        rememberClient({ advisorId, clientId, name: client.name })
-      }
-
+      // Submit the session. The server finds-or-creates the client (advisor +
+      // name), so replays re-link to the same record; we then remember that
+      // client on this device from the record it returns.
       getSessionStore()
-        .saveSession({
+        .submitSession({
           ...data,
-          clientLabel,
           advisorId,
-          clientId,
+          clientName: clientLabel,
           answers: nextAnswers.map((a) => ({ roundId: a.round.id, allocX: a.allocX })),
+        })
+        .then((record) => {
+          if (record.advisorId && record.clientId) {
+            rememberClient({
+              advisorId: record.advisorId,
+              clientId: record.clientId,
+              name: record.clientLabel ?? clientLabel ?? '',
+            })
+          }
         })
         .catch((err) => console.warn('Failed to save session:', err))
     } else if (nextIndex === SCREEN2_START) {

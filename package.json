@@ -8,7 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
-    "deploy": "gcloud run deploy investor-profile --source . --region us-central1 --allow-unauthenticated"
+    "deploy": "gcloud run deploy investor-profile --source . --project archetype-classifier --region us-central1 --allow-unauthenticated --quiet"
   },
   "dependencies": {
     "react": "^18.3.1",

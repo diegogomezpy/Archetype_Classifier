@@ -21,30 +21,29 @@ export default function AdvisorClientPage() {
   const t = useT()
   const { lang } = useLang()
   const { config } = useArchetypeConfig()
-  const { loggedInAdvisorId, clients } = useDirectory()
+  const { loggedInAdvisorId } = useDirectory()
   const { clientId } = useParams<{ clientId: string }>()
   const [sessions, setSessions] = useState<SessionRecord[] | null>(null)
 
+  // Scope the fetch to (advisor, client) so another advisor's client returns
+  // nothing even via a hand-typed URL.
   useEffect(() => {
+    if (!loggedInAdvisorId || !clientId) return
     let alive = true
     getSessionStore()
-      .listSessions()
+      .listSessions({ advisorId: loggedInAdvisorId, clientId })
       .then((s) => alive && setSessions(s))
       .catch(() => alive && setSessions([]))
     return () => {
       alive = false
     }
-  }, [])
-
-  const client = clients.find((c) => c.id === clientId) ?? null
+  }, [loggedInAdvisorId, clientId])
 
   const mySessions = useMemo(
-    () =>
-      (sessions ?? [])
-        .filter((s) => s.clientId === clientId)
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-    [sessions, clientId],
+    () => (sessions ?? []).slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [sessions],
   )
+  const clientName = mySessions[0]?.clientLabel ?? null
 
   const handleDelete = (s: SessionRecord) => {
     void getSessionStore()
@@ -52,9 +51,8 @@ export default function AdvisorClientPage() {
       .then(() => setSessions((prev) => prev?.filter((x) => x.id !== s.id) ?? prev))
   }
 
-  // Not signed in, or this client isn't the advisor's → back to the advisor home.
+  // Not signed in → back to the advisor home.
   if (!loggedInAdvisorId) return <Navigate to="/advisor" replace />
-  if (client && client.advisorId !== loggedInAdvisorId) return <Navigate to="/advisor" replace />
 
   return (
     <div>
@@ -65,7 +63,7 @@ export default function AdvisorClientPage() {
       </Link>
 
       <h1 className="mt-6 text-3xl font-semibold tracking-tight text-text">
-        {client?.name ?? '—'}
+        {clientName ?? '—'}
       </h1>
       <p className="mt-2 text-sm text-muted">{t.clientHistory.sessionsSub}</p>
 

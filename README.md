@@ -36,12 +36,15 @@ Hash-based routing (works on static hosting with no server rewrites):
 
 A consistent top nav (**Client test · Advisor · Admin**) sits on every screen
 except mid-game. Everything (sessions, instrument catalog, archetype config,
-advisors, clients) is persisted to `localStorage` behind async storage
-interfaces (`src/lib/storage.ts`, `src/lib/catalog.tsx`,
-`src/lib/archetypeConfig.tsx`, `src/lib/directory.tsx`) — a GCP-native backend
-(Cloud Run API + Firestore, server-side) can swap in behind the same interfaces
-later. The drawn game P&L is deliberately **not** persisted — it's an engagement
-mechanic, not profile data.
+advisors, clients) is persisted **server-side in Firestore** via the backend API
+(`server/`), reached through a thin client (`src/lib/api.ts`) behind the same
+store interfaces (`src/lib/storage.ts`, `src/lib/catalog.tsx`,
+`src/lib/archetypeConfig.tsx`, `src/lib/directory.tsx`). So data is shared across
+devices and browsers — an admin's edits and a client's sessions show up
+everywhere, not just on the machine that made them. Only two things stay
+device-local (`localStorage`): the language toggle and the advisor picker's
+"who am I on this device" selection. The drawn game P&L is deliberately **not**
+persisted — it's an engagement mechanic, not profile data.
 
 ### Advisor & client linking
 
@@ -53,10 +56,12 @@ they enter their name and pick their advisor, which links the session to both.
 normalized name), and the browser also remembers the last client for a one-tap
 "continuing as…" on the intro. Each advisor's tab shows only their own clients.
 
-> **Note.** This is MVP-grade scoping, not security — all data lives in the
-> browser and is readable there. Real enforcement would come with the backend
-> (server-side data + auth), which the storage interfaces are shaped for; it's
-> deliberately deferred until the product is validated.
+> **Note.** This is MVP-grade scoping, not security. Data now lives server-side
+> in Firestore, but the API is open (no auth) and the advisor "login" is just an
+> unverified device-local pick — anyone who reaches the API or the admin console
+> can read or change anything. Real enforcement (authenticated advisors,
+> server-checked ownership) is deliberately deferred until the product is
+> validated.
 
 ### Admin-configurable engine
 
@@ -103,26 +108,28 @@ with a "data as of" field). It seeds the admin-managed catalog; admins add,
 edit, hide, and emphasize from there.
 
 **Autofill.** When adding an instrument, the admin enters a ticker (or ISIN) and
-hits "Fetch data" to auto-populate the detail sheet from live market data
-(`src/lib/marketData.ts`). Two client-side adapters run straight from the browser:
+hits "Fetch data". The browser posts the identity to the backend
+(`POST /api/market-data`), which does the fetching server-side (`server/src/marketData.ts`) —
+no keys or CORS limits in the browser. The client side (`src/lib/marketData.ts`)
+is just a thin call to that endpoint:
 
-- **Crypto → CoinGecko** (keyless, CORS-open) — fills last price, 1-year change,
-  market cap, and volume out of the box.
-- **Equities/ETFs → Financial Modeling Prep** (keyed) — fills description, price,
-  1-year change, 52-week range, volume, market cap, dividend yield, P/E, beta,
-  etc. The admin pastes a free API key into the **Market data source** settings
-  on the admin page; it's stored in the browser (fine for an internal tool,
-  exposed in a static build).
+- **Equities/ETFs → Yahoo Finance** (`yahoo-finance2`, keyless) — description,
+  price, 1-year change, 52-week range, volume, market cap, dividend yield, P/E,
+  beta, and **ATM ~3-month implied vol** from the option chain. Yahoo's default
+  data host (`query2`) returns 429 for Google Cloud IPs, so the server routes
+  calls to `query1` with a browser `User-Agent` (see the note in
+  `server/src/marketData.ts`) — that mirrors the working crumb request and gets
+  past the block.
+- **Crypto → CoinGecko + Deribit** (both keyless) — CoinGecko fills last price,
+  1-year change, market cap, and volume; **Deribit DVOL** fills crypto ATM
+  implied vol.
 
 Fetched fields are formatted (compact `$1.2T`, signed `+38.4%`) and merged
 non-destructively — a fetch never blanks a field the admin already filled.
 
-**What stays manual:** ATM 3M implied vol (needs a paid options/vol provider) and
-bond/structured-product reference data (coupon, rating, barriers — OTC desk data
-with no free API). Those fields are in the schema and editable, just not
-auto-fillable from the browser. Moving these calls to a backend later would hide
-the equity key and unlock crypto implied vol (Deribit) — both blocked in a
-static build.
+**What stays manual:** bond/structured-product reference data (coupon, rating,
+barriers — OTC desk data with no free API). Those fields are in the schema and
+editable, just not auto-fillable.
 
 ## How it works
 
@@ -277,31 +284,51 @@ src/
 │   └── instrumentDetails.ts# Seed per-asset detail sheets (illustrative samples)
 └── lib/
     ├── scoring.ts          # Scoring pipeline, classification, allocation engine
-    ├── storage.ts          # Session store interface + localStorage implementation
-    ├── catalog.tsx         # Managed instrument catalog: field specs, store, provider
-    ├── archetypeConfig.tsx # Editable shape vectors + per-archetype model mixes
-    ├── directory.tsx       # Advisors + clients + one-click advisor picker
-    ├── marketData.ts       # Autofill: CoinGecko (crypto) + FMP (equities, keyed)
+    ├── api.ts              # Thin fetch client for the backend API (/api)
+    ├── storage.ts          # Session store → POST/GET /api/sessions
+    ├── catalog.tsx         # Managed instrument catalog: field specs, provider (API-backed)
+    ├── archetypeConfig.tsx # Editable shape vectors + per-archetype model mixes (API-backed)
+    ├── directory.tsx       # Advisors (API-backed) + one-click advisor picker
+    ├── marketData.ts       # Autofill: thin POST to /api/market-data
     ├── outcomes.ts         # Joint payoff distribution + weighted draw sampling
     ├── instruments.ts      # Bundled instrument universe (seeds the catalog)
     └── advisorCopy.ts      # Advisor talking-point generation (en/es)
+
+server/                     # Backend API (Node + Hono + Firestore), serves the built app too
+└── src/
+    ├── index.ts            # Hono app: /api routes + static frontend + SPA fallback
+    ├── db.ts               # Firestore init (@google-cloud/firestore) + collections
+    └── marketData.ts       # Server market data: Yahoo (equities) + CoinGecko/Deribit (crypto)
 ```
 
 ## Deployment
 
-The static site deploys to **Cloud Run** (`npm run deploy` →
-`gcloud run deploy investor-profile --source . --region us-central1`). The
-`Dockerfile` builds the Vite app and serves it with nginx (`nginx.conf`: SPA
-fallback + hashed-asset caching); the container scales to zero. Everything lives
-in one GCP project.
+One container on **Cloud Run** (`npm run deploy` →
+`gcloud run deploy investor-profile --source . --region us-central1 --allow-unauthenticated`).
+The `Dockerfile` builds the Vite app and the Node server, then runs the server —
+which serves the built app **and** the `/api` routes from the same origin, so
+there are no CORS or cross-service concerns. The container scales to zero.
+Firestore (native mode) lives in the same GCP project (`archetype-classifier`);
+Cloud Run's runtime service account reaches it with project `editor` access — no
+key files, no Firebase SDK. Live at
+<https://investor-profile-41156376159.us-central1.run.app>.
+
+### Local development
+
+Two processes (see `CLI.md`):
+
+- **API server** — `cd server && npm install && npm run dev` (port 8080). Needs
+  Firestore credentials once: `gcloud auth application-default login`.
+- **Frontend** — `npm run dev` (port 5173). Vite proxies `/api` → `:8080`.
 
 ## Notes
 
 - **Desktop-first.** The layout targets desktop widths; it is not yet optimized
   for mobile.
-- **No backend / no logins (MVP).** All scoring runs client-side and everything
-  persists to the browser's `localStorage` — nothing is sent anywhere, and there
-  are no passwords. A GCP-native backend (Cloud Run API + Firestore, server-side)
-  can slot in behind the existing storage interfaces once the product is proven.
+- **Backend, but no logins/auth (MVP).** Data persists server-side in Firestore
+  via the `server/` API, so it's shared across devices — but the API is open and
+  the advisor "login" is an unverified device-local pick. Authenticated advisors
+  and server-checked ownership are deferred until the product is proven. Scoring
+  still runs client-side (the server only stores results and fetches market data).
 - Fonts (DM Mono, Inter) are loaded from Google Fonts at runtime.
 - The instrument universe and archetype copy are illustrative sample content.

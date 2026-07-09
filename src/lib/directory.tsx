@@ -6,14 +6,17 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { api } from './api'
 
 // ---------------------------------------------------------------------------
-// Advisor / client directory
+// Advisor directory (backend-API backed)
 // ---------------------------------------------------------------------------
-// Advisors are created by the admin; clients belong to exactly one advisor and
-// are matched on (advisorId + normalized name) so replays re-link to the same
-// client record. There are no logins (MVP): the Advisor tab is a one-click
-// "who are you?" picker, remembered on the device.
+// Advisors are created by the admin and persist in Firestore via the API.
+// Clients belong to exactly one advisor and are matched on (advisorId +
+// normalized name) so replays re-link to the same client record — but that
+// find-or-create now happens SERVER-SIDE when a completed test is submitted, so
+// the client no longer keeps a local client list. There are no logins (MVP):
+// the Advisor tab is a one-click "who are you?" picker, remembered on-device.
 
 export type Advisor = {
   id: string
@@ -31,18 +34,9 @@ export type Client = {
 // Device-remembered last client, for one-tap "continue as" on the intro.
 export type LastClient = { advisorId: string; clientId: string; name: string }
 
-function makeId(prefix: string): string {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
-  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
-}
+// ── Device-local persistence (advisor picker + last client only) ─────────────
 
-const normalize = (name: string) => name.trim().toLowerCase().replace(/\s+/g, ' ')
-
-// ── Persistence ──────────────────────────────────────────────────────────────
-
-const ADVISORS_KEY = 'ip_advisors_v1'
-const CLIENTS_KEY = 'ip_clients_v1'
-const SESSION_KEY = 'ip_advisor_session_v1' // logged-in advisorId
+const SESSION_KEY = 'ip_advisor_session_v1' // selected advisorId on this device
 const LAST_CLIENT_KEY = 'ip_last_client_v1'
 
 function readJSON<T>(key: string, fallback: T): T {
@@ -72,14 +66,11 @@ function remove(key: string): void {
 
 type DirectoryContextValue = {
   advisors: Advisor[]
-  clients: Client[]
-  // admin
+  loading: boolean
+  // admin (optimistic + persisted via API)
   addAdvisor: (name: string) => void
   updateAdvisor: (advisor: Advisor) => void
   removeAdvisor: (id: string) => void
-  // client flow
-  findOrCreateClient: (advisorId: string, name: string) => Client
-  clientsForAdvisor: (advisorId: string) => Client[]
   // which advisor is using this device (one-click picker, no login)
   loggedInAdvisorId: string | null
   login: (advisorId: string) => void
@@ -92,12 +83,10 @@ type DirectoryContextValue = {
 
 const DirectoryContext = createContext<DirectoryContextValue>({
   advisors: [],
-  clients: [],
+  loading: true,
   addAdvisor: () => {},
   updateAdvisor: () => {},
   removeAdvisor: () => {},
-  findOrCreateClient: () => ({ id: '', advisorId: '', name: '', createdAt: '' }),
-  clientsForAdvisor: () => [],
   loggedInAdvisorId: null,
   login: () => {},
   logout: () => {},
@@ -107,8 +96,8 @@ const DirectoryContext = createContext<DirectoryContextValue>({
 })
 
 export function DirectoryProvider({ children }: { children: ReactNode }) {
-  const [advisors, setAdvisors] = useState<Advisor[]>(() => readJSON<Advisor[]>(ADVISORS_KEY, []))
-  const [clients, setClients] = useState<Client[]>(() => readJSON<Client[]>(CLIENTS_KEY, []))
+  const [advisors, setAdvisors] = useState<Advisor[]>([])
+  const [loading, setLoading] = useState(true)
   const [loggedInAdvisorId, setLoggedIn] = useState<string | null>(() =>
     readJSON<string | null>(SESSION_KEY, null),
   )
@@ -116,35 +105,45 @@ export function DirectoryProvider({ children }: { children: ReactNode }) {
     readJSON<LastClient | null>(LAST_CLIENT_KEY, null),
   )
 
-  useEffect(() => writeJSON(ADVISORS_KEY, advisors), [advisors])
-  useEffect(() => writeJSON(CLIENTS_KEY, clients), [clients])
+  useEffect(() => {
+    let alive = true
+    api
+      .get<Advisor[]>('/advisors')
+      .then((list) => alive && setAdvisors(list ?? []))
+      .catch(() => alive && setAdvisors([]))
+      .finally(() => alive && setLoading(false))
+    return () => {
+      alive = false
+    }
+  }, [])
 
   const value = useMemo<DirectoryContextValue>(() => {
     return {
       advisors,
-      clients,
-      addAdvisor: (name) =>
-        setAdvisors((prev) => [
-          ...prev,
-          { id: makeId('adv'), name: name.trim(), createdAt: new Date().toISOString() },
-        ]),
-      updateAdvisor: (advisor) =>
-        setAdvisors((prev) => prev.map((a) => (a.id === advisor.id ? advisor : a))),
-      removeAdvisor: (id) => setAdvisors((prev) => prev.filter((a) => a.id !== id)),
-      findOrCreateClient: (advisorId, name) => {
-        const key = normalize(name)
-        const existing = clients.find((c) => c.advisorId === advisorId && normalize(c.name) === key)
-        if (existing) return existing
-        const created: Client = {
-          id: makeId('cli'),
-          advisorId,
-          name: name.trim(),
-          createdAt: new Date().toISOString(),
-        }
-        setClients((prev) => [...prev, created])
-        return created
+      loading,
+      addAdvisor: (name) => {
+        const trimmed = name.trim()
+        if (!trimmed) return
+        // Optimistic: show a temp row, then reconcile with the server's record.
+        const tempId = `tmp_${Date.now().toString(36)}`
+        const temp: Advisor = { id: tempId, name: trimmed, createdAt: new Date().toISOString() }
+        setAdvisors((prev) => [...prev, temp])
+        void api
+          .post<Advisor>('/advisors', { name: trimmed })
+          .then((saved) => setAdvisors((prev) => prev.map((a) => (a.id === tempId ? saved : a))))
+          .catch((e) => {
+            console.warn('advisor add:', e)
+            setAdvisors((prev) => prev.filter((a) => a.id !== tempId))
+          })
       },
-      clientsForAdvisor: (advisorId) => clients.filter((c) => c.advisorId === advisorId),
+      updateAdvisor: (advisor) => {
+        setAdvisors((prev) => prev.map((a) => (a.id === advisor.id ? advisor : a)))
+        void api.put(`/advisors/${advisor.id}`, advisor).catch((e) => console.warn('advisor save:', e))
+      },
+      removeAdvisor: (id) => {
+        setAdvisors((prev) => prev.filter((a) => a.id !== id))
+        void api.del(`/advisors/${id}`).catch((e) => console.warn('advisor delete:', e))
+      },
       loggedInAdvisorId,
       login: (advisorId) => {
         if (!advisors.some((a) => a.id === advisorId)) return
@@ -165,7 +164,7 @@ export function DirectoryProvider({ children }: { children: ReactNode }) {
         remove(LAST_CLIENT_KEY)
       },
     }
-  }, [advisors, clients, loggedInAdvisorId, lastClient])
+  }, [advisors, loading, loggedInAdvisorId, lastClient])
 
   return <DirectoryContext.Provider value={value}>{children}</DirectoryContext.Provider>
 }

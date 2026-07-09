@@ -1,11 +1,12 @@
 node_modules
 dist
+server/node_modules
+server/dist
 .git
 .github
 .firebase
 .claude
-functions/node_modules
-functions/lib
+functions
 coverage
 *.local
 npm-debug.log*

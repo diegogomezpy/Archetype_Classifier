@@ -15,6 +15,7 @@ import {
   type ShapeArchetype,
   type ShapeScores,
 } from './scoring'
+import { api } from './api'
 
 // ---------------------------------------------------------------------------
 // Admin-editable archetype configuration
@@ -104,54 +105,7 @@ export function seedConfig(): ArchetypeConfig {
   return { shapeVectors, assetMix }
 }
 
-// ── Persistence ──────────────────────────────────────────────────────────────
-
-const CONFIG_KEY = 'ip_archetype_config_v1'
-
-export interface ArchetypeConfigStore {
-  load(): Promise<ArchetypeConfig>
-  save(config: ArchetypeConfig): Promise<void>
-  reset(): Promise<ArchetypeConfig>
-}
-
-class LocalArchetypeConfigStore implements ArchetypeConfigStore {
-  async load(): Promise<ArchetypeConfig> {
-    try {
-      const raw = localStorage.getItem(CONFIG_KEY)
-      if (!raw) return seedConfig()
-      const parsed = JSON.parse(raw) as Partial<ArchetypeConfig>
-      const seed = seedConfig()
-      // Merge over the seed so a partial/older payload still yields a full config.
-      return {
-        shapeVectors: { ...seed.shapeVectors, ...(parsed.shapeVectors ?? {}) },
-        assetMix: { ...seed.assetMix, ...(parsed.assetMix ?? {}) },
-      }
-    } catch {
-      return seedConfig()
-    }
-  }
-
-  async save(config: ArchetypeConfig): Promise<void> {
-    try {
-      localStorage.setItem(CONFIG_KEY, JSON.stringify(config))
-    } catch {
-      /* ignore (quota/private mode) */
-    }
-  }
-
-  async reset(): Promise<ArchetypeConfig> {
-    try {
-      localStorage.removeItem(CONFIG_KEY)
-    } catch {
-      /* ignore */
-    }
-    return seedConfig()
-  }
-}
-
-const configStore: ArchetypeConfigStore = new LocalArchetypeConfigStore()
-
-// ── React context ────────────────────────────────────────────────────────────
+// ── React context (backend-API backed) ──────────────────────────────────────
 
 type ArchetypeConfigContextValue = {
   config: ArchetypeConfig
@@ -170,49 +124,63 @@ const ArchetypeConfigContext = createContext<ArchetypeConfigContextValue>({
   reset: () => {},
 })
 
+function mergeWithSeed(partial: Partial<ArchetypeConfig> | null): ArchetypeConfig {
+  const seed = seedConfig()
+  if (!partial) return seed
+  return {
+    shapeVectors: { ...seed.shapeVectors, ...(partial.shapeVectors ?? {}) },
+    assetMix: { ...seed.assetMix, ...(partial.assetMix ?? {}) },
+  }
+}
+
 export function ArchetypeConfigProvider({ children }: { children: ReactNode }) {
+  // Seed synchronously so classification works on first paint; the async load
+  // swaps in the persisted config, and the classifier's active vectors follow.
   const [config, setConfig] = useState<ArchetypeConfig>(seedConfig)
 
-  // Seed the classifier immediately, then swap in any persisted config.
+  const persist = (next: ArchetypeConfig) => {
+    setActiveShapeVectors(next.shapeVectors)
+    setConfig(next)
+    void api.put('/config/archetypes', next).catch((e) => console.warn('config save:', e))
+  }
+
   useEffect(() => {
     let alive = true
-    configStore.load().then((loaded) => {
-      if (alive) setConfig(loaded)
-    })
+    ;(async () => {
+      try {
+        const loaded = await api.get<Partial<ArchetypeConfig> | null>('/config/archetypes')
+        if (!loaded) {
+          // First run: seed the config on the server.
+          const seed = seedConfig()
+          await api.put('/config/archetypes', seed)
+          if (alive) {
+            setActiveShapeVectors(seed.shapeVectors)
+            setConfig(seed)
+          }
+        } else {
+          const merged = mergeWithSeed(loaded)
+          if (alive) {
+            setActiveShapeVectors(merged.shapeVectors)
+            setConfig(merged)
+          }
+        }
+      } catch {
+        // Backend unreachable — keep the seeded defaults.
+      }
+    })()
     return () => {
       alive = false
     }
   }, [])
 
-  // Keep the classifier's active vectors in sync with the config.
-  useEffect(() => {
-    setActiveShapeVectors(config.shapeVectors)
-  }, [config.shapeVectors])
-
   const value = useMemo<ArchetypeConfigContextValue>(
     () => ({
       config,
-      setShapeVectors: (vectors) => {
-        setConfig((prev) => {
-          const next = { ...prev, shapeVectors: vectors }
-          void configStore.save(next)
-          return next
-        })
-      },
-      setAssetMix: (key, mix) => {
-        setConfig((prev) => {
-          const next = { ...prev, assetMix: { ...prev.assetMix, [key]: mix } }
-          void configStore.save(next)
-          return next
-        })
-      },
+      setShapeVectors: (vectors) => persist({ ...config, shapeVectors: vectors }),
+      setAssetMix: (key, mix) =>
+        persist({ ...config, assetMix: { ...config.assetMix, [key]: mix } }),
       recomputeMix: (key) => computeDefaultMix(key, config.shapeVectors),
-      reset: () => {
-        void configStore.reset().then((seed) => {
-          setActiveShapeVectors(seed.shapeVectors)
-          setConfig(seed)
-        })
-      },
+      reset: () => persist(seedConfig()),
     }),
     [config],
   )

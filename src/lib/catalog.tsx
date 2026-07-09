@@ -8,6 +8,7 @@ import {
 } from 'react'
 import { INSTRUMENTS, type AssetClass, type Instrument } from './instruments'
 import { SEED_DETAILS } from '../data/instrumentDetails'
+import { api } from './api'
 
 // ---------------------------------------------------------------------------
 // Managed instrument catalog
@@ -147,54 +148,11 @@ export function seedCatalog(): ManagedInstrument[] {
   })
 }
 
-// ── Persistence (async interface; localStorage now, Firestore later) ────────
-
-const CATALOG_KEY = 'ip_catalog_v1'
-
-export interface CatalogStore {
-  load(): Promise<ManagedInstrument[]>
-  saveAll(items: ManagedInstrument[]): Promise<void>
-  reset(): Promise<ManagedInstrument[]>
-}
-
-class LocalCatalogStore implements CatalogStore {
-  async load(): Promise<ManagedInstrument[]> {
-    try {
-      const raw = localStorage.getItem(CATALOG_KEY)
-      if (!raw) return seedCatalog()
-      const parsed = JSON.parse(raw)
-      return Array.isArray(parsed) && parsed.length > 0
-        ? (parsed as ManagedInstrument[])
-        : seedCatalog()
-    } catch {
-      return seedCatalog()
-    }
-  }
-
-  async saveAll(items: ManagedInstrument[]): Promise<void> {
-    try {
-      localStorage.setItem(CATALOG_KEY, JSON.stringify(items))
-    } catch {
-      /* ignore (quota/private mode) — edits still live in memory */
-    }
-  }
-
-  async reset(): Promise<ManagedInstrument[]> {
-    try {
-      localStorage.removeItem(CATALOG_KEY)
-    } catch {
-      /* ignore */
-    }
-    return seedCatalog()
-  }
-}
-
-const catalogStore: CatalogStore = new LocalCatalogStore()
-
-// ── React context ────────────────────────────────────────────────────────────
+// ── React context (backend-API backed) ──────────────────────────────────────
 
 type CatalogContextValue = {
   instruments: ManagedInstrument[]
+  loading: boolean
   /** Insert or replace by id, then persist. */
   upsert: (item: ManagedInstrument) => void
   remove: (id: string) => void
@@ -203,19 +161,34 @@ type CatalogContextValue = {
 
 const CatalogContext = createContext<CatalogContextValue>({
   instruments: [],
+  loading: true,
   upsert: () => {},
   remove: () => {},
   reset: () => {},
 })
 
 export function CatalogProvider({ children }: { children: ReactNode }) {
-  // Seed synchronously so first paint always has a universe; the async load
-  // then swaps in any persisted edits (instant for localStorage).
-  const [instruments, setInstruments] = useState<ManagedInstrument[]>(seedCatalog)
+  const [instruments, setInstruments] = useState<ManagedInstrument[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let alive = true
-    catalogStore.load().then((items) => alive && setInstruments(items))
+    ;(async () => {
+      try {
+        let items = await api.get<ManagedInstrument[]>('/catalog')
+        // First run: seed the catalog from the bundled defaults.
+        if (!items || items.length === 0) {
+          const res = await api.post<{ items: ManagedInstrument[] }>('/catalog/seed', seedCatalog())
+          items = res.items
+        }
+        if (alive) setInstruments(items)
+      } catch {
+        // Backend unreachable — fall back to the bundled defaults (read-only).
+        if (alive) setInstruments(seedCatalog())
+      } finally {
+        if (alive) setLoading(false)
+      }
+    })()
     return () => {
       alive = false
     }
@@ -224,28 +197,26 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
   const value = useMemo<CatalogContextValue>(
     () => ({
       instruments,
+      loading,
       upsert: (item) => {
+        const stamped = { ...item, updatedAt: new Date().toISOString() }
         setInstruments((prev) => {
-          const stamped = { ...item, updatedAt: new Date().toISOString() }
           const idx = prev.findIndex((i) => i.id === item.id)
-          const next =
-            idx === -1 ? [...prev, stamped] : prev.map((i) => (i.id === item.id ? stamped : i))
-          void catalogStore.saveAll(next)
-          return next
+          return idx === -1 ? [...prev, stamped] : prev.map((i) => (i.id === item.id ? stamped : i))
         })
+        void api.put(`/catalog/${item.id}`, stamped).catch((e) => console.warn('catalog save:', e))
       },
       remove: (id) => {
-        setInstruments((prev) => {
-          const next = prev.filter((i) => i.id !== id)
-          void catalogStore.saveAll(next)
-          return next
-        })
+        setInstruments((prev) => prev.filter((i) => i.id !== id))
+        void api.del(`/catalog/${id}`).catch((e) => console.warn('catalog delete:', e))
       },
       reset: () => {
-        void catalogStore.reset().then(setInstruments)
+        const seed = seedCatalog()
+        setInstruments(seed)
+        void api.post('/catalog/reset', seed).catch((e) => console.warn('catalog reset:', e))
       },
     }),
-    [instruments],
+    [instruments, loading],
   )
 
   return <CatalogContext.Provider value={value}>{children}</CatalogContext.Provider>

@@ -1,19 +1,26 @@
-# Frontend container for Cloud Run — build the Vite app, serve it with nginx.
+# Single container for Cloud Run: the Node API server (server/) serves both the
+# built Vite app and the /api routes from one origin.
 # Deploy:  gcloud run deploy investor-profile --source . --region us-central1
 
-# ---- build ----
+# ---- build: frontend (Vite → /app/dist) then server (tsc → /app/server/dist) ----
 FROM node:20-alpine AS build
 WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci
 COPY . .
-# Vite reads VITE_FIREBASE_* from .env.production at build time (public config).
-RUN npm run build
+RUN npm ci && npm run build
+WORKDIR /app/server
+RUN npm ci && npm run build
 
-# ---- serve ----
-FROM nginx:1.27-alpine
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /app/dist /usr/share/nginx/html
-# Cloud Run sends traffic to $PORT (default 8080); nginx listens there.
+# ---- runtime: Node server with production deps only ----
+FROM node:20-alpine AS runtime
+WORKDIR /app
+ENV NODE_ENV=production
+ENV WEB_ROOT=web
+# Server production dependencies.
+COPY server/package.json server/package-lock.json ./
+RUN npm ci --omit=dev
+# Compiled server + the built frontend it serves.
+COPY --from=build /app/server/dist ./dist
+COPY --from=build /app/dist ./web
+# Cloud Run sends traffic to $PORT (default 8080); the server reads it.
 EXPOSE 8080
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["node", "dist/index.js"]

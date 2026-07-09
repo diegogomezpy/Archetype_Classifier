@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
-import { useDirectory, type Advisor } from '../lib/directory'
+import { useEffect, useMemo, useState } from 'react'
+import { useDirectory, type Advisor, type Client } from '../lib/directory'
+import { api } from '../lib/api'
 import { useT } from '../i18n/i18n'
 import AppNav from '../components/AppNav'
 import AdminNav from '../components/AdminNav'
@@ -10,7 +11,19 @@ const labelCls = 'mb-1.5 block text-xs font-medium text-muted'
 
 export default function AdminAdvisorsPage() {
   const t = useT()
-  const { advisors, clients, addAdvisor, updateAdvisor, removeAdvisor } = useDirectory()
+  const { advisors, addAdvisor, updateAdvisor, removeAdvisor } = useDirectory()
+  const [clients, setClients] = useState<Client[]>([])
+
+  useEffect(() => {
+    let alive = true
+    api
+      .get<Client[]>('/clients')
+      .then((c) => alive && setClients(c ?? []))
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [])
 
   const clientCount = useMemo(() => {
     const map: Record<string, number> = {}
