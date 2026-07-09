@@ -6,6 +6,7 @@ import { reclassifyScores } from '../lib/scoring'
 import { useArchetypeConfig } from '../lib/archetypeConfig'
 import { useDirectory } from '../lib/directory'
 import { dateLocale, useLang, useT } from '../i18n/i18n'
+import AppNav from '../components/AppNav'
 
 function fmtDate(iso: string, locale: string): string {
   const d = new Date(iso)
@@ -71,6 +72,7 @@ export default function AdvisorSessionPage() {
 
   return (
     <div>
+      <AppNav />
       {/* Session header bar — advisor navigation, hidden from the print report */}
       <div className="no-print mx-auto flex w-full max-w-6xl items-center gap-3 px-8 pt-6">
         <Link

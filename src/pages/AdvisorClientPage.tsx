@@ -6,6 +6,7 @@ import { useArchetypeConfig } from '../lib/archetypeConfig'
 import { useDirectory } from '../lib/directory'
 import { dateLocale, useLang, useT } from '../i18n/i18n'
 import { localizedArchetype } from '../i18n/content'
+import AppNav from '../components/AppNav'
 
 function fmtDate(iso: string, locale: string): string {
   const d = new Date(iso)
@@ -56,7 +57,9 @@ export default function AdvisorClientPage() {
   if (client && client.advisorId !== loggedInAdvisorId) return <Navigate to="/advisor" replace />
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-6 py-12">
+    <div>
+      <AppNav />
+      <div className="mx-auto w-full max-w-3xl px-6 py-8">
       <Link to="/advisor" className="text-sm text-muted transition-colors hover:text-text">
         {t.clientHistory.back}
       </Link>
@@ -112,6 +115,7 @@ export default function AdvisorClientPage() {
           )
         })}
       </ul>
+      </div>
     </div>
   )
 }

@@ -12,16 +12,17 @@ import AdminPage from './pages/AdminPage'
 import AdminArchetypesPage from './pages/AdminArchetypesPage'
 import AdminAdvisorsPage from './pages/AdminAdvisorsPage'
 
-// Route shell. Hash routing keeps every route working on static hosting
-// (GitHub Pages subpath) with no server rewrites.
+// Route shell. Hash routing keeps every route working on static hosting with no
+// server rewrites. MVP: no logins anywhere — the advisor area is a one-click
+// "who are you?" picker, the admin console is open.
 //
-//   #/                      client test (public)
-//   #/advisor               advisor sign-in → their clients
-//   #/advisor/client/:id    one client's session history (advisor)
-//   #/advisor/session/:id   one session's two-panel dashboard (advisor)
-//   #/admin                 instrument catalog (admin)
-//   #/admin/archetypes      archetype vectors + model mixes (admin)
-//   #/admin/advisors        advisor account management (admin)
+//   #/                      client test
+//   #/advisor               advisor's clients (picker if none selected)
+//   #/advisor/client/:id    one client's session history
+//   #/advisor/session/:id   one session's dashboard
+//   #/admin                 instrument catalog
+//   #/admin/archetypes      archetype vectors + model mixes
+//   #/admin/advisors        advisor accounts
 export default function App() {
   return (
     <LanguageProvider>

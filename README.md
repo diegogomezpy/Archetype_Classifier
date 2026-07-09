@@ -27,36 +27,36 @@ Hash-based routing (works on static hosting with no server rewrites):
 | Route | Audience | What |
 |-------|----------|------|
 | `#/` | Client (public) | The 10-round test. Client enters their name and picks their advisor, then gets their archetype + brief description only. Completing it saves a session. |
-| `#/advisor` | Advisor | Sign-in (pick account + passcode) → **that advisor's clients only**, each with their play history. |
+| `#/advisor` | Advisor | A one-click "Who are you?" picker → that advisor's clients, each with their play history. |
 | `#/advisor/client/:clientId` | Advisor | One client's session history, newest first (replays accumulate here). |
-| `#/advisor/session/:id` | Advisor | One session's dashboard: classification, allocation, and recommended instruments with per-asset detail drill-down. Strictly advisor-facing, scoped to the signed-in advisor. |
+| `#/advisor/session/:id` | Advisor | One session's dashboard: classification, allocation, and recommended instruments with per-asset detail drill-down. Strictly advisor-facing. |
 | `#/admin` | Admin | Instrument catalog console: curate everything offerable to clients — risk vectors (σ/α/λ), visibility, "house pick" emphasis, and per-asset-class details. |
 | `#/admin/archetypes` | Admin | Archetype console: edit the classification shape vectors (Banker/Venture/Insurer) and each archetype's recommended model asset mix. |
-| `#/admin/advisors` | Admin | Advisor accounts: create the advisors clients pick from (name + passcode). |
+| `#/admin/advisors` | Admin | Advisor accounts: create the advisors clients pick from (just names). |
 
-Everything (sessions, instrument catalog, archetype config, advisors, clients,
-advisor login) is persisted to `localStorage` behind async storage interfaces
-(`src/lib/storage.ts`, `src/lib/catalog.tsx`, `src/lib/archetypeConfig.tsx`,
-`src/lib/directory.tsx`); a Firebase/Firestore backend swaps in behind the same
-interfaces in the planned next phase. The drawn game P&L is deliberately **not**
-persisted — it's an engagement mechanic, not profile data.
+A consistent top nav (**Client test · Advisor · Admin**) sits on every screen
+except mid-game. Everything (sessions, instrument catalog, archetype config,
+advisors, clients) is persisted to `localStorage` behind async storage
+interfaces (`src/lib/storage.ts`, `src/lib/catalog.tsx`,
+`src/lib/archetypeConfig.tsx`, `src/lib/directory.tsx`) — a GCP-native backend
+(Cloud Run API + Firestore, server-side) can swap in behind the same interfaces
+later. The drawn game P&L is deliberately **not** persisted — it's an engagement
+mechanic, not profile data.
 
-### Advisor accounts & client linking
+### Advisor & client linking
 
-Admins create advisor accounts. When a client plays, they enter their name and
-select their advisor, which links the session to both. **Replays re-link to the
-same client** — a client is matched by (advisor + normalized name), and the
-browser also remembers the last client for a one-tap "continuing as…" on the
-intro. An advisor signs in (account + passcode) and sees only *their* clients,
-each with full play history; the client-history and session routes are scoped to
-the signed-in advisor and redirect otherwise.
+**No logins (MVP).** The admin console is open, and an advisor "signs in" by
+clicking their name on the Advisor tab (remembered on the device; "Switch
+advisor" to change). Admins create advisors (name only). When a client plays,
+they enter their name and pick their advisor, which links the session to both.
+**Replays re-link to the same client** — a client is matched by (advisor +
+normalized name), and the browser also remembers the last client for a one-tap
+"continuing as…" on the intro. Each advisor's tab shows only their own clients.
 
-> **Security note.** On this static build the scoping and passcodes are
-> **demo-grade** — all data lives in the browser and is readable there, so this
-> is functional isolation, not enforced isolation. Real enforcement (and real
-> logins) arrive with the Phase-2 backend: Firebase Auth + Firestore security
-> rules. The data model and UI built here carry over unchanged; only the storage
-> and the access check move server-side.
+> **Note.** This is MVP-grade scoping, not security — all data lives in the
+> browser and is readable there. Real enforcement would come with the backend
+> (server-side data + auth), which the storage interfaces are shaped for; it's
+> deliberately deferred until the product is validated.
 
 ### Admin-configurable engine
 
@@ -102,14 +102,27 @@ illustrative sample detail sheet (`src/data/instrumentDetails.ts`, all marked
 with a "data as of" field). It seeds the admin-managed catalog; admins add,
 edit, hide, and emphasize from there.
 
-**Autofill seam.** When adding an instrument, the admin can enter a ticker
-and/or ISIN and hit "Fetch data" to auto-populate the detail sheet from a
-market-data source. This is behind a provider interface (`src/lib/marketData.ts`)
-that is intentionally a no-op in the static build — a browser can't reach Yahoo
-Finance (CORS) and ATM implied vol needs a keyed options-data provider — so it
-reports "unavailable" rather than inventing numbers. The Phase-2 backend swaps in
-a real server-side provider via `setMarketDataProvider`, and results merge
-straight into the detail sheet (field keys line up).
+**Autofill.** When adding an instrument, the admin enters a ticker (or ISIN) and
+hits "Fetch data" to auto-populate the detail sheet from live market data
+(`src/lib/marketData.ts`). Two client-side adapters run straight from the browser:
+
+- **Crypto → CoinGecko** (keyless, CORS-open) — fills last price, 1-year change,
+  market cap, and volume out of the box.
+- **Equities/ETFs → Financial Modeling Prep** (keyed) — fills description, price,
+  1-year change, 52-week range, volume, market cap, dividend yield, P/E, beta,
+  etc. The admin pastes a free API key into the **Market data source** settings
+  on the admin page; it's stored in the browser (fine for an internal tool,
+  exposed in a static build).
+
+Fetched fields are formatted (compact `$1.2T`, signed `+38.4%`) and merged
+non-destructively — a fetch never blanks a field the admin already filled.
+
+**What stays manual:** ATM 3M implied vol (needs a paid options/vol provider) and
+bond/structured-product reference data (coupon, rating, barriers — OTC desk data
+with no free API). Those fields are in the schema and editable, just not
+auto-fillable from the browser. Moving these calls to a backend later would hide
+the equity key and unlock crypto implied vol (Deribit) — both blocked in a
+static build.
 
 ## How it works
 
@@ -225,9 +238,9 @@ src/
 ├── index.css               # Tailwind layers + animations + print styles
 ├── pages/
 │   ├── TestFlowPage.tsx    # Client flow: intro → rounds → interstitial → own profile
-│   ├── AdvisorListPage.tsx # Advisor: sign-in gate + their client list
+│   ├── AdvisorListPage.tsx # Advisor: "who are you?" picker + their client list
 │   ├── AdvisorClientPage.tsx # Advisor: one client's session history
-│   ├── AdvisorSessionPage.tsx # Advisor: one session's dashboard (scoped)
+│   ├── AdvisorSessionPage.tsx # Advisor: one session's dashboard
 │   ├── AdminPage.tsx       # Admin: instrument catalog console (CRUD + details)
 │   ├── AdminArchetypesPage.tsx # Admin: archetype vectors + model asset mixes
 │   └── AdminAdvisorsPage.tsx # Admin: advisor account management
@@ -248,7 +261,8 @@ src/
 │   ├── PayoffBar.tsx       # Canvas payoff-distribution bar (joint outcomes)
 │   ├── HalfwayScreen.tsx   # Screen 1 → screen 2 transition
 │   ├── AdvisorDashboard.tsx# Two-panel session view (advisor route only)
-│   ├── AdminNav.tsx        # Shared admin header + Instruments/Archetypes tabs
+│   ├── AppNav.tsx          # Global top nav (Client test / Advisor / Admin)
+│   ├── AdminNav.tsx        # Admin sub-tabs (Instruments / Archetypes / Advisors)
 │   ├── RecommendationsPanel.tsx # Classification + allocation + instruments (advisor-framed)
 │   ├── AdvisorPanel.tsx    # Raw scores, confidence, talking points
 │   ├── DonutChart.tsx      # Pure-SVG allocation donut
@@ -266,8 +280,8 @@ src/
     ├── storage.ts          # Session store interface + localStorage implementation
     ├── catalog.tsx         # Managed instrument catalog: field specs, store, provider
     ├── archetypeConfig.tsx # Editable shape vectors + per-archetype model mixes
-    ├── directory.tsx       # Advisors + clients + advisor login (demo-grade)
-    ├── marketData.ts       # Autofill provider seam (no-op now; backend in Phase 2)
+    ├── directory.tsx       # Advisors + clients + one-click advisor picker
+    ├── marketData.ts       # Autofill: CoinGecko (crypto) + FMP (equities, keyed)
     ├── outcomes.ts         # Joint payoff distribution + weighted draw sampling
     ├── instruments.ts      # Bundled instrument universe (seeds the catalog)
     └── advisorCopy.ts      # Advisor talking-point generation (en/es)
@@ -275,17 +289,19 @@ src/
 
 ## Deployment
 
-A GitHub Actions workflow (`.github/workflows/deploy.yml`) type-checks, builds,
-and publishes `dist/` to GitHub Pages on every push to `main`. The production
-build is served from the `/Archetype_Classifier/` subpath (see `vite.config.ts`);
-local dev and preview stay at `/`.
+The static site deploys to **Cloud Run** (`npm run deploy` →
+`gcloud run deploy investor-profile --source . --region us-central1`). The
+`Dockerfile` builds the Vite app and serves it with nginx (`nginx.conf`: SPA
+fallback + hashed-asset caching); the container scales to zero. Everything lives
+in one GCP project.
 
 ## Notes
 
 - **Desktop-first.** The layout targets desktop widths; it is not yet optimized
   for mobile.
-- **No backend (yet).** All scoring runs client-side; completed sessions are
-  saved to the browser's `localStorage` only — nothing is sent anywhere. A
-  Firestore backend is the planned next phase.
+- **No backend / no logins (MVP).** All scoring runs client-side and everything
+  persists to the browser's `localStorage` — nothing is sent anywhere, and there
+  are no passwords. A GCP-native backend (Cloud Run API + Firestore, server-side)
+  can slot in behind the existing storage interfaces once the product is proven.
 - Fonts (DM Mono, Inter) are loaded from Google Fonts at runtime.
 - The instrument universe and archetype copy are illustrative sample content.

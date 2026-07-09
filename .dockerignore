@@ -1,0 +1,13 @@
+node_modules
+dist
+.git
+.github
+.firebase
+.claude
+functions/node_modules
+functions/lib
+coverage
+*.local
+npm-debug.log*
+firebase-debug.log
+firestore-debug.log

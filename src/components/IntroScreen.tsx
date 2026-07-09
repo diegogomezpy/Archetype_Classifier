@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
 import { useT } from '../i18n/i18n'
 import { useDirectory } from '../lib/directory'
 
@@ -120,16 +119,6 @@ export default function IntroScreen({ onStart }: Props) {
         </button>
 
         <p className="mt-6 text-sm text-muted">{t.intro.footnote}</p>
-
-        <div className="mt-10 flex items-center gap-2 text-xs text-muted/70">
-          <Link to="/advisor" className="transition-colors hover:text-muted">
-            {t.intro.advisorAccess}
-          </Link>
-          <span aria-hidden>·</span>
-          <Link to="/admin" className="transition-colors hover:text-muted">
-            {t.intro.adminAccess}
-          </Link>
-        </div>
       </div>
     </div>
   )

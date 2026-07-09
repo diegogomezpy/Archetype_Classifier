@@ -12,19 +12,12 @@ import {
 // ---------------------------------------------------------------------------
 // Advisors are created by the admin; clients belong to exactly one advisor and
 // are matched on (advisorId + normalized name) so replays re-link to the same
-// client record. An advisor "logs in" (select account + passcode) and then only
-// sees their own clients.
-//
-// SECURITY NOTE: on the static (localStorage) build this is demo-grade — all
-// data is readable in the browser, so the advisor scoping is functional, not
-// enforced. Real isolation arrives with the Phase-2 backend (Firebase Auth +
-// Firestore rules); this whole model carries over unchanged, only the storage
-// and the access check move server-side.
+// client record. There are no logins (MVP): the Advisor tab is a one-click
+// "who are you?" picker, remembered on the device.
 
 export type Advisor = {
   id: string
   name: string
-  passcode: string // may be empty (select-only login); demo-grade, plaintext
   createdAt: string
 }
 
@@ -81,15 +74,15 @@ type DirectoryContextValue = {
   advisors: Advisor[]
   clients: Client[]
   // admin
-  addAdvisor: (name: string, passcode: string) => void
+  addAdvisor: (name: string) => void
   updateAdvisor: (advisor: Advisor) => void
   removeAdvisor: (id: string) => void
   // client flow
   findOrCreateClient: (advisorId: string, name: string) => Client
   clientsForAdvisor: (advisorId: string) => Client[]
-  // advisor auth (demo-grade)
+  // which advisor is using this device (one-click picker, no login)
   loggedInAdvisorId: string | null
-  login: (advisorId: string, passcode: string) => boolean
+  login: (advisorId: string) => void
   logout: () => void
   // device memory
   lastClient: LastClient | null
@@ -106,7 +99,7 @@ const DirectoryContext = createContext<DirectoryContextValue>({
   findOrCreateClient: () => ({ id: '', advisorId: '', name: '', createdAt: '' }),
   clientsForAdvisor: () => [],
   loggedInAdvisorId: null,
-  login: () => false,
+  login: () => {},
   logout: () => {},
   lastClient: null,
   rememberClient: () => {},
@@ -130,15 +123,10 @@ export function DirectoryProvider({ children }: { children: ReactNode }) {
     return {
       advisors,
       clients,
-      addAdvisor: (name, passcode) =>
+      addAdvisor: (name) =>
         setAdvisors((prev) => [
           ...prev,
-          {
-            id: makeId('adv'),
-            name: name.trim(),
-            passcode: passcode.trim(),
-            createdAt: new Date().toISOString(),
-          },
+          { id: makeId('adv'), name: name.trim(), createdAt: new Date().toISOString() },
         ]),
       updateAdvisor: (advisor) =>
         setAdvisors((prev) => prev.map((a) => (a.id === advisor.id ? advisor : a))),
@@ -158,13 +146,10 @@ export function DirectoryProvider({ children }: { children: ReactNode }) {
       },
       clientsForAdvisor: (advisorId) => clients.filter((c) => c.advisorId === advisorId),
       loggedInAdvisorId,
-      login: (advisorId, passcode) => {
-        const advisor = advisors.find((a) => a.id === advisorId)
-        if (!advisor) return false
-        if (advisor.passcode && advisor.passcode !== passcode.trim()) return false
+      login: (advisorId) => {
+        if (!advisors.some((a) => a.id === advisorId)) return
         setLoggedIn(advisorId)
         writeJSON(SESSION_KEY, advisorId)
-        return true
       },
       logout: () => {
         setLoggedIn(null)

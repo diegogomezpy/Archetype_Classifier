@@ -5,9 +5,15 @@ import {
   useCatalog,
   type ManagedInstrument,
 } from '../lib/catalog'
-import { fetchInstrumentData } from '../lib/marketData'
+import {
+  fetchInstrumentData,
+  getMarketDataConfig,
+  setMarketDataConfig,
+  type EquityProviderId,
+} from '../lib/marketData'
 import { useLang, useT } from '../i18n/i18n'
 import { assetClassLabel } from '../i18n/content'
+import AppNav from '../components/AppNav'
 import AdminNav from '../components/AdminNav'
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
@@ -36,6 +42,69 @@ const inputCls =
   'w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm text-text shadow-soft outline-none transition-shadow placeholder:text-muted/60 focus:ring-2 focus:ring-teal/40'
 const labelCls = 'mb-1.5 block text-xs font-medium text-muted'
 
+// ── Market-data source settings (collapsible) ────────────────────────────────
+
+function MarketDataSettings() {
+  const t = useT()
+  const [cfg, setCfg] = useState(getMarketDataConfig)
+  const [saved, setSaved] = useState(false)
+
+  const save = () => {
+    setMarketDataConfig(cfg)
+    setSaved(true)
+    window.setTimeout(() => setSaved(false), 1500)
+  }
+
+  return (
+    <details className="mt-6 rounded-2xl border border-border bg-surface px-5 py-4 shadow-soft">
+      <summary className="cursor-pointer list-none font-mono text-xs uppercase tracking-[0.14em] text-muted transition-colors hover:text-text">
+        {t.admin.dataSourceTitle}
+      </summary>
+      <p className="mt-3 max-w-2xl text-xs leading-relaxed text-muted">{t.admin.dataSourceHint}</p>
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <label className={labelCls}>{t.admin.provider}</label>
+          <select
+            className={inputCls}
+            value={cfg.equityProvider}
+            onChange={(e) => {
+              setCfg((c) => ({ ...c, equityProvider: e.target.value as EquityProviderId }))
+              setSaved(false)
+            }}
+          >
+            <option value="none">{t.admin.providerNone}</option>
+            <option value="fmp">Financial Modeling Prep</option>
+          </select>
+        </div>
+        <div>
+          <label className={labelCls}>{t.admin.apiKey}</label>
+          <input
+            type="password"
+            className={inputCls}
+            value={cfg.apiKey}
+            disabled={cfg.equityProvider === 'none'}
+            onChange={(e) => {
+              setCfg((c) => ({ ...c, apiKey: e.target.value }))
+              setSaved(false)
+            }}
+          />
+          <p className="mt-1 text-[11px] text-muted">{t.admin.apiKeyHint}</p>
+        </div>
+      </div>
+      <div className="mt-4 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={save}
+          className="rounded-xl bg-teal px-5 py-2 text-sm font-semibold text-white shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card"
+        >
+          {t.admin.saveSettings}
+        </button>
+        {saved && <span className="text-xs font-medium text-teal">{t.admin.settingsSaved}</span>}
+      </div>
+    </details>
+  )
+}
+
 // ── Edit / create form ───────────────────────────────────────────────────────
 
 function InstrumentForm({
@@ -62,6 +131,7 @@ function InstrumentForm({
   const autofill = async () => {
     setFetching(true)
     setFetchMsg(null)
+    const sym = draft.ticker.trim() || (draft.isin ?? '').trim()
     const res = await fetchInstrumentData({
       ticker: draft.ticker.trim(),
       isin: (draft.isin ?? '').trim(),
@@ -69,11 +139,18 @@ function InstrumentForm({
     })
     setFetching(false)
     if (res.ok) {
+      const n = Object.keys(res.fields).length
       setDraft((d) => ({ ...d, details: { ...d.details, ...res.fields } }))
-      setFetchMsg(t.admin.autofillFilled)
+      setFetchMsg(n > 0 ? t.admin.autofillFilled(n) : t.admin.autofillNotFound(sym))
     } else {
       setFetchMsg(
-        res.reason === 'not_found' ? t.admin.autofillNeedId : t.admin.autofillUnavailable,
+        res.reason === 'no_key'
+          ? t.admin.autofillNoKey
+          : res.reason === 'unsupported'
+            ? t.admin.autofillUnsupported
+            : res.reason === 'network'
+              ? t.admin.autofillNetwork
+              : t.admin.autofillNotFound(sym),
       )
     }
   }
@@ -323,7 +400,9 @@ export default function AdminPage() {
     `σ ${i.sigmaLoad >= 0 ? '+' : ''}${i.sigmaLoad.toFixed(2)} · α ${i.alphaLoad >= 0 ? '+' : ''}${i.alphaLoad.toFixed(2)} · λ ${i.lambdaLoad >= 0 ? '+' : ''}${i.lambdaLoad.toFixed(2)}`
 
   return (
-    <div className="mx-auto w-full max-w-4xl px-6 py-12">
+    <div>
+      <AppNav />
+      <div className="mx-auto w-full max-w-4xl px-6 py-8">
       <AdminNav />
 
       <h1 className="mt-6 text-3xl font-semibold tracking-tight text-text">{t.admin.title}</h1>
@@ -331,6 +410,8 @@ export default function AdminPage() {
       <p className="mt-1 font-mono text-xs text-muted tnum">
         {t.admin.count(shown.length, instruments.length)}
       </p>
+
+      <MarketDataSettings />
 
       {/* Controls */}
       <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -475,6 +556,7 @@ export default function AdminPage() {
           </li>
         ))}
       </ul>
+      </div>
     </div>
   )
 }

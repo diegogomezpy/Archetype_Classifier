@@ -10,6 +10,7 @@ import type { ShapeArchetype, ShapeScores } from '../lib/scoring'
 import type { ArchetypeKey } from '../data/archetypes'
 import { useLang, useT } from '../i18n/i18n'
 import { assetClassLabel, localizedArchetype } from '../i18n/content'
+import AppNav from '../components/AppNav'
 import AdminNav from '../components/AdminNav'
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
@@ -98,7 +99,9 @@ export default function AdminArchetypesPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-4xl px-6 py-12">
+    <div>
+      <AppNav />
+      <div className="mx-auto w-full max-w-4xl px-6 py-8">
       <AdminNav />
 
       <div className="mt-6 flex items-start justify-between gap-4">
@@ -241,6 +244,7 @@ export default function AdminArchetypesPage() {
           })}
         </div>
       </section>
+      </div>
     </div>
   )
 }

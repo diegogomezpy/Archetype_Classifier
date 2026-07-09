@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import IntroScreen, { type StartInfo } from '../components/IntroScreen'
+import AppNav from '../components/AppNav'
 import RoundScreen from '../components/RoundScreen'
 import HalfwayScreen from '../components/HalfwayScreen'
 import ClientResult from '../components/ClientResult'
@@ -123,7 +124,14 @@ export default function TestFlowPage() {
         />
       </div>
 
-      {state === 'intro' && <IntroScreen onStart={start} />}
+      {/* The nav shows on the intro only — once the game starts the client gets
+          a distraction-free screen. */}
+      {state === 'intro' && (
+        <>
+          <AppNav />
+          <IntroScreen onStart={start} />
+        </>
+      )}
 
       {state === 'playing' && (
         <RoundScreen
