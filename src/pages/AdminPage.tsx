@@ -50,6 +50,20 @@ const inputCls =
   'w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm text-text shadow-soft outline-none transition-shadow placeholder:text-muted/60 focus:ring-2 focus:ring-teal/40'
 const labelCls = 'mb-1.5 block text-xs font-medium text-muted'
 
+// Filter-panel styling shared by the Market / Visibility / Category controls.
+const filterGroupLabel = 'font-mono text-[10px] uppercase tracking-wider text-muted'
+const segmentedCls = 'inline-flex rounded-full border border-border bg-surface p-0.5'
+const segBtn = (active: boolean) =>
+  `rounded-full px-3 py-1 text-xs font-medium transition-all ${
+    active ? 'bg-teal/15 text-teal shadow-soft' : 'text-muted hover:text-text'
+  }`
+const chipCls = (active: boolean) =>
+  `flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm transition-all ${
+    active
+      ? 'border-transparent bg-teal/15 font-medium text-teal shadow-soft'
+      : 'border-border bg-surface text-muted hover:text-text'
+  }`
+
 // ── Edit / create form ───────────────────────────────────────────────────────
 
 function InstrumentForm({
@@ -426,27 +440,13 @@ export default function AdminPage() {
         {t.admin.count(shown.length, instruments.length)}
       </p>
 
-      {/* Filters: market (global / local) + actions */}
+      {/* Actions — right-aligned, distinct from the filters below */}
       <div className="mt-6 flex flex-wrap items-center gap-2">
-        <div className="inline-flex rounded-full border border-border bg-surface p-0.5">
-          {(['all', 'global', 'local'] as const).map((r) => (
-            <button
-              key={r}
-              type="button"
-              onClick={() => pickRegion(r)}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${
-                regionFilter === r ? 'bg-teal/15 text-teal shadow-soft' : 'text-muted hover:text-text'
-              }`}
-            >
-              {r === 'all' ? t.admin.visAll : regionLabel(r, lang)}
-            </button>
-          ))}
-        </div>
         {loadMsg && <span className="text-xs font-medium text-teal">{loadMsg}</span>}
         <button
           type="button"
           onClick={loadCadiem}
-          className="ml-auto rounded-full border border-border bg-surface px-3.5 py-1.5 text-sm text-muted transition-colors hover:text-teal"
+          className="ml-auto rounded-full border border-border bg-surface px-3.5 py-1.5 text-sm font-medium text-muted transition-colors hover:text-teal"
         >
           {t.admin.loadCadiem(CADIEM_LOCAL.length)}
         </button>
@@ -462,73 +462,81 @@ export default function AdminPage() {
         </button>
       </div>
 
-      {/* Filters: category (reflects the selected market) */}
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setFilter('all')}
-          className={`rounded-full border px-3.5 py-1.5 text-sm transition-all ${
-            filter === 'all'
-              ? 'border-transparent bg-teal/15 font-medium text-teal shadow-soft'
-              : 'border-border bg-surface text-muted hover:text-text'
-          }`}
-        >
-          {t.admin.filterAll}
-        </button>
-        {filterCats.map((c) => {
-          const catRegion: Region = isLocalCategory(c) ? 'local' : 'global'
-          return (
-            <button
-              key={c}
-              type="button"
-              onClick={() => setFilter(c)}
-              className={`flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm transition-all ${
-                filter === c
-                  ? 'border-transparent bg-teal/15 font-medium text-teal shadow-soft'
-                  : 'border-border bg-surface text-muted hover:text-text'
-              }`}
-            >
-              <span
-                className="h-2 w-2 shrink-0 rounded-full"
-                style={{ backgroundColor: colorForCategory(c, catRegion) }}
-              />
-              {categoryLabel(c, catRegion, lang)}
-            </button>
-          )
-        })}
-      </div>
+      {/* Filter panel — Market · Visibility · Category, grouped and labeled */}
+      <div className="mt-4 rounded-2xl border border-border bg-surface/60 p-4 shadow-soft">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+          <div className="flex items-center gap-2.5">
+            <span className={filterGroupLabel}>{t.admin.region}</span>
+            <div className={segmentedCls}>
+              {(['all', 'global', 'local'] as const).map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => pickRegion(r)}
+                  className={segBtn(regionFilter === r)}
+                >
+                  {r === 'all' ? t.admin.visAll : regionLabel(r, lang)}
+                </button>
+              ))}
+            </div>
+          </div>
 
-      {/* Filters: visibility + bulk delete of the filtered selection */}
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <div className="inline-flex rounded-full border border-border bg-surface p-0.5">
-          {(['all', 'visible', 'hidden'] as const).map((v) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => setVisFilter(v)}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${
-                visFilter === v ? 'bg-teal/15 text-teal shadow-soft' : 'text-muted hover:text-text'
-              }`}
-            >
-              {v === 'all'
-                ? t.admin.visAll
-                : v === 'visible'
-                  ? t.admin.visVisible
-                  : t.admin.visHidden}
-            </button>
-          ))}
+          <div className="flex items-center gap-2.5">
+            <span className={filterGroupLabel}>{t.admin.visibility}</span>
+            <div className={segmentedCls}>
+              {(['all', 'visible', 'hidden'] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setVisFilter(v)}
+                  className={segBtn(visFilter === v)}
+                >
+                  {v === 'all'
+                    ? t.admin.visAll
+                    : v === 'visible'
+                      ? t.admin.visVisible
+                      : t.admin.visHidden}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setConfirmText('')
+              setBulkOpen(true)
+            }}
+            disabled={shown.length === 0}
+            className="ml-auto rounded-full border border-red/40 bg-red/5 px-3.5 py-1.5 text-sm font-medium text-red transition-colors hover:bg-red/10 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {t.admin.deleteFiltered(shown.length)}
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            setConfirmText('')
-            setBulkOpen(true)
-          }}
-          disabled={shown.length === 0}
-          className="ml-auto rounded-full border border-red/40 bg-red/5 px-3.5 py-1.5 text-sm font-medium text-red transition-colors hover:bg-red/10 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {t.admin.deleteFiltered(shown.length)}
-        </button>
+
+        {/* Category chips — reflect the selected market */}
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
+          <span className={`${filterGroupLabel} mr-1`}>{t.admin.category}</span>
+          <button
+            type="button"
+            onClick={() => setFilter('all')}
+            className={chipCls(filter === 'all')}
+          >
+            {t.admin.filterAll}
+          </button>
+          {filterCats.map((c) => {
+            const catRegion: Region = isLocalCategory(c) ? 'local' : 'global'
+            return (
+              <button key={c} type="button" onClick={() => setFilter(c)} className={chipCls(filter === c)}>
+                <span
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: colorForCategory(c, catRegion) }}
+                />
+                {categoryLabel(c, catRegion, lang)}
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       {/* Bulk-delete confirmation — must type the word to arm the button */}

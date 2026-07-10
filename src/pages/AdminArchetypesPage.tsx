@@ -244,16 +244,14 @@ export default function AdminArchetypesPage() {
                   </span>
                 </div>
 
-                <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2.5 sm:grid-cols-3 lg:grid-cols-4">
+                <div className="mt-4 grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2">
                   {ASSET_CLASSES.map((cls) => (
-                    <div key={cls} className="flex items-center gap-2">
+                    <label key={cls} className="flex items-center gap-2.5">
                       <span
-                        className="h-2 w-2 shrink-0 rounded-full"
+                        className="h-2.5 w-2.5 shrink-0 rounded-full"
                         style={{ backgroundColor: ASSET_CLASS_COLORS[cls] }}
                       />
-                      <label className="min-w-0 flex-1 truncate text-xs text-muted">
-                        {assetClassLabel(cls, lang)}
-                      </label>
+                      <span className="flex-1 text-sm text-text">{assetClassLabel(cls, lang)}</span>
                       <input
                         type="number"
                         min={0}
@@ -263,7 +261,8 @@ export default function AdminArchetypesPage() {
                         value={mixDraft[key][cls]}
                         onChange={(e) => setMixCell(key, cls, e.target.value)}
                       />
-                    </div>
+                      <span className="w-3 shrink-0 text-xs text-muted">%</span>
+                    </label>
                   ))}
                 </div>
 
@@ -313,16 +312,14 @@ export default function AdminArchetypesPage() {
                   </span>
                 </div>
 
-                <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2.5 sm:grid-cols-3 lg:grid-cols-5">
+                <div className="mt-4 grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2">
                   {LOCAL_CATEGORIES.map((cat) => (
-                    <div key={cat} className="flex items-center gap-2">
+                    <label key={cat} className="flex items-center gap-2.5">
                       <span
-                        className="h-2 w-2 shrink-0 rounded-full"
+                        className="h-2.5 w-2.5 shrink-0 rounded-full"
                         style={{ backgroundColor: LOCAL_CATEGORY_COLORS[cat] }}
                       />
-                      <label className="min-w-0 flex-1 truncate text-xs text-muted">
-                        {categoryLabel(cat, 'local', lang)}
-                      </label>
+                      <span className="flex-1 text-sm text-text">{categoryLabel(cat, 'local', lang)}</span>
                       <input
                         type="number"
                         min={0}
@@ -332,7 +329,8 @@ export default function AdminArchetypesPage() {
                         value={localMixDraft[key][cat]}
                         onChange={(e) => setLocalMixCell(key, cat, e.target.value)}
                       />
-                    </div>
+                      <span className="w-3 shrink-0 text-xs text-muted">%</span>
+                    </label>
                   ))}
                 </div>
 
