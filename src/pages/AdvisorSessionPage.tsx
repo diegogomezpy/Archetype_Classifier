@@ -74,7 +74,7 @@ export default function AdvisorSessionPage() {
     <div>
       <AppNav />
       {/* Session header bar — advisor navigation, hidden from the print report */}
-      <div className="no-print mx-auto flex w-full max-w-6xl items-center gap-3 px-8 pt-6">
+      <div className="no-print mx-auto flex w-full max-w-5xl items-center gap-3 px-6 pt-6 min-[900px]:px-8">
         <Link
           to={session.clientId ? `/advisor/client/${session.clientId}` : '/advisor'}
           className="text-sm text-muted transition-colors hover:text-text"
