@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react'
-import { ASSET_CLASS_COLORS, type AssetClass } from '../lib/instruments'
+import { colorForCategory, type Category, type Region } from '../lib/instruments'
 import { useLang } from '../i18n/i18n'
-import { assetClassLabel } from '../i18n/content'
+import { categoryLabel } from '../i18n/content'
 
 type Props = {
-  data: { assetClass: AssetClass; pct: number }[]
+  data: { assetClass: Category; pct: number }[]
   size?: number
+  region?: Region
 }
 
-export default function DonutChart({ data, size = 200 }: Props) {
+export default function DonutChart({ data, size = 200, region = 'global' }: Props) {
   const { lang } = useLang()
   const [mounted, setMounted] = useState(false)
   useEffect(() => {
@@ -39,7 +40,7 @@ export default function DonutChart({ data, size = 200 }: Props) {
               cy="60"
               r="42"
               fill="none"
-              stroke={ASSET_CLASS_COLORS[seg.assetClass]}
+              stroke={colorForCategory(seg.assetClass, region)}
               strokeWidth="22"
               pathLength={100}
               strokeDasharray={mounted ? `${seg.pct} ${100 - seg.pct}` : `0 100`}
@@ -57,7 +58,7 @@ export default function DonutChart({ data, size = 200 }: Props) {
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
           <span className="font-mono text-2xl font-medium text-text tnum">{top.pct}%</span>
           <span className="mt-0.5 max-w-[6rem] text-[11px] leading-tight text-muted">
-            {assetClassLabel(top.assetClass, lang)}
+            {categoryLabel(top.assetClass, region, lang)}
           </span>
         </div>
       )}

@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from 'react'
 import { ARCHETYPES, type ArchetypeKey } from '../data/archetypes'
-import { type AssetClass } from './instruments'
+import { type AssetClass, type LocalCategory } from './instruments'
 import {
   SHAPE_VECTORS,
   computeAllocation,
@@ -30,10 +30,15 @@ import { api } from './api'
 // engine can be retuned without a code change.
 
 export type MixSlice = { assetClass: AssetClass; pct: number }
+export type LocalMixSlice = { assetClass: LocalCategory; pct: number }
 
 export type ArchetypeConfig = {
   shapeVectors: Record<ShapeArchetype, ShapeScores>
+  // The GLOBAL model portfolio (across the international asset classes).
   assetMix: Record<ArchetypeKey, MixSlice[]>
+  // The LOCAL model portfolio (across the Cadiem categories). Independent from
+  // the global mix — the advisor dashboard shows both side by side.
+  localAssetMix: Record<ArchetypeKey, LocalMixSlice[]>
 }
 
 // Display order: shape archetypes first, then the two special cases.
@@ -53,8 +58,11 @@ export function archetypeName(key: ArchetypeKey): string {
 
 // ── Normalization ────────────────────────────────────────────────────────────
 // Turn any non-negative weights into integer percentages summing to 100
-// (largest-remainder), sorted desc, zeros dropped.
-export function normalizeMix(weights: { assetClass: AssetClass; pct: number }[]): MixSlice[] {
+// (largest-remainder), sorted desc, zeros dropped. Generic over the category
+// type so it serves both the global (AssetClass) and local (LocalCategory) mix.
+export function normalizeMix<C extends string>(
+  weights: { assetClass: C; pct: number }[],
+): { assetClass: C; pct: number }[] {
   const positive = weights.filter((w) => w.pct > 0)
   const total = positive.reduce((s, w) => s + w.pct, 0)
   if (total <= 0) return []
@@ -94,6 +102,35 @@ export function computeDefaultMix(key: ArchetypeKey, vectors: Record<ShapeArchet
   return computeAllocation(key, vec)
 }
 
+// Default LOCAL model portfolios (across the 5 Cadiem categories). Hand-set per
+// archetype rather than engine-derived — the local menu is bonds/CDs/funds with
+// no game-measured shape, so these are sensible starting mixes the admin retunes
+// on the Archetypes page. Each sums to 100.
+export function seedLocalMix(): Record<ArchetypeKey, LocalMixSlice[]> {
+  const m = (
+    fixed: number,
+    equities: number,
+    cds: number,
+    mutual: number,
+    investment: number,
+  ): LocalMixSlice[] =>
+    normalizeMix<LocalCategory>([
+      { assetClass: 'Fixed income', pct: fixed },
+      { assetClass: 'Equities', pct: equities },
+      { assetClass: 'CDs', pct: cds },
+      { assetClass: 'Mutual funds', pct: mutual },
+      { assetClass: 'Investment funds', pct: investment },
+    ])
+  return {
+    //         Fixed  Equ  CDs  Mut  Inv
+    banker: m(30, 5, 30, 25, 10), // capital preservation
+    venture: m(20, 40, 5, 10, 25), // growth / risk-on
+    insurer: m(45, 5, 20, 15, 15), // steady income
+    quant: m(55, 30, 0, 5, 10), // concentrated, EV-disciplined
+    indexer: m(30, 20, 15, 20, 15), // broad, balanced
+  }
+}
+
 export function seedConfig(): ArchetypeConfig {
   const shapeVectors: Record<ShapeArchetype, ShapeScores> = {
     banker: { ...SHAPE_VECTORS.banker },
@@ -102,7 +139,7 @@ export function seedConfig(): ArchetypeConfig {
   }
   const assetMix = {} as Record<ArchetypeKey, MixSlice[]>
   for (const key of ARCHETYPE_ORDER) assetMix[key] = computeDefaultMix(key, shapeVectors)
-  return { shapeVectors, assetMix }
+  return { shapeVectors, assetMix, localAssetMix: seedLocalMix() }
 }
 
 // ── React context (backend-API backed) ──────────────────────────────────────
@@ -111,7 +148,8 @@ type ArchetypeConfigContextValue = {
   config: ArchetypeConfig
   setShapeVectors: (vectors: Record<ShapeArchetype, ShapeScores>) => void
   setAssetMix: (key: ArchetypeKey, mix: MixSlice[]) => void
-  /** Regenerate one archetype's mix from the engine using the live vectors. */
+  setLocalAssetMix: (key: ArchetypeKey, mix: LocalMixSlice[]) => void
+  /** Regenerate one archetype's global mix from the engine using the live vectors. */
   recomputeMix: (key: ArchetypeKey) => MixSlice[]
   reset: () => void
 }
@@ -120,6 +158,7 @@ const ArchetypeConfigContext = createContext<ArchetypeConfigContextValue>({
   config: seedConfig(),
   setShapeVectors: () => {},
   setAssetMix: () => {},
+  setLocalAssetMix: () => {},
   recomputeMix: () => [],
   reset: () => {},
 })
@@ -130,6 +169,7 @@ function mergeWithSeed(partial: Partial<ArchetypeConfig> | null): ArchetypeConfi
   return {
     shapeVectors: { ...seed.shapeVectors, ...(partial.shapeVectors ?? {}) },
     assetMix: { ...seed.assetMix, ...(partial.assetMix ?? {}) },
+    localAssetMix: { ...seed.localAssetMix, ...(partial.localAssetMix ?? {}) },
   }
 }
 
@@ -179,6 +219,8 @@ export function ArchetypeConfigProvider({ children }: { children: ReactNode }) {
       setShapeVectors: (vectors) => persist({ ...config, shapeVectors: vectors }),
       setAssetMix: (key, mix) =>
         persist({ ...config, assetMix: { ...config.assetMix, [key]: mix } }),
+      setLocalAssetMix: (key, mix) =>
+        persist({ ...config, localAssetMix: { ...config.localAssetMix, [key]: mix } }),
       recomputeMix: (key) => computeDefaultMix(key, config.shapeVectors),
       reset: () => persist(seedConfig()),
     }),

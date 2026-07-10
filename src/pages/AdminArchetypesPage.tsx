@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'react'
-import { ASSET_CLASSES, ASSET_CLASS_COLORS, type AssetClass } from '../lib/instruments'
+import {
+  ASSET_CLASSES,
+  ASSET_CLASS_COLORS,
+  LOCAL_CATEGORIES,
+  LOCAL_CATEGORY_COLORS,
+  type AssetClass,
+  type LocalCategory,
+} from '../lib/instruments'
 import {
   ARCHETYPE_ORDER,
   SHAPE_ARCHETYPES,
@@ -9,7 +16,7 @@ import {
 import type { ShapeArchetype, ShapeScores } from '../lib/scoring'
 import type { ArchetypeKey } from '../data/archetypes'
 import { useLang, useT } from '../i18n/i18n'
-import { assetClassLabel, localizedArchetype } from '../i18n/content'
+import { assetClassLabel, categoryLabel, localizedArchetype } from '../i18n/content'
 import AppNav from '../components/AppNav'
 import AdminNav from '../components/AdminNav'
 
@@ -24,6 +31,7 @@ const numInput =
 
 type VectorDraft = Record<ShapeArchetype, ShapeScores>
 type MixDraft = Record<ArchetypeKey, Record<AssetClass, string>>
+type LocalMixDraft = Record<ArchetypeKey, Record<LocalCategory, string>>
 
 function buildMixDraft(assetMix: ReturnType<typeof useArchetypeConfig>['config']['assetMix']): MixDraft {
   const out = {} as MixDraft
@@ -39,17 +47,38 @@ function buildMixDraft(assetMix: ReturnType<typeof useArchetypeConfig>['config']
   return out
 }
 
+function buildLocalMixDraft(
+  localMix: ReturnType<typeof useArchetypeConfig>['config']['localAssetMix'],
+): LocalMixDraft {
+  const out = {} as LocalMixDraft
+  for (const key of ARCHETYPE_ORDER) {
+    const row = {} as Record<LocalCategory, string>
+    const slices = localMix[key] ?? []
+    for (const cat of LOCAL_CATEGORIES) {
+      const found = slices.find((s) => s.assetClass === cat)
+      row[cat] = found ? String(found.pct) : '0'
+    }
+    out[key] = row
+  }
+  return out
+}
+
 export default function AdminArchetypesPage() {
   const t = useT()
   const { lang } = useLang()
-  const { config, setShapeVectors, setAssetMix, recomputeMix, reset } = useArchetypeConfig()
+  const { config, setShapeVectors, setAssetMix, setLocalAssetMix, recomputeMix, reset } =
+    useArchetypeConfig()
 
   const [vectorDraft, setVectorDraft] = useState<VectorDraft>(config.shapeVectors)
   const [mixDraft, setMixDraft] = useState<MixDraft>(() => buildMixDraft(config.assetMix))
+  const [localMixDraft, setLocalMixDraft] = useState<LocalMixDraft>(() =>
+    buildLocalMixDraft(config.localAssetMix),
+  )
 
   // Resync drafts whenever the persisted config changes (async load, save, reset).
   useEffect(() => setVectorDraft(config.shapeVectors), [config.shapeVectors])
   useEffect(() => setMixDraft(buildMixDraft(config.assetMix)), [config.assetMix])
+  useEffect(() => setLocalMixDraft(buildLocalMixDraft(config.localAssetMix)), [config.localAssetMix])
 
   const setAxis = (key: ShapeArchetype, axis: keyof ShapeScores, value: string) =>
     setVectorDraft((d) => ({ ...d, [key]: { ...d[key], [axis]: parseNum(value) } }))
@@ -92,6 +121,23 @@ export default function AdminArchetypesPage() {
       }
       return { ...d, [key]: row }
     })
+  }
+
+  // ── Local model mix (across the Cadiem categories) ──
+  const setLocalMixCell = (key: ArchetypeKey, cat: LocalCategory, value: string) =>
+    setLocalMixDraft((d) => ({ ...d, [key]: { ...d[key], [cat]: value } }))
+
+  const localMixTotal = (key: ArchetypeKey) =>
+    LOCAL_CATEGORIES.reduce((s, cat) => s + Math.max(0, parseNum(localMixDraft[key][cat])), 0)
+
+  const saveLocalMix = (key: ArchetypeKey) => {
+    const weights = LOCAL_CATEGORIES.map((cat) => ({
+      assetClass: cat,
+      pct: Math.max(0, parseNum(localMixDraft[key][cat])),
+    }))
+    const normalized = normalizeMix<LocalCategory>(weights)
+    if (normalized.length === 0) return
+    setLocalAssetMix(key, normalized)
   }
 
   const handleReset = () => {
@@ -236,6 +282,68 @@ export default function AdminArchetypesPage() {
                     className="rounded-xl px-4 py-2 text-sm font-medium text-muted transition-colors hover:text-text"
                   >
                     {t.adminArch.recompute}
+                  </button>
+                  {empty && <span className="text-xs text-red">{t.adminArch.sumWarning}</span>}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </section>
+
+      {/* ── Section 3: LOCAL model mix (Cadiem categories) ──────────────────── */}
+      <section className="mt-14">
+        <h2 className="font-mono text-xs uppercase tracking-[0.14em] text-muted">
+          {t.adminArch.localMixTitle}
+        </h2>
+        <p className="mt-2 max-w-2xl text-sm text-muted">{t.adminArch.localMixHint}</p>
+
+        <div className="mt-5 space-y-4">
+          {ARCHETYPE_ORDER.map((key) => {
+            const total = localMixTotal(key)
+            const empty = total <= 0
+            return (
+              <div key={key} className="rounded-2xl border border-border bg-surface p-5 shadow-soft">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-semibold text-text">
+                    {localizedArchetype(key, lang).name}
+                  </h3>
+                  <span className={`font-mono text-xs tnum ${empty ? 'text-red' : 'text-muted'}`}>
+                    {t.adminArch.total}: {total}
+                  </span>
+                </div>
+
+                <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2.5 sm:grid-cols-3 lg:grid-cols-5">
+                  {LOCAL_CATEGORIES.map((cat) => (
+                    <div key={cat} className="flex items-center gap-2">
+                      <span
+                        className="h-2 w-2 shrink-0 rounded-full"
+                        style={{ backgroundColor: LOCAL_CATEGORY_COLORS[cat] }}
+                      />
+                      <label className="min-w-0 flex-1 truncate text-xs text-muted">
+                        {categoryLabel(cat, 'local', lang)}
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        aria-label={`${localizedArchetype(key, lang).name} — ${categoryLabel(cat, 'local', lang)}`}
+                        className={`${numInput} w-16 text-right`}
+                        value={localMixDraft[key][cat]}
+                        onChange={(e) => setLocalMixCell(key, cat, e.target.value)}
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-4 flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => saveLocalMix(key)}
+                    disabled={empty}
+                    className="rounded-xl bg-teal px-5 py-2 text-sm font-semibold text-white shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {t.adminArch.save}
                   </button>
                   {empty && <span className="text-xs text-red">{t.adminArch.sumWarning}</span>}
                 </div>

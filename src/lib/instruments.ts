@@ -7,10 +7,32 @@ export type AssetClass =
   | 'Crypto'
   | 'Cash/MMF'
 
+// ---------------------------------------------------------------------------
+// Region: global (international markets) vs local (Paraguayan / Cadiem menu)
+// ---------------------------------------------------------------------------
+// Every instrument belongs to exactly one region. The two are classified and
+// allocated independently — the advisor dashboard shows a Global portfolio AND
+// a Local portfolio. Global instruments are organized by the AssetClass classes
+// above; local ones by the LocalCategory set below.
+export type Region = 'global' | 'local'
+
+export type LocalCategory =
+  | 'Equities'
+  | 'Fixed income'
+  | 'CDs'
+  | 'Mutual funds'
+  | 'Investment funds'
+
+// A category is region-specific: an AssetClass for global, a LocalCategory for
+// local. 'Equities' and 'Fixed income' exist in both, so the region always
+// disambiguates which taxonomy (and palette) applies.
+export type Category = AssetClass | LocalCategory
+
 export interface Instrument {
   name: string
   ticker: string
-  assetClass: AssetClass
+  region?: Region // defaults to 'global' when absent
+  assetClass: Category
   sigmaLoad: number
   alphaLoad: number
   lambdaLoad: number
@@ -28,6 +50,14 @@ export const ASSET_CLASSES: AssetClass[] = [
   'Cash/MMF',
 ]
 
+export const LOCAL_CATEGORIES: LocalCategory[] = [
+  'Fixed income',
+  'Equities',
+  'CDs',
+  'Mutual funds',
+  'Investment funds',
+]
+
 export const ASSET_CLASS_COLORS: Record<AssetClass, string> = {
   'Fixed income': '#378ADD',
   Equities: '#00C9A7',
@@ -36,6 +66,30 @@ export const ASSET_CLASS_COLORS: Record<AssetClass, string> = {
   Alternatives: '#E67E22',
   Crypto: '#E05C5C',
   'Cash/MMF': '#8A8D99',
+}
+
+export const LOCAL_CATEGORY_COLORS: Record<LocalCategory, string> = {
+  'Fixed income': '#378ADD',
+  Equities: '#00C9A7',
+  CDs: '#8A8D99',
+  'Mutual funds': '#C9933A',
+  'Investment funds': '#9B59B6',
+}
+
+const LOCAL_CATEGORY_SET = new Set<string>(LOCAL_CATEGORIES)
+export function isLocalCategory(c: string): c is LocalCategory {
+  return LOCAL_CATEGORY_SET.has(c)
+}
+
+/** The categories that make up a region's taxonomy. */
+export function categoriesForRegion(region: Region): Category[] {
+  return region === 'local' ? LOCAL_CATEGORIES : ASSET_CLASSES
+}
+
+/** Swatch color for a category, using the right palette for the region. */
+export function colorForCategory(category: Category, region: Region = 'global'): string {
+  if (region === 'local') return LOCAL_CATEGORY_COLORS[category as LocalCategory] ?? '#8A8D99'
+  return ASSET_CLASS_COLORS[category as AssetClass] ?? '#8A8D99'
 }
 
 // Field derivation (documentation only):

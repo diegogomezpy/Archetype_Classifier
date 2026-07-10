@@ -6,7 +6,14 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { INSTRUMENTS, type AssetClass, type Instrument } from './instruments'
+import {
+  INSTRUMENTS,
+  type AssetClass,
+  type Category,
+  type Instrument,
+  type LocalCategory,
+  type Region,
+} from './instruments'
 import { SEED_DETAILS } from '../data/instrumentDetails'
 import { api } from './api'
 
@@ -125,6 +132,83 @@ export const ASSET_FIELD_SPECS: Record<AssetClass, FieldSpec[]> = {
   ],
 }
 
+// ── Per-local-category information schema ───────────────────────────────────
+// Local (Cadiem) instruments carry the fields the bulletin publishes: issuer,
+// rating, estimated yield, coupon frequency, maturity, currency, minimum, etc.
+const ISSUER: FieldSpec = { key: 'issuer', en: 'Issuer', es: 'Emisor' }
+const RATING: FieldSpec = { key: 'rating', en: 'Credit rating', es: 'Calificación' }
+const CURRENCY: FieldSpec = { key: 'currency', en: 'Currency', es: 'Moneda' }
+
+export const LOCAL_FIELD_SPECS: Record<LocalCategory, FieldSpec[]> = {
+  'Fixed income': [
+    DESCRIPTION,
+    ISSUER,
+    RATING,
+    { key: 'estYield', en: 'Estimated yield (%)', es: 'Rendimiento estimado (%)' },
+    { key: 'couponFrequency', en: 'Interest payment', es: 'Pago de intereses' },
+    { key: 'maturity', en: 'Maturity', es: 'Vencimiento' },
+    { key: 'residualYears', en: 'Residual term (years)', es: 'Plazo residual (años)' },
+    { key: 'available', en: 'Amount available', es: 'Disponibilidad' },
+    CURRENCY,
+    AS_OF,
+  ],
+  CDs: [
+    DESCRIPTION,
+    ISSUER,
+    RATING,
+    { key: 'estYield', en: 'Estimated yield (%)', es: 'Rendimiento estimado (%)' },
+    { key: 'couponFrequency', en: 'Interest payment', es: 'Pago de intereses' },
+    { key: 'maturity', en: 'Maturity', es: 'Vencimiento' },
+    { key: 'residualYears', en: 'Residual term (years)', es: 'Plazo residual (años)' },
+    { key: 'cuts', en: 'Cuts', es: 'Cantidad de cortes' },
+    CURRENCY,
+    AS_OF,
+  ],
+  Equities: [
+    DESCRIPTION,
+    ISSUER,
+    RATING,
+    { key: 'shareClass', en: 'Class', es: 'Clase' },
+    { key: 'shareType', en: 'Share type', es: 'Tipo de acción' },
+    { key: 'estYield', en: 'Estimated yield (%)', es: 'Rendimiento estimado (%)' },
+    { key: 'price', en: 'Price', es: 'Precio' },
+    { key: 'available', en: 'Amount available', es: 'Disponibilidad' },
+    CURRENCY,
+    AS_OF,
+  ],
+  'Mutual funds': [
+    DESCRIPTION,
+    { key: 'fundManager', en: 'Manager', es: 'Administradora' },
+    RATING,
+    { key: 'estYield', en: 'Estimated return (%)', es: 'Rendimiento estimado (%)' },
+    { key: 'horizon', en: 'Horizon', es: 'Horizonte' },
+    { key: 'dividendPayment', en: 'Income payment', es: 'Pago de rendimientos' },
+    { key: 'redemption', en: 'Redemption', es: 'Pago de rescates' },
+    { key: 'minInvestment', en: 'Minimum investment', es: 'Inversión mínima' },
+    CURRENCY,
+    AS_OF,
+  ],
+  'Investment funds': [
+    DESCRIPTION,
+    { key: 'fundManager', en: 'Manager', es: 'Administradora' },
+    { key: 'estYield', en: 'Estimated return (%)', es: 'Rendimiento estimado (%)' },
+    { key: 'dividendPayment', en: 'Dividend payment', es: 'Pago de dividendos' },
+    { key: 'shareValue', en: 'Share value', es: 'Valor cuota' },
+    { key: 'saleValue', en: 'Sale value', es: 'Valor de venta' },
+    { key: 'term', en: 'Term', es: 'Plazo' },
+    { key: 'minInvestment', en: 'Minimum investment', es: 'Inversión mínima' },
+    CURRENCY,
+    AS_OF,
+  ],
+}
+
+/** The detail-field schema for an instrument, by region + category. */
+export function fieldSpecsFor(region: Region, category: Category): FieldSpec[] {
+  return region === 'local'
+    ? LOCAL_FIELD_SPECS[category as LocalCategory] ?? []
+    : ASSET_FIELD_SPECS[category as AssetClass] ?? []
+}
+
 // ── Autofill coverage ────────────────────────────────────────────────────────
 // Which detail fields the "Fetch data" autofill can populate, per asset class.
 // This MUST track what the server actually returns (see server/src/marketData.ts):
@@ -139,10 +223,15 @@ export const FETCHABLE_FIELDS: Partial<Record<AssetClass, string[]>> = {
   Crypto: ['lastPrice', 'change1Y', 'marketCap', 'avgVolume', 'impliedVol3m', 'asOf'],
 }
 
-/** True if this asset class has any market-data autofill source. */
-export const supportsFetch = (ac: AssetClass): boolean => (FETCHABLE_FIELDS[ac]?.length ?? 0) > 0
+// Autofill is a global-only capability — there's no market-data feed for the
+// local Cadiem instruments, so both helpers take the region and return "none"
+// for local regardless of the category name (local 'Equities' isn't fetchable).
+/** True if this instrument's class has a market-data autofill source. */
+export const supportsFetch = (category: Category, region: Region = 'global'): boolean =>
+  region === 'global' && (FETCHABLE_FIELDS[category as AssetClass]?.length ?? 0) > 0
 /** The set of detail keys Fetch can fill for this class (empty if none). */
-export const fetchableFields = (ac: AssetClass): Set<string> => new Set(FETCHABLE_FIELDS[ac] ?? [])
+export const fetchableFields = (category: Category, region: Region = 'global'): Set<string> =>
+  new Set(region === 'global' ? FETCHABLE_FIELDS[category as AssetClass] ?? [] : [])
 
 // ── Seeding ──────────────────────────────────────────────────────────────────
 
@@ -177,6 +266,8 @@ type CatalogContextValue = {
   remove: (id: string) => void
   /** Delete many by id in one go (used by the admin's bulk "delete filtered"). */
   removeMany: (ids: string[]) => void
+  /** Insert or replace many by id in one go (used to load the Cadiem menu). */
+  addMany: (items: ManagedInstrument[]) => void
 }
 
 const CatalogContext = createContext<CatalogContextValue>({
@@ -185,6 +276,7 @@ const CatalogContext = createContext<CatalogContextValue>({
   upsert: () => {},
   remove: () => {},
   removeMany: () => {},
+  addMany: () => {},
 })
 
 export function CatalogProvider({ children }: { children: ReactNode }) {
@@ -232,6 +324,14 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
         setInstruments((prev) => prev.filter((i) => !drop.has(i.id)))
         void Promise.all(
           ids.map((id) => api.del(`/catalog/${id}`).catch((e) => console.warn('catalog delete:', id, e))),
+        )
+      },
+      addMany: (items) => {
+        const stamped = items.map((it) => ({ ...it, updatedAt: new Date().toISOString() }))
+        const ids = new Set(stamped.map((it) => it.id))
+        setInstruments((prev) => [...prev.filter((i) => !ids.has(i.id)), ...stamped])
+        void Promise.all(
+          stamped.map((it) => api.put(`/catalog/${it.id}`, it).catch((e) => console.warn('catalog add:', it.id, e))),
         )
       },
     }),

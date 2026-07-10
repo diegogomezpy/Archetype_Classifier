@@ -1,7 +1,7 @@
 import type { AllocRound } from '../types'
 import type { Lang } from './i18n'
 import { ARCHETYPES, type Archetype, type ArchetypeKey } from '../data/archetypes'
-import type { AssetClass } from '../lib/instruments'
+import type { AssetClass, Category, LocalCategory, Region } from '../lib/instruments'
 
 // ---------------------------------------------------------------------------
 // Content translations. English lives in the data files (the source of truth
@@ -164,4 +164,37 @@ const ASSET_CLASS_ES: Record<AssetClass, string> = {
 
 export function assetClassLabel(cls: AssetClass, lang: Lang): string {
   return lang === 'es' ? ASSET_CLASS_ES[cls] : cls
+}
+
+// Local (Cadiem) categories — English identifiers, Spanish display labels.
+const LOCAL_CATEGORY_EN: Record<LocalCategory, string> = {
+  'Fixed income': 'Fixed income',
+  Equities: 'Equities',
+  CDs: 'CDs',
+  'Mutual funds': 'Mutual funds',
+  'Investment funds': 'Investment funds',
+}
+const LOCAL_CATEGORY_ES: Record<LocalCategory, string> = {
+  'Fixed income': 'Renta fija',
+  Equities: 'Acciones',
+  CDs: 'CDA',
+  'Mutual funds': 'Fondos mutuos',
+  'Investment funds': 'Fondos de inversión',
+}
+
+/** Localized label for any category, using the region's taxonomy. */
+export function categoryLabel(category: Category, region: Region, lang: Lang): string {
+  if (region === 'local') {
+    const c = category as LocalCategory
+    return lang === 'es' ? LOCAL_CATEGORY_ES[c] : LOCAL_CATEGORY_EN[c]
+  }
+  return assetClassLabel(category as AssetClass, lang)
+}
+
+const REGION_LABELS: Record<Region, { en: string; es: string }> = {
+  global: { en: 'Global', es: 'Global' },
+  local: { en: 'Local', es: 'Local' },
+}
+export function regionLabel(region: Region, lang: Lang): string {
+  return lang === 'es' ? REGION_LABELS[region].es : REGION_LABELS[region].en
 }

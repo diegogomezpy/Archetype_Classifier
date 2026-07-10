@@ -1,17 +1,27 @@
 import { useMemo, useState } from 'react'
-import { ASSET_CLASSES, ASSET_CLASS_COLORS, type AssetClass } from '../lib/instruments'
 import {
-  ASSET_FIELD_SPECS,
+  categoriesForRegion,
+  colorForCategory,
+  isLocalCategory,
+  type AssetClass,
+  type Category,
+  type Region,
+} from '../lib/instruments'
+import {
   fetchableFields,
+  fieldSpecsFor,
   supportsFetch,
   useCatalog,
   type ManagedInstrument,
 } from '../lib/catalog'
+import { CADIEM_LOCAL } from '../data/cadiemLocal'
 import { fetchInstrumentData } from '../lib/marketData'
 import { useLang, useT } from '../i18n/i18n'
-import { assetClassLabel } from '../i18n/content'
+import { categoryLabel, regionLabel } from '../i18n/content'
 import AppNav from '../components/AppNav'
 import AdminNav from '../components/AdminNav'
+
+const REGIONS: Region[] = ['global', 'local']
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
 
@@ -23,6 +33,7 @@ function newInstrument(): ManagedInstrument {
         : `inst_${Date.now().toString(36)}`,
     name: '',
     ticker: '',
+    region: 'global',
     assetClass: 'Equities',
     sigmaLoad: 0,
     alphaLoad: 0,
@@ -56,8 +67,15 @@ function InstrumentForm({
   const [fetching, setFetching] = useState(false)
   const [fetchMsg, setFetchMsg] = useState<string | null>(null)
 
+  const region: Region = draft.region ?? 'global'
+
   const set = <K extends keyof ManagedInstrument>(key: K, value: ManagedInstrument[K]) =>
     setDraft((d) => ({ ...d, [key]: value }))
+
+  // Switching region moves the instrument into the other taxonomy — reset the
+  // category to that region's first one so it's always valid.
+  const setRegion = (r: Region) =>
+    setDraft((d) => ({ ...d, region: r, assetClass: categoriesForRegion(r)[0] }))
 
   // Autofill the detail sheet from live market data (ticker/ISIN). The backend
   // fetches from Yahoo Finance (equities) or CoinGecko + Deribit (crypto).
@@ -68,7 +86,7 @@ function InstrumentForm({
     const res = await fetchInstrumentData({
       ticker: draft.ticker.trim(),
       isin: (draft.isin ?? '').trim(),
-      assetClass: draft.assetClass,
+      assetClass: draft.assetClass as AssetClass,
     })
     setFetching(false)
     if (res.ok) {
@@ -92,8 +110,8 @@ function InstrumentForm({
     return Number.isFinite(n) ? n : fallback
   }
 
-  const specs = ASSET_FIELD_SPECS[draft.assetClass]
-  const fetchSet = fetchableFields(draft.assetClass)
+  const specs = fieldSpecsFor(region, draft.assetClass)
+  const fetchSet = fetchableFields(draft.assetClass, region)
 
   const save = () => {
     if (!draft.name.trim()) return
@@ -142,21 +160,35 @@ function InstrumentForm({
           />
         </div>
         <div>
+          <label className={labelCls}>{t.admin.region}</label>
+          <select
+            className={inputCls}
+            value={region}
+            onChange={(e) => setRegion(e.target.value as Region)}
+          >
+            {REGIONS.map((r) => (
+              <option key={r} value={r}>
+                {regionLabel(r, lang)}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
           <label className={labelCls}>{t.admin.assetClass}</label>
           <select
             className={inputCls}
             value={draft.assetClass}
-            onChange={(e) => set('assetClass', e.target.value as AssetClass)}
+            onChange={(e) => set('assetClass', e.target.value as Category)}
           >
-            {ASSET_CLASSES.map((c) => (
+            {categoriesForRegion(region).map((c) => (
               <option key={c} value={c}>
-                {assetClassLabel(c, lang)}
+                {categoryLabel(c, region, lang)}
               </option>
             ))}
           </select>
         </div>
         {/* Autofill from a market-data source — only for classes that have one. */}
-        {supportsFetch(draft.assetClass) && (
+        {supportsFetch(draft.assetClass, region) && (
           <div className="flex items-center gap-3 sm:col-span-2">
             <button
               type="button"
@@ -317,23 +349,50 @@ function InstrumentForm({
 export default function AdminPage() {
   const t = useT()
   const { lang } = useLang()
-  const { instruments, upsert, remove, removeMany } = useCatalog()
-  const [filter, setFilter] = useState<AssetClass | 'all'>('all')
+  const { instruments, upsert, remove, removeMany, addMany } = useCatalog()
+  const [regionFilter, setRegionFilter] = useState<Region | 'all'>('all')
+  const [filter, setFilter] = useState<Category | 'all'>('all')
   const [visFilter, setVisFilter] = useState<'all' | 'visible' | 'hidden'>('all')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
   const [bulkOpen, setBulkOpen] = useState(false)
   const [confirmText, setConfirmText] = useState('')
+  const [loadMsg, setLoadMsg] = useState<string | null>(null)
 
   const shown = useMemo(
     () =>
-      instruments.filter(
-        (i) =>
+      instruments.filter((i) => {
+        const region = i.region ?? 'global'
+        return (
+          (regionFilter === 'all' || region === regionFilter) &&
           (filter === 'all' || i.assetClass === filter) &&
-          (visFilter === 'all' || (visFilter === 'visible' ? i.visible : !i.visible)),
-      ),
-    [instruments, filter, visFilter],
+          (visFilter === 'all' || (visFilter === 'visible' ? i.visible : !i.visible))
+        )
+      }),
+    [instruments, regionFilter, filter, visFilter],
   )
+
+  // Category chips reflect the selected market; 'all' shows the union (local-only
+  // categories appended after the global ones).
+  const globalCats = categoriesForRegion('global')
+  const filterCats: Category[] =
+    regionFilter === 'all'
+      ? [...globalCats, ...categoriesForRegion('local').filter((c) => !(globalCats as string[]).includes(c))]
+      : categoriesForRegion(regionFilter)
+
+  const pickRegion = (r: Region | 'all') => {
+    setRegionFilter(r)
+    // Drop a class filter that no longer belongs to the chosen market.
+    if (r !== 'all' && filter !== 'all' && !(categoriesForRegion(r) as string[]).includes(filter)) {
+      setFilter('all')
+    }
+  }
+
+  const loadCadiem = () => {
+    addMany(CADIEM_LOCAL)
+    setLoadMsg(t.admin.loadCadiemDone(CADIEM_LOCAL.length))
+    window.setTimeout(() => setLoadMsg(null), 2500)
+  }
 
   const handleDelete = (inst: ManagedInstrument) => {
     if (!window.confirm(t.admin.deleteConfirm(inst.name))) return
@@ -367,8 +426,44 @@ export default function AdminPage() {
         {t.admin.count(shown.length, instruments.length)}
       </p>
 
-      {/* Filters: asset class */}
+      {/* Filters: market (global / local) + actions */}
       <div className="mt-6 flex flex-wrap items-center gap-2">
+        <div className="inline-flex rounded-full border border-border bg-surface p-0.5">
+          {(['all', 'global', 'local'] as const).map((r) => (
+            <button
+              key={r}
+              type="button"
+              onClick={() => pickRegion(r)}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${
+                regionFilter === r ? 'bg-teal/15 text-teal shadow-soft' : 'text-muted hover:text-text'
+              }`}
+            >
+              {r === 'all' ? t.admin.visAll : regionLabel(r, lang)}
+            </button>
+          ))}
+        </div>
+        {loadMsg && <span className="text-xs font-medium text-teal">{loadMsg}</span>}
+        <button
+          type="button"
+          onClick={loadCadiem}
+          className="ml-auto rounded-full border border-border bg-surface px-3.5 py-1.5 text-sm text-muted transition-colors hover:text-teal"
+        >
+          {t.admin.loadCadiem(CADIEM_LOCAL.length)}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setAdding(true)
+            setEditingId(null)
+          }}
+          className="rounded-full bg-teal px-4 py-1.5 text-sm font-semibold text-white shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card"
+        >
+          + {t.admin.add}
+        </button>
+      </div>
+
+      {/* Filters: category (reflects the selected market) */}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={() => setFilter('all')}
@@ -380,34 +475,27 @@ export default function AdminPage() {
         >
           {t.admin.filterAll}
         </button>
-        {ASSET_CLASSES.map((c) => (
-          <button
-            key={c}
-            type="button"
-            onClick={() => setFilter(c)}
-            className={`flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm transition-all ${
-              filter === c
-                ? 'border-transparent bg-teal/15 font-medium text-teal shadow-soft'
-                : 'border-border bg-surface text-muted hover:text-text'
-            }`}
-          >
-            <span
-              className="h-2 w-2 shrink-0 rounded-full"
-              style={{ backgroundColor: ASSET_CLASS_COLORS[c] }}
-            />
-            {assetClassLabel(c, lang)}
-          </button>
-        ))}
-        <button
-          type="button"
-          onClick={() => {
-            setAdding(true)
-            setEditingId(null)
-          }}
-          className="ml-auto rounded-full bg-teal px-4 py-1.5 text-sm font-semibold text-white shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card"
-        >
-          + {t.admin.add}
-        </button>
+        {filterCats.map((c) => {
+          const catRegion: Region = isLocalCategory(c) ? 'local' : 'global'
+          return (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setFilter(c)}
+              className={`flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm transition-all ${
+                filter === c
+                  ? 'border-transparent bg-teal/15 font-medium text-teal shadow-soft'
+                  : 'border-border bg-surface text-muted hover:text-text'
+              }`}
+            >
+              <span
+                className="h-2 w-2 shrink-0 rounded-full"
+                style={{ backgroundColor: colorForCategory(c, catRegion) }}
+              />
+              {categoryLabel(c, catRegion, lang)}
+            </button>
+          )
+        })}
       </div>
 
       {/* Filters: visibility + bulk delete of the filtered selection */}
@@ -517,12 +605,17 @@ export default function AdminPage() {
               />
               <span
                 className="h-2.5 w-2.5 shrink-0 rounded-full"
-                style={{ backgroundColor: ASSET_CLASS_COLORS[inst.assetClass] }}
+                style={{ backgroundColor: colorForCategory(inst.assetClass, inst.region ?? 'global') }}
               />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="truncate text-sm font-medium text-text">{inst.name}</span>
                   <span className="shrink-0 font-mono text-xs text-muted">{inst.ticker}</span>
+                  {(inst.region ?? 'global') === 'local' && (
+                    <span className="shrink-0 rounded-md bg-amber/12 px-1.5 py-0.5 text-[10px] font-medium text-amber">
+                      {regionLabel('local', lang)}
+                    </span>
+                  )}
                   {inst.emphasized && (
                     <span className="shrink-0 rounded-md bg-teal/12 px-1.5 py-0.5 text-[10px] font-medium text-teal">
                       {t.admin.emphasized}
@@ -535,7 +628,7 @@ export default function AdminPage() {
                   )}
                 </div>
                 <p className="mt-0.5 truncate font-mono text-[11px] text-muted tnum">
-                  {assetClassLabel(inst.assetClass, lang)} · {vec(inst)}
+                  {categoryLabel(inst.assetClass, inst.region ?? 'global', lang)} · {vec(inst)}
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-1">

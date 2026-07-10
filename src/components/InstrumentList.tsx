@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { ASSET_CLASS_COLORS } from '../lib/instruments'
-import { ASSET_FIELD_SPECS, type ManagedInstrument } from '../lib/catalog'
+import { colorForCategory } from '../lib/instruments'
+import { fieldSpecsFor, type ManagedInstrument } from '../lib/catalog'
 import { useLang, useT } from '../i18n/i18n'
 
 type Props = {
@@ -18,9 +18,10 @@ export default function InstrumentList({ instruments }: Props) {
   return (
     <ul className="divide-y divide-border">
       {instruments.map((inst, i) => {
-        const color = ASSET_CLASS_COLORS[inst.assetClass]
+        const region = inst.region ?? 'global'
+        const color = colorForCategory(inst.assetClass, region)
         const expanded = expandedId === inst.id
-        const specs = ASSET_FIELD_SPECS[inst.assetClass]
+        const specs = fieldSpecsFor(region, inst.assetClass)
         const description = inst.details.description
         const filled = specs.filter(
           (s) => s.key !== 'description' && (inst.details[s.key] ?? '').trim() !== '',

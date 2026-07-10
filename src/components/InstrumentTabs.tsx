@@ -1,16 +1,18 @@
 import { useMemo, useState } from 'react'
-import { ASSET_CLASS_COLORS, type AssetClass } from '../lib/instruments'
+import { colorForCategory, type Category, type Region } from '../lib/instruments'
 import { computeFitScore } from '../lib/scoring'
 import type { NormalizedScores } from '../lib/scoring'
 import { useCatalog, type ManagedInstrument } from '../lib/catalog'
 import { useLang, useT } from '../i18n/i18n'
-import { assetClassLabel } from '../i18n/content'
+import { categoryLabel } from '../i18n/content'
 import InstrumentList from './InstrumentList'
 
 type Props = {
   /** Allocation slices (pct > 0), already sorted by weight desc. */
-  allocation: { assetClass: AssetClass; pct: number }[]
+  allocation: { assetClass: Category; pct: number }[]
   scores: NormalizedScores
+  /** Which universe to draw instruments from (global vs local). */
+  region?: Region
   /** Max instruments shown per asset-class tab. Defaults to all (no cap). */
   perClassLimit?: number
 }
@@ -22,33 +24,39 @@ function hexAlpha(hex: string, alpha: number): string {
   return `${hex}${a}`
 }
 
-export default function InstrumentTabs({ allocation, scores, perClassLimit = Infinity }: Props) {
+export default function InstrumentTabs({
+  allocation,
+  scores,
+  region = 'global',
+  perClassLimit = Infinity,
+}: Props) {
   const t = useT()
   const { lang } = useLang()
   // Admin-curated universe: hidden instruments never surface; emphasized ones
   // ("house picks") pin to the top of their class regardless of fit.
   const { instruments } = useCatalog()
-  // Tabs cover the asset classes present in the suggested allocation, ordered
+  // Tabs cover the categories present in the suggested allocation, ordered
   // by allocation weight desc (allocation is already sorted that way).
   const classes = allocation.map((a) => a.assetClass)
-  const [active, setActive] = useState<AssetClass>(classes[0])
+  const [active, setActive] = useState<Category>(classes[0])
 
-  // Per-class instruments: visible only, scored by fit, house picks first.
+  // Per-class instruments: this region + visible only, scored by fit, house
+  // picks first.
   const byClass = useMemo(() => {
-    const map = {} as Record<AssetClass, (ManagedInstrument & { fit: number })[]>
+    const map = {} as Record<string, (ManagedInstrument & { fit: number })[]>
     for (const cls of classes) {
       map[cls] = instruments
-        .filter((i) => i.assetClass === cls && i.visible)
+        .filter((i) => (i.region ?? 'global') === region && i.assetClass === cls && i.visible)
         .map((i) => ({ ...i, fit: computeFitScore(i, scores) }))
         .sort((a, b) => (b.emphasized ? 1 : 0) - (a.emphasized ? 1 : 0) || b.fit - a.fit)
         .slice(0, perClassLimit)
     }
     return map
-  }, [classes.join('|'), instruments, scores, perClassLimit])
+  }, [classes.join('|'), instruments, scores, region, perClassLimit])
 
   // Guard: if for any reason the active tab fell out of the class list, reset.
   const activeClass = classes.includes(active) ? active : classes[0]
-  const pctOf = (cls: AssetClass) => allocation.find((a) => a.assetClass === cls)?.pct ?? 0
+  const pctOf = (cls: Category) => allocation.find((a) => a.assetClass === cls)?.pct ?? 0
 
   return (
     <div>
@@ -61,7 +69,7 @@ export default function InstrumentTabs({ allocation, scores, perClassLimit = Inf
       >
         {classes.map((cls) => {
           const isActive = cls === activeClass
-          const color = ASSET_CLASS_COLORS[cls]
+          const color = colorForCategory(cls, region)
           return (
             <button
               key={cls}
@@ -81,7 +89,7 @@ export default function InstrumentTabs({ allocation, scores, perClassLimit = Inf
                 className="h-2 w-2 shrink-0 rounded-full"
                 style={{ backgroundColor: color }}
               />
-              <span className="font-medium">{assetClassLabel(cls, lang)}</span>
+              <span className="font-medium">{categoryLabel(cls, region, lang)}</span>
               <span
                 className="rounded-md px-1.5 py-0.5 font-mono text-[11px] font-medium tnum"
                 style={
@@ -121,9 +129,9 @@ export default function InstrumentTabs({ allocation, scores, perClassLimit = Inf
             <div className="mb-2 flex items-center gap-2">
               <span
                 className="h-2.5 w-2.5 shrink-0 rounded-full"
-                style={{ backgroundColor: ASSET_CLASS_COLORS[cls] }}
+                style={{ backgroundColor: colorForCategory(cls, region) }}
               />
-              <span className="text-sm font-semibold text-text">{assetClassLabel(cls, lang)}</span>
+              <span className="text-sm font-semibold text-text">{categoryLabel(cls, region, lang)}</span>
               <span className="font-mono text-xs text-muted tnum">{pctOf(cls)}%</span>
             </div>
             {byClass[cls] && byClass[cls].length > 0 ? (
