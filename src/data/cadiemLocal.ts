@@ -83,6 +83,7 @@ function make(
     ticker,
     region: 'local',
     assetClass: category,
+    source: 'menu',
     ...vec,
     liquidityTier,
     lockupMonths,

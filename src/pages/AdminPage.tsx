@@ -6,6 +6,7 @@ import {
   type AssetClass,
   type Category,
   type Region,
+  type Source,
 } from '../lib/instruments'
 import {
   fetchableFields,
@@ -35,6 +36,7 @@ function newInstrument(): ManagedInstrument {
     ticker: '',
     region: 'global',
     assetClass: 'Equities',
+    source: 'test',
     sigmaLoad: 0,
     alphaLoad: 0,
     lambdaLoad: 0,
@@ -294,6 +296,15 @@ function InstrumentForm({
           />
           {t.admin.emphasizedLabel}
         </label>
+        <label className="flex items-center gap-2.5 text-sm text-text">
+          <input
+            type="checkbox"
+            checked={(draft.source ?? 'test') === 'test'}
+            onChange={(e) => set('source', e.target.checked ? 'test' : 'menu')}
+            className="h-4 w-4 accent-amber"
+          />
+          {t.admin.testLabel}
+        </label>
       </div>
 
       {/* Per-class asset details */}
@@ -365,9 +376,11 @@ export default function AdminPage() {
   const { lang } = useLang()
   const { instruments, upsert, remove, removeMany, addMany } = useCatalog()
   const [regionFilter, setRegionFilter] = useState<Region | 'all'>('all')
+  const [sourceFilter, setSourceFilter] = useState<Source | 'all'>('all')
   const [filter, setFilter] = useState<Category | 'all'>('all')
   const [visFilter, setVisFilter] = useState<'all' | 'visible' | 'hidden'>('all')
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
   const [bulkOpen, setBulkOpen] = useState(false)
   const [confirmText, setConfirmText] = useState('')
@@ -377,13 +390,15 @@ export default function AdminPage() {
     () =>
       instruments.filter((i) => {
         const region = i.region ?? 'global'
+        const source = i.source ?? 'test'
         return (
           (regionFilter === 'all' || region === regionFilter) &&
+          (sourceFilter === 'all' || source === sourceFilter) &&
           (filter === 'all' || i.assetClass === filter) &&
           (visFilter === 'all' || (visFilter === 'visible' ? i.visible : !i.visible))
         )
       }),
-    [instruments, regionFilter, filter, visFilter],
+    [instruments, regionFilter, sourceFilter, filter, visFilter],
   )
 
   // Category chips reflect the selected market; 'all' shows the union (local-only
@@ -427,6 +442,29 @@ export default function AdminPage() {
 
   const vec = (i: ManagedInstrument) =>
     `σ ${i.sigmaLoad >= 0 ? '+' : ''}${i.sigmaLoad.toFixed(2)} · α ${i.alphaLoad >= 0 ? '+' : ''}${i.alphaLoad.toFixed(2)} · λ ${i.lambdaLoad >= 0 ? '+' : ''}${i.lambdaLoad.toFixed(2)}`
+
+  // Compact currency symbol from a "PYG (₲)" / "USD ($)" detail string.
+  const curShort = (c = '') =>
+    c.includes('$') || /usd/i.test(c) ? '$' : c.includes('₲') || /pyg|gs/i.test(c) ? '₲' : c
+  // Category-appropriate quick facts for the list subtitle (local only):
+  //  bonds/CDs → yield · rating · currency;  equities → yield · type · currency;
+  //  funds → yield · currency. Global rows keep the σ/α/λ vector.
+  const quickFacts = (i: ManagedInstrument): string | null => {
+    if ((i.region ?? 'global') !== 'local') return null
+    const d = i.details
+    const parts: string[] = []
+    if (d.estYield) parts.push(d.estYield)
+    if (i.assetClass === 'Fixed income' || i.assetClass === 'CDs') {
+      if (d.rating) parts.push(d.rating)
+    } else if (i.assetClass === 'Equities') {
+      const s = (d.shareType ?? '').toLowerCase()
+      if (/común|comun/.test(s)) parts.push(t.admin.shareCommon)
+      else if (s) parts.push(t.admin.sharePreferred)
+    }
+    const cur = curShort(d.currency)
+    if (cur) parts.push(cur)
+    return parts.length ? parts.join(' · ') : null
+  }
 
   return (
     <div>
@@ -476,6 +514,26 @@ export default function AdminPage() {
                   className={segBtn(regionFilter === r)}
                 >
                   {r === 'all' ? t.admin.visAll : regionLabel(r, lang)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5">
+            <span className={filterGroupLabel}>{t.admin.source}</span>
+            <div className={segmentedCls}>
+              {(['all', 'menu', 'test'] as const).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setSourceFilter(s)}
+                  className={segBtn(sourceFilter === s)}
+                >
+                  {s === 'all'
+                    ? t.admin.visAll
+                    : s === 'menu'
+                      ? t.admin.sourceMenu
+                      : t.admin.sourceTest}
                 </button>
               ))}
             </div>
@@ -601,7 +659,7 @@ export default function AdminPage() {
             <div
               className={`flex items-center gap-3 rounded-2xl border bg-surface px-4 py-3 shadow-soft ${
                 inst.visible ? 'border-border' : 'border-border/60 opacity-60'
-              }`}
+              } ${expandedId === inst.id ? 'border-teal/40' : ''}`}
             >
               <input
                 type="checkbox"
@@ -615,12 +673,27 @@ export default function AdminPage() {
                 className="h-2.5 w-2.5 shrink-0 rounded-full"
                 style={{ backgroundColor: colorForCategory(inst.assetClass, inst.region ?? 'global') }}
               />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
+              {/* Click anywhere on the identity to expand the detail sheet. */}
+              <button
+                type="button"
+                aria-expanded={expandedId === inst.id}
+                onClick={() => setExpandedId(expandedId === inst.id ? null : inst.id)}
+                className="min-w-0 flex-1 text-left"
+              >
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <span className="truncate text-sm font-medium text-text">{inst.name}</span>
                   <span className="shrink-0 font-mono text-xs text-muted">{inst.ticker}</span>
+                  {(inst.source ?? 'test') === 'test' ? (
+                    <span className="shrink-0 rounded-md bg-amber/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber">
+                      {t.admin.sourceTest}
+                    </span>
+                  ) : (
+                    <span className="shrink-0 rounded-md bg-teal/12 px-1.5 py-0.5 text-[10px] font-medium text-teal">
+                      {t.admin.sourceMenu}
+                    </span>
+                  )}
                   {(inst.region ?? 'global') === 'local' && (
-                    <span className="shrink-0 rounded-md bg-amber/12 px-1.5 py-0.5 text-[10px] font-medium text-amber">
+                    <span className="shrink-0 rounded-md bg-surface2 px-1.5 py-0.5 text-[10px] font-medium text-muted">
                       {regionLabel('local', lang)}
                     </span>
                   )}
@@ -636,14 +709,24 @@ export default function AdminPage() {
                   )}
                 </div>
                 <p className="mt-0.5 truncate font-mono text-[11px] text-muted tnum">
-                  {categoryLabel(inst.assetClass, inst.region ?? 'global', lang)} · {vec(inst)}
+                  {categoryLabel(inst.assetClass, inst.region ?? 'global', lang)} ·{' '}
+                  {quickFacts(inst) ?? vec(inst)}
                 </p>
-              </div>
+              </button>
+              <span
+                aria-hidden
+                className={`shrink-0 text-muted transition-transform duration-200 ${
+                  expandedId === inst.id ? 'rotate-90' : ''
+                }`}
+              >
+                ›
+              </span>
               <div className="flex shrink-0 items-center gap-1">
                 <button
                   type="button"
                   onClick={() => {
                     setEditingId(editingId === inst.id ? null : inst.id)
+                    setExpandedId(null)
                     setAdding(false)
                   }}
                   className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-surface2 hover:text-text"
@@ -659,6 +742,47 @@ export default function AdminPage() {
                 </button>
               </div>
             </div>
+
+            {/* Expanded detail sheet — read-only drill-down (click row to toggle) */}
+            {expandedId === inst.id && (
+              <div className="mt-2 rounded-2xl border border-border bg-surface2/30 p-5">
+                {inst.details.description && (
+                  <p className="mb-3 text-sm leading-relaxed text-text">{inst.details.description}</p>
+                )}
+                {(() => {
+                  const filled = fieldSpecsFor(inst.region ?? 'global', inst.assetClass).filter(
+                    (s) => s.key !== 'description' && (inst.details[s.key] ?? '').trim() !== '',
+                  )
+                  return filled.length > 0 ? (
+                    <dl className="grid grid-cols-1 gap-x-8 gap-y-2 sm:grid-cols-2">
+                      {filled.map((s) => (
+                        <div key={s.key} className="flex items-baseline justify-between gap-3">
+                          <dt className="text-xs text-muted">{lang === 'es' ? s.es : s.en}</dt>
+                          <dd className="text-right font-mono text-xs font-medium text-text tnum">
+                            {inst.details[s.key]}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  ) : (
+                    !inst.details.description && (
+                      <p className="text-xs italic text-muted">{t.instrumentDetail.noDetails}</p>
+                    )
+                  )
+                })()}
+                <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 border-t border-border/70 pt-3 font-mono text-[11px] text-muted tnum">
+                  <span>{vec(inst)}</span>
+                  <span>
+                    {t.instrumentDetail.liquidityTier}: {inst.liquidityTier}
+                  </span>
+                  {inst.lockupMonths > 0 && (
+                    <span>
+                      {t.instrumentDetail.lockup}: {inst.lockupMonths} {t.instrumentDetail.months}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
 
             {editingId === inst.id && (
               <div className="mt-2">
