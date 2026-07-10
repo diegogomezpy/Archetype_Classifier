@@ -101,7 +101,7 @@ function bonds(rows: BondRow[], currency: 'PYG' | 'USD'): ManagedInstrument[] {
   const fmt = currency === 'PYG' ? pyg : usd
   const curLabel = currency === 'PYG' ? 'PYG (₲)' : 'USD ($)'
   return rows.map(([issuer, rating, yld, coupon, amount, residual, maturity]) =>
-    make('Fixed income', bondVector(rating), `${issuer} — ${maturity} (${yld}%)`, 'BONO', 2, 0, {
+    make('Fixed income', bondVector(rating), issuer, 'BONO', 2, 0, {
       issuer,
       rating,
       estYield: `${yld}%`,
@@ -172,7 +172,7 @@ const BONDS_USD: BondRow[] = [
 
 // ── CDA (certificates of deposit) ───────────────────────────────────────────
 const CDS: ManagedInstrument[] = [
-  make('CDs', cdVector('AA-py'), 'Zeta Banco — CDA 3/4/2029 (10,00%)', 'CDA', 3, 0, {
+  make('CDs', cdVector('AA-py'), 'Zeta Banco', 'CDA', 3, 0, {
     issuer: 'Zeta Banco',
     rating: 'AA-py',
     estYield: '10,00%',
@@ -240,8 +240,10 @@ const EQ_ROWS: EqRow[] = [
   ['IBI SAECA', 'A Py', 'D', '13,50', '1.000.000', '10.000.000', '10.000.000', 'Acción preferida electrónica'],
 ]
 const EQUITIES: ManagedInstrument[] = EQ_ROWS.map(([issuer, rating, cls, yld, price, amount, sale, type]) => {
+  // Name drops the yield (shown in the row's quick facts); price keeps the
+  // several preferred-share classes distinguishable.
   const label = cls && cls !== '-' ? `${issuer} — Clase ${cls}` : issuer
-  const name = yld ? `${label} (${yld}%)` : `${label} (₲${price})`
+  const name = `${label} (₲ ${price})`
   return make('Equities', localEquityVector, name, 'ACC', 3, 0, {
     issuer,
     rating,
