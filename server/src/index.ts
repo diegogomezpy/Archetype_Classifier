@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
 import {
   advisorsCol,
   catalogCol,
@@ -168,14 +168,30 @@ app.post('/api/market-data', async (c) => {
 })
 
 // ── static frontend + SPA fallback ───────────────────────────────────────────
-app.use('/*', serveStatic({ root: WEB_ROOT }))
 let indexHtml = ''
 try {
   indexHtml = readFileSync(join(WEB_ROOT, 'index.html'), 'utf8')
 } catch {
   indexHtml = '<!doctype html><title>Investor Profile</title><div id="root"></div>'
 }
-app.get('*', (c) => c.html(indexHtml))
+
+// The HTML shell must NEVER be cached, so every load re-fetches the current
+// index.html (which points at the latest content-hashed bundle) instead of a
+// browser serving a stale cached app after a deploy.
+const serveShell = (c: Context) => {
+  c.header('Cache-Control', 'no-cache')
+  return c.html(indexHtml)
+}
+app.get('/', serveShell)
+
+// Content-hashed assets are immutable — cache them aggressively.
+app.use('/assets/*', async (c, next) => {
+  await next()
+  c.header('Cache-Control', 'public, max-age=31536000, immutable')
+})
+
+app.use('/*', serveStatic({ root: WEB_ROOT }))
+app.get('*', serveShell)
 
 const port = Number(process.env.PORT) || 8080
 serve({ fetch: app.fetch, port })
