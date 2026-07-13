@@ -6,7 +6,6 @@ import {
   type AssetClass,
   type Category,
   type Region,
-  type Source,
 } from '../lib/instruments'
 import {
   fetchableFields,
@@ -37,7 +36,6 @@ function newInstrument(): ManagedInstrument {
     ticker: '',
     region: 'global',
     assetClass: 'Equities',
-    source: 'test',
     sigmaLoad: 0,
     alphaLoad: 0,
     lambdaLoad: 0,
@@ -297,15 +295,6 @@ function InstrumentForm({
           />
           {t.admin.emphasizedLabel}
         </label>
-        <label className="flex items-center gap-2.5 text-sm text-text">
-          <input
-            type="checkbox"
-            checked={(draft.source ?? 'test') === 'test'}
-            onChange={(e) => set('source', e.target.checked ? 'test' : 'menu')}
-            className="h-4 w-4 accent-amber"
-          />
-          {t.admin.testLabel}
-        </label>
       </div>
 
       {/* Per-class asset details */}
@@ -377,7 +366,6 @@ export default function AdminPage() {
   const { lang } = useLang()
   const { instruments, upsert, remove, removeMany, addMany } = useCatalog()
   const [regionFilter, setRegionFilter] = useState<Region | 'all'>('all')
-  const [sourceFilter, setSourceFilter] = useState<Source | 'all'>('all')
   const [filter, setFilter] = useState<Category | 'all'>('all')
   const [visFilter, setVisFilter] = useState<'all' | 'visible' | 'hidden'>('all')
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -390,15 +378,13 @@ export default function AdminPage() {
     () =>
       instruments.filter((i) => {
         const region = i.region ?? 'global'
-        const source = i.source ?? 'test'
         return (
           (regionFilter === 'all' || region === regionFilter) &&
-          (sourceFilter === 'all' || source === sourceFilter) &&
           (filter === 'all' || i.assetClass === filter) &&
           (visFilter === 'all' || (visFilter === 'visible' ? i.visible : !i.visible))
         )
       }),
-    [instruments, regionFilter, sourceFilter, filter, visFilter],
+    [instruments, regionFilter, filter, visFilter],
   )
 
   // Category chips reflect the selected market; 'all' shows the union (local-only
@@ -501,26 +487,6 @@ export default function AdminPage() {
                   className={segBtn(regionFilter === r)}
                 >
                   {r === 'all' ? t.admin.visAll : regionLabel(r, lang)}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2.5">
-            <span className={filterGroupLabel}>{t.admin.source}</span>
-            <div className={segmentedCls}>
-              {(['all', 'menu', 'test'] as const).map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setSourceFilter(s)}
-                  className={segBtn(sourceFilter === s)}
-                >
-                  {s === 'all'
-                    ? t.admin.visAll
-                    : s === 'menu'
-                      ? t.admin.sourceMenu
-                      : t.admin.sourceTest}
                 </button>
               ))}
             </div>

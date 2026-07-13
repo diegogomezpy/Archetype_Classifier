@@ -28,17 +28,11 @@ export type LocalCategory =
 // disambiguates which taxonomy (and palette) applies.
 export type Category = AssetClass | LocalCategory
 
-// Provenance: 'menu' = loaded from the official product menu (the Cadiem
-// bulletin); 'test' = a manually-added example / placeholder. Absent is treated
-// as 'test' (unknown provenance).
-export type Source = 'menu' | 'test'
-
 export interface Instrument {
   name: string
   ticker: string
   region?: Region // defaults to 'global' when absent
   assetClass: Category
-  source?: Source // defaults to 'test' when absent
   sigmaLoad: number
   alphaLoad: number
   lambdaLoad: number

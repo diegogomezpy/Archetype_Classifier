@@ -6,6 +6,7 @@ import { useArchetypeConfig } from '../lib/archetypeConfig'
 import { useDirectory } from '../lib/directory'
 import { dateLocale, useLang, useT } from '../i18n/i18n'
 import { localizedArchetype } from '../i18n/content'
+import { ARCHETYPE_COLORS } from '../data/archetypes'
 import AppNav from '../components/AppNav'
 
 function fmtDate(iso: string, locale: string): string {
@@ -13,6 +14,13 @@ function fmtDate(iso: string, locale: string): string {
   return d.toLocaleDateString(locale, { month: 'short', day: 'numeric', year: 'numeric' }) +
     ' · ' +
     d.toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' })
+}
+
+function initials(name: string): string {
+  return name.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase()
+}
+function hexA(hex: string, alpha: number): string {
+  return `${hex}${Math.round(alpha * 255).toString(16).padStart(2, '0')}`
 }
 
 // One client's play history: every session, newest first. Scoped to the
@@ -44,6 +52,10 @@ export default function AdvisorClientPage() {
     [sessions],
   )
   const clientName = mySessions[0]?.clientLabel ?? null
+  // The client's current classification (newest session) drives the header accent.
+  const latestLive = mySessions[0] ? reclassifyScores(mySessions[0].scores, config.shapeVectors) : null
+  const latestColor = latestLive ? ARCHETYPE_COLORS[latestLive.archetype] : '#8A8D99'
+  const latestName = latestLive ? localizedArchetype(latestLive.archetype, lang).name : null
 
   const handleDelete = (s: SessionRecord) => {
     void getSessionStore()
@@ -62,21 +74,49 @@ export default function AdvisorClientPage() {
         {t.clientHistory.back}
       </Link>
 
-      <h1 className="mt-6 text-3xl font-semibold tracking-tight text-text">
-        {clientName ?? '—'}
-      </h1>
-      <p className="mt-2 text-sm text-muted">{t.clientHistory.sessionsSub}</p>
+      <div className="mt-6 flex items-center gap-4">
+        <span
+          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-lg font-semibold shadow-soft"
+          style={{ backgroundColor: hexA(latestColor, 0.14), color: latestColor }}
+        >
+          {clientName ? initials(clientName) : '—'}
+        </span>
+        <div className="min-w-0">
+          <h1 className="truncate text-3xl font-semibold tracking-tight text-text">
+            {clientName ?? '—'}
+          </h1>
+          <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-muted">
+            {latestName && (
+              <span className="inline-flex items-center gap-1.5">
+                <span
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: latestColor }}
+                />
+                {latestName}
+              </span>
+            )}
+            {latestName && <span className="text-muted/40">·</span>}
+            <span>{t.advisorClients.sessions(mySessions.length)}</span>
+          </p>
+        </div>
+      </div>
+      <p className="mt-4 text-sm text-muted">{t.clientHistory.sessionsSub}</p>
 
       <ul className="mt-8 space-y-3">
         {mySessions.map((s) => {
           const live = reclassifyScores(s.scores, config.shapeVectors)
           const archetype = localizedArchetype(live.archetype, lang)
+          const sColor = ARCHETYPE_COLORS[live.archetype]
           return (
             <li key={s.id} className="group relative">
               <Link
                 to={`/advisor/session/${s.id}`}
                 className="flex items-center gap-4 rounded-2xl border border-border bg-surface p-5 pr-14 shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card"
               >
+                <span
+                  className="h-2.5 w-2.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: sColor }}
+                />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2.5">
                     <span className="truncate text-base font-semibold text-text">

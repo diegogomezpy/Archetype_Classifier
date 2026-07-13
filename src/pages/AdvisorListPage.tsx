@@ -6,6 +6,7 @@ import { useArchetypeConfig } from '../lib/archetypeConfig'
 import { useDirectory, type Advisor } from '../lib/directory'
 import { dateLocale, useLang, useT } from '../i18n/i18n'
 import { localizedArchetype } from '../i18n/content'
+import { ARCHETYPE_COLORS } from '../data/archetypes'
 import AppNav from '../components/AppNav'
 
 function fmtDate(iso: string, locale: string): string {
@@ -14,6 +15,24 @@ function fmtDate(iso: string, locale: string): string {
     day: 'numeric',
     year: 'numeric',
   })
+}
+
+// Up-to-two-letter initials for a client avatar.
+function initials(name: string): string {
+  return name
+    .trim()
+    .split(/\s+/)
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase()
+}
+
+function hexA(hex: string, alpha: number): string {
+  const a = Math.round(alpha * 255)
+    .toString(16)
+    .padStart(2, '0')
+  return `${hex}${a}`
 }
 
 // ── One-click advisor picker (no login, remembered on this device) ──────────
@@ -156,31 +175,45 @@ export default function AdvisorListPage() {
             {rows.map(({ clientId, name, count, latest }) => {
               const live = latest ? reclassifyScores(latest.scores, config.shapeVectors) : null
               const archetype = live ? localizedArchetype(live.archetype, lang) : null
+              const color = live ? ARCHETYPE_COLORS[live.archetype] : '#8A8D99'
               return (
                 <li key={clientId}>
                   <Link
                     to={`/advisor/client/${clientId}`}
-                    className="flex items-center gap-4 rounded-2xl border border-border bg-surface p-5 shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card"
+                    className="group flex items-center gap-4 rounded-2xl border border-border bg-surface p-4 pr-5 shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:border-border hover:shadow-card"
                   >
+                    <span
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold"
+                      style={{ backgroundColor: hexA(color, 0.14), color }}
+                    >
+                      {initials(name)}
+                    </span>
                     <div className="min-w-0 flex-1">
-                      <span className="truncate text-base font-semibold text-text">
-                        {name}
-                      </span>
-                      <p className="mt-1 text-sm text-muted">
-                        {archetype ? archetype.name : '—'}
-                        {' · '}
-                        {t.advisorClients.sessions(count)}
+                      <span className="truncate text-base font-semibold text-text">{name}</span>
+                      <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-muted">
+                        <span className="inline-flex items-center gap-1.5">
+                          <span
+                            className="h-2 w-2 shrink-0 rounded-full"
+                            style={{ backgroundColor: color }}
+                          />
+                          {archetype ? archetype.name : '—'}
+                        </span>
+                        <span className="text-muted/40">·</span>
+                        <span>{t.advisorClients.sessions(count)}</span>
                       </p>
                     </div>
                     {latest && (
-                      <div className="shrink-0 text-right">
-                        <p className="text-xs text-muted">{t.advisorClients.lastPlayed}</p>
+                      <div className="hidden shrink-0 text-right sm:block">
+                        <p className="text-[11px] text-muted">{t.advisorClients.lastPlayed}</p>
                         <p className="font-mono text-xs text-text tnum">
                           {fmtDate(latest.createdAt, dateLocale(lang))}
                         </p>
                       </div>
                     )}
-                    <span aria-hidden className="text-muted">
+                    <span
+                      aria-hidden
+                      className="shrink-0 text-muted transition-transform duration-200 group-hover:translate-x-0.5"
+                    >
                       →
                     </span>
                   </Link>

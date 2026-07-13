@@ -11,6 +11,16 @@ export type Archetype = {
   products: string[]
 }
 
+// Accent color per archetype, used for client-card avatars and chips on the
+// advisor pages. Chosen from the app palette to read at a glance.
+export const ARCHETYPE_COLORS: Record<ArchetypeKey, string> = {
+  banker: '#378ADD', // blue — capital preservation
+  quant: '#9B59B6', // purple — systematic
+  venture: '#E05C5C', // red — bold upside
+  insurer: '#C9933A', // amber — income
+  indexer: '#5AA98B', // teal-green — broad market
+}
+
 export const ARCHETYPES: Record<ArchetypeKey, Archetype> = {
   banker: {
     name: 'The Banker',
