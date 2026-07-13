@@ -11,6 +11,7 @@ import {
 import {
   fetchableFields,
   fieldSpecsFor,
+  localQuickFacts,
   supportsFetch,
   useCatalog,
   type ManagedInstrument,
@@ -442,31 +443,15 @@ export default function AdminPage() {
   const vec = (i: ManagedInstrument) =>
     `σ ${i.sigmaLoad >= 0 ? '+' : ''}${i.sigmaLoad.toFixed(2)} · α ${i.alphaLoad >= 0 ? '+' : ''}${i.alphaLoad.toFixed(2)} · λ ${i.lambdaLoad >= 0 ? '+' : ''}${i.lambdaLoad.toFixed(2)}`
 
-  // Compact currency symbol from a "PYG (₲)" / "USD ($)" detail string.
-  const curShort = (c = '') =>
-    c.includes('$') || /usd/i.test(c) ? '$' : c.includes('₲') || /pyg|gs/i.test(c) ? '₲' : c
-  // Category-appropriate quick facts for the list subtitle (local only):
-  //  bonds/CDs → yield · rating · currency;  equities → yield · type · currency;
-  //  funds → yield · currency. Global rows keep the σ/α/λ vector.
-  const quickFacts = (i: ManagedInstrument): string | null => {
-    if ((i.region ?? 'global') !== 'local') return null
-    const d = i.details
-    const isDebt = i.assetClass === 'Fixed income' || i.assetClass === 'CDs'
-    const parts: string[] = []
-    if (d.estYield) parts.push(d.estYield)
-    if (isDebt) {
-      if (d.rating) parts.push(d.rating)
-    } else if (i.assetClass === 'Equities') {
-      const s = (d.shareType ?? '').toLowerCase()
-      if (/común|comun/.test(s)) parts.push(t.admin.shareCommon)
-      else if (s) parts.push(t.admin.sharePreferred)
-    }
-    const cur = curShort(d.currency)
-    if (cur) parts.push(cur)
-    // Time until maturity (residual term) for debt instruments.
-    if (isDebt && d.residualYears) parts.push(`${d.residualYears} ${t.admin.yrsShort}`)
-    return parts.length ? parts.join(' · ') : null
+  // Category-appropriate quick facts for the list subtitle (local rows only);
+  // global rows fall back to the σ/α/λ vector.
+  const factLabels = {
+    common: t.admin.shareCommon,
+    preferred: t.admin.sharePreferred,
+    yrs: t.admin.yrsShort,
   }
+  const quickFacts = (i: ManagedInstrument): string | null =>
+    localQuickFacts(i, factLabels) || null
 
   return (
     <div>

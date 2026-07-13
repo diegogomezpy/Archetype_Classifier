@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { colorForCategory } from '../lib/instruments'
-import { fieldSpecsFor, type ManagedInstrument } from '../lib/catalog'
+import { fieldSpecsFor, localQuickFacts, type ManagedInstrument } from '../lib/catalog'
 import { useLang, useT } from '../i18n/i18n'
 
 type Props = {
@@ -26,6 +26,13 @@ export default function InstrumentList({ instruments }: Props) {
         const filled = specs.filter(
           (s) => s.key !== 'description' && (inst.details[s.key] ?? '').trim() !== '',
         )
+        // Compact facts line (local instruments): distinguishes same-issuer bond
+        // series and surfaces yield/rating/currency/maturity at a glance.
+        const facts = localQuickFacts(inst, {
+          common: t.admin.shareCommon,
+          preferred: t.admin.sharePreferred,
+          yrs: t.admin.yrsShort,
+        })
         return (
           <li key={inst.id}>
             <button
@@ -47,6 +54,9 @@ export default function InstrumentList({ instruments }: Props) {
                     </span>
                   )}
                 </div>
+                {facts && (
+                  <p className="mt-0.5 truncate font-mono text-[11px] text-muted tnum">{facts}</p>
+                )}
                 <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-surface2">
                   <div
                     className="h-full rounded-full"

@@ -233,6 +233,41 @@ export const supportsFetch = (category: Category, region: Region = 'global'): bo
 export const fetchableFields = (category: Category, region: Region = 'global'): Set<string> =>
   new Set(region === 'global' ? FETCHABLE_FIELDS[category as AssetClass] ?? [] : [])
 
+// ── Quick facts ──────────────────────────────────────────────────────────────
+// A compact, category-appropriate summary line for a LOCAL instrument, used in
+// both the admin catalog rows and the advisor's recommended-instruments list.
+
+export type QuickFactLabels = { common: string; preferred: string; yrs: string }
+
+/** Compact currency glyph from a "PYG (₲)" / "USD ($)" detail string. */
+export const currencyGlyph = (c = ''): string =>
+  c.includes('$') || /usd/i.test(c) ? '$' : c.includes('₲') || /pyg|gs/i.test(c) ? '₲' : c
+
+/**
+ * Category-appropriate quick facts for a LOCAL instrument ('' for global):
+ *   bonds/CDs → yield · rating · currency · years-to-maturity
+ *   equities  → yield · common/preferred · currency
+ *   funds     → yield · currency
+ */
+export function localQuickFacts(inst: ManagedInstrument, labels: QuickFactLabels): string {
+  if ((inst.region ?? 'global') !== 'local') return ''
+  const d = inst.details
+  const isDebt = inst.assetClass === 'Fixed income' || inst.assetClass === 'CDs'
+  const parts: string[] = []
+  if (d.estYield) parts.push(d.estYield)
+  if (isDebt) {
+    if (d.rating) parts.push(d.rating)
+  } else if (inst.assetClass === 'Equities') {
+    const s = (d.shareType ?? '').toLowerCase()
+    if (/común|comun/.test(s)) parts.push(labels.common)
+    else if (s) parts.push(labels.preferred)
+  }
+  const cur = currencyGlyph(d.currency)
+  if (cur) parts.push(cur)
+  if (isDebt && d.residualYears) parts.push(`${d.residualYears} ${labels.yrs}`)
+  return parts.join(' · ')
+}
+
 // ── Seeding ──────────────────────────────────────────────────────────────────
 
 // Stable id for a bundled instrument (ticker alone isn't unique — OTC repeats).
