@@ -1,10 +1,9 @@
 type Props = {
   label: string
   value: number // [-1, 1] for core dims, [0, 1] for accessory
-  interpretation: string
 }
 
-export default function DimensionScoreBar({ label, value, interpretation }: Props) {
+export default function DimensionScoreBar({ label, value }: Props) {
   const magnitude = Math.min(1, Math.abs(value)) * 50 // half-width percentage
   const positive = value >= 0
   const signed = `${value >= 0 ? '+' : '−'}${Math.abs(value).toFixed(2)}`
@@ -32,8 +31,6 @@ export default function DimensionScoreBar({ label, value, interpretation }: Prop
           />
         )}
       </div>
-
-      <p className="mt-1.5 text-xs italic text-muted">{interpretation}</p>
     </div>
   )
 }

@@ -131,20 +131,16 @@ const en = {
     updated: 'Updated',
   },
   advisorPanel: {
-    internal: 'Internal — not shown to the client',
-    rawScores: 'Raw dimension scores',
+    rawScores: 'Risk profile',
     dimVariance: 'Variance tolerance',
     dimSkew: 'Skew preference',
     dimLoss: 'Loss tolerance',
     dimEv: 'EV discipline',
-    confidenceTitle: 'Classification confidence',
+    confidenceTitle: 'Confidence',
     confidenceSuffix: (name: string) => `confidence — ${name}`,
-    shapeMatch: 'Shape-direction match',
     blendLine: (name: string) => `Blend — secondary ${name} at`,
-    tentative:
-      "Tentative — choices didn't lean strongly; treat as a best fit and confirm in conversation",
-    lowSignal: (dim: string) => `Low signal on ${dim} — follow up in conversation`,
-    talkingPoints: 'Advisor talking points',
+    lowSignalBrief: (dims: string) => `Low signal · ${dims}`,
+    talkingPoints: 'Talking points',
   },
   instruments: {
     tabsAria: 'Recommended instruments by asset class',
@@ -173,8 +169,7 @@ const en = {
   },
   admin: {
     title: 'Instrument catalog',
-    subtitle:
-      'Everything offerable to clients. Edit risk vectors, visibility, emphasis, and the per-asset details shown on the advisor dashboard.',
+    subtitle: 'Instruments offerable to clients.',
     count: (shown: number, total: number) => `${shown} of ${total} instruments`,
     filterAll: 'All',
     add: 'Add instrument',
@@ -246,23 +241,18 @@ const en = {
   },
   adminArch: {
     title: 'Archetypes',
-    subtitle:
-      'Tune the classification geometry and the model portfolio recommended for each archetype.',
+    subtitle: 'Classification vectors and model portfolios.',
     vectorsTitle: 'Archetype risk vectors',
-    vectorsHint:
-      'The payoff-shape signature each archetype is matched against (cosine similarity). Editing these changes how future tests classify.',
-    notVectorNote:
-      'The Quant (EV-discipline overlay) and the Indexer (low-conviction fallback) are not directions in shape space, so they have no vector — only a model mix below.',
+    vectorsHint: 'The shape signature classification matches against.',
+    notVectorNote: 'Quant and Indexer have no vector — only a model mix below.',
     sigma: 'σ variance',
     alpha: 'α skew',
     lambda: 'λ loss aversion',
     saveVectors: 'Save vectors',
     mixTitle: 'Global model mix',
-    mixHint:
-      'The global model portfolio shown on the advisor dashboard for each archetype. Percentages are normalized to 100 on save.',
+    mixHint: 'Shown on the advisor report. Normalized to 100 on save.',
     localMixTitle: 'Local model mix',
-    localMixHint:
-      'The local model portfolio across the local categories, shown alongside the global one. Percentages are normalized to 100 on save.',
+    localMixHint: 'Normalized to 100 on save.',
     total: 'Total',
     sumWarning: 'At least one class must be above 0.',
     recompute: 'Recompute from model',
@@ -273,8 +263,7 @@ const en = {
   },
   adminAdvisors: {
     title: 'Advisors',
-    subtitle:
-      'Create the advisors clients pick from at the start of the test. Each advisor sees their own clients on the Advisor tab.',
+    subtitle: 'Advisors clients pick from when they start the test.',
     count: (n: number) => `${n} ${n === 1 ? 'advisor' : 'advisors'}`,
     add: 'Add advisor',
     name: 'Advisor name',
@@ -438,20 +427,16 @@ const es: UIStrings = {
     updated: 'Actualizado',
   },
   advisorPanel: {
-    internal: 'Interno — no visible para el cliente',
-    rawScores: 'Puntajes por dimensión',
+    rawScores: 'Perfil de riesgo',
     dimVariance: 'Tolerancia a la varianza',
     dimSkew: 'Preferencia de asimetría',
     dimLoss: 'Tolerancia a pérdidas',
     dimEv: 'Disciplina de VE',
-    confidenceTitle: 'Confianza de la clasificación',
+    confidenceTitle: 'Confianza',
     confidenceSuffix: (name: string) => `de confianza — ${name}`,
-    shapeMatch: 'Coincidencia de dirección de forma',
     blendLine: (name: string) => `Mixto — secundario ${name} al`,
-    tentative:
-      'Tentativo — las elecciones no marcaron una tendencia clara; trátalo como mejor aproximación y confírmalo en conversación',
-    lowSignal: (dim: string) => `Señal baja en ${dim} — profundizar en conversación`,
-    talkingPoints: 'Puntos de conversación para el asesor',
+    lowSignalBrief: (dims: string) => `Señal baja · ${dims}`,
+    talkingPoints: 'Puntos de conversación',
   },
   instruments: {
     tabsAria: 'Instrumentos recomendados por clase de activo',
@@ -480,8 +465,7 @@ const es: UIStrings = {
   },
   admin: {
     title: 'Catálogo de instrumentos',
-    subtitle:
-      'Todo lo ofrecible a los clientes. Edita vectores de riesgo, visibilidad, énfasis y los detalles por activo que se muestran en el panel del asesor.',
+    subtitle: 'Instrumentos ofrecibles a los clientes.',
     count: (shown: number, total: number) => `${shown} de ${total} instrumentos`,
     filterAll: 'Todos',
     add: 'Agregar instrumento',
@@ -554,23 +538,18 @@ const es: UIStrings = {
   },
   adminArch: {
     title: 'Arquetipos',
-    subtitle:
-      'Ajusta la geometría de clasificación y el portafolio modelo recomendado para cada arquetipo.',
+    subtitle: 'Vectores de clasificación y portafolios modelo.',
     vectorsTitle: 'Vectores de riesgo por arquetipo',
-    vectorsHint:
-      'La firma de forma de pago contra la que se compara cada arquetipo (similitud coseno). Editarlos cambia cómo se clasifican los tests futuros.',
-    notVectorNote:
-      'El Cuantitativo (superposición de disciplina de VE) y el Indexador (resultado de baja convicción) no son direcciones en el espacio de forma, así que no tienen vector — solo una mezcla modelo abajo.',
+    vectorsHint: 'La firma de forma con la que la clasificación compara.',
+    notVectorNote: 'El Cuantitativo y el Indexador no tienen vector — solo una mezcla modelo abajo.',
     sigma: 'σ varianza',
     alpha: 'α asimetría',
     lambda: 'λ aversión a pérdidas',
     saveVectors: 'Guardar vectores',
     mixTitle: 'Mezcla modelo global',
-    mixHint:
-      'El portafolio modelo global que se muestra en el panel del asesor para cada arquetipo. Los porcentajes se normalizan a 100 al guardar.',
+    mixHint: 'Se muestra en el informe del asesor. Se normaliza a 100 al guardar.',
     localMixTitle: 'Mezcla modelo local',
-    localMixHint:
-      'El portafolio modelo local sobre las categorías locales, mostrado junto al global. Los porcentajes se normalizan a 100 al guardar.',
+    localMixHint: 'Se normaliza a 100 al guardar.',
     total: 'Total',
     sumWarning: 'Al menos una clase debe ser mayor a 0.',
     recompute: 'Recalcular desde el modelo',
@@ -581,8 +560,7 @@ const es: UIStrings = {
   },
   adminAdvisors: {
     title: 'Asesores',
-    subtitle:
-      'Crea los asesores que los clientes eligen al inicio del test. Cada asesor ve sus propios clientes en la pestaña Asesor.',
+    subtitle: 'Asesores que los clientes eligen al iniciar el test.',
     count: (n: number) => `${n} ${n === 1 ? 'asesor' : 'asesores'}`,
     add: 'Agregar asesor',
     name: 'Nombre del asesor',

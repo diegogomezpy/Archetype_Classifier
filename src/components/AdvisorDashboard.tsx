@@ -2,13 +2,7 @@ import { useState } from 'react'
 import { computeAllocation, type DashboardData } from '../lib/scoring'
 import { colorForCategory, type Category, type Region } from '../lib/instruments'
 import { useArchetypeConfig } from '../lib/archetypeConfig'
-import {
-  getSigmaLabel,
-  getAlphaLabel,
-  getLossToleranceLabel,
-  getEvLabel,
-  getTalkingPoints,
-} from '../lib/advisorCopy'
+import { getTalkingPoints } from '../lib/advisorCopy'
 import { useLang, useT } from '../i18n/i18n'
 import { categoryLabel, localizedArchetype, regionLabel } from '../i18n/content'
 import DonutChart from './DonutChart'
@@ -92,14 +86,12 @@ export default function AdvisorDashboard({ data, clientName }: Props) {
   // (teal/right = risk-on, amber/left = risk-off).
   const { scores } = data
   const dimensions = [
-    { label: t.advisorPanel.dimVariance, value: scores.sigma, interp: getSigmaLabel(scores.sigma, lang) },
-    { label: t.advisorPanel.dimSkew, value: scores.alpha, interp: getAlphaLabel(scores.alpha, lang) },
-    { label: t.advisorPanel.dimLoss, value: -scores.lambda, interp: getLossToleranceLabel(-scores.lambda, lang) },
-    { label: t.advisorPanel.dimEv, value: scores.ev, interp: getEvLabel(scores.ev, lang) },
+    { label: t.advisorPanel.dimVariance, value: scores.sigma },
+    { label: t.advisorPanel.dimSkew, value: scores.alpha },
+    { label: t.advisorPanel.dimLoss, value: -scores.lambda },
+    { label: t.advisorPanel.dimEv, value: scores.ev },
   ]
   const confidencePct = Math.round(data.confidence * 100)
-  const matchStrength = Math.round(data.primarySimilarity * 100)
-  const isShapePrimary = data.archetype !== 'indexer' && data.archetype !== 'quant'
 
   const lowSignals: string[] = []
   if (Math.abs(scores.sigma) < 0.2) lowSignals.push(t.advisorPanel.dimVariance)
@@ -112,11 +104,10 @@ export default function AdvisorDashboard({ data, clientName }: Props) {
   return (
     <div className="animate-fade-300 mx-auto w-full max-w-5xl px-6 pb-16 pt-6 min-[900px]:px-8">
       {/* Advisor-view marker */}
-      <div className="no-print mb-5 flex items-center gap-3">
+      <div className="no-print mb-5">
         <span className="rounded-md bg-text px-2.5 py-1 font-mono text-[11px] uppercase tracking-[0.16em] text-bg">
           {t.common.advisorView}
         </span>
-        <span className="text-xs text-muted">{t.advisorPanel.internal}</span>
       </div>
 
       {/* ── Hero: client, archetype, confidence ─────────────────────────────── */}
@@ -138,12 +129,6 @@ export default function AdvisorDashboard({ data, clientName }: Props) {
                 </span>
               )}
             </p>
-            <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted">
-              <span className="mr-1.5 font-mono text-[10px] uppercase tracking-wider text-muted/80">
-                {t.dashboard.shownToClient}
-              </span>
-              <span className="italic">“{archetype.desc}”</span>
-            </p>
           </div>
           <div
             className={`shrink-0 self-start rounded-2xl border px-6 py-4 text-center ${
@@ -160,36 +145,22 @@ export default function AdvisorDashboard({ data, clientName }: Props) {
             >
               {confidencePct}%
             </p>
-            {isShapePrimary && (
-              <p className="mt-1 text-[11px] text-muted">
-                {t.advisorPanel.shapeMatch} <span className="font-mono text-text">{matchStrength}%</span>
-              </p>
-            )}
           </div>
         </div>
-        {data.tentative && (
-          <p className="mt-5 rounded-lg bg-amber/[0.1] px-3 py-2 text-xs font-medium leading-snug text-amber">
-            {t.advisorPanel.tentative}
-          </p>
-        )}
       </header>
 
       {/* ── Risk profile ────────────────────────────────────────────────────── */}
       <section className="mt-10">
         <h2 className={sectionLabel}>{t.advisorPanel.rawScores}</h2>
-        <div className="mt-5 grid grid-cols-1 gap-x-12 gap-y-6 sm:grid-cols-2">
+        <div className="mt-5 grid grid-cols-1 gap-x-12 gap-y-5 sm:grid-cols-2">
           {dimensions.map((d) => (
-            <DimensionScoreBar key={d.label} label={d.label} value={d.value} interpretation={d.interp} />
+            <DimensionScoreBar key={d.label} label={d.label} value={d.value} />
           ))}
         </div>
         {lowSignals.length > 0 && (
-          <div className="mt-5 flex flex-wrap gap-2">
-            {lowSignals.map((dim) => (
-              <span key={dim} className="rounded-lg bg-amber/[0.1] px-3 py-1.5 text-xs text-amber">
-                {t.advisorPanel.lowSignal(dim)}
-              </span>
-            ))}
-          </div>
+          <p className="mt-5 text-xs text-amber">
+            {t.advisorPanel.lowSignalBrief(lowSignals.join(', '))}
+          </p>
         )}
       </section>
 
