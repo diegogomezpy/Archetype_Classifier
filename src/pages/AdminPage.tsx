@@ -133,7 +133,7 @@ function InstrumentForm({
     onSave({
       ...draft,
       name: draft.name.trim(),
-      ticker: draft.ticker.trim() || 'OTC',
+      ticker: draft.ticker.trim(),
       isin: draft.isin?.trim() || undefined,
       sigmaLoad: clamp(draft.sigmaLoad, -1, 1),
       alphaLoad: clamp(draft.alphaLoad, -1, 1),
@@ -638,7 +638,9 @@ export default function AdminPage() {
               >
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <span className="truncate text-sm font-medium text-text">{inst.name}</span>
-                  <span className="shrink-0 font-mono text-xs text-muted">{inst.ticker}</span>
+                  {inst.ticker && (
+                    <span className="shrink-0 font-mono text-xs text-muted">{inst.ticker}</span>
+                  )}
                   {(inst.region ?? 'global') === 'local' && (
                     <span className="shrink-0 rounded-md bg-surface2 px-1.5 py-0.5 text-[10px] font-medium text-muted">
                       {regionLabel('local', lang)}

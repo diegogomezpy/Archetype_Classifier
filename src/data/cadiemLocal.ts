@@ -67,7 +67,6 @@ function make(
   category: LocalCategory,
   vec: Vec,
   name: string,
-  ticker: string,
   liquidityTier: 1 | 2 | 3 | 4,
   lockupMonths: number,
   details: Record<string, string>,
@@ -80,7 +79,7 @@ function make(
   return {
     id,
     name,
-    ticker,
+    ticker: '', // local securities are OTC — no exchange ticker
     region: 'local',
     assetClass: category,
     ...vec,
@@ -100,7 +99,7 @@ function bonds(rows: BondRow[], currency: 'PYG' | 'USD'): ManagedInstrument[] {
   const fmt = currency === 'PYG' ? pyg : usd
   const curLabel = currency === 'PYG' ? 'PYG (₲)' : 'USD ($)'
   return rows.map(([issuer, rating, yld, coupon, amount, residual, maturity]) =>
-    make('Fixed income', bondVector(rating), issuer, 'BONO', 2, 0, {
+    make('Fixed income', bondVector(rating), issuer, 2, 0, {
       issuer,
       rating,
       estYield: `${yld}%`,
@@ -171,7 +170,7 @@ const BONDS_USD: BondRow[] = [
 
 // ── CDA (certificates of deposit) ───────────────────────────────────────────
 const CDS: ManagedInstrument[] = [
-  make('CDs', cdVector('AA-py'), 'Zeta Banco', 'CDA', 3, 0, {
+  make('CDs', cdVector('AA-py'), 'Zeta Banco', 3, 0, {
     issuer: 'Zeta Banco',
     rating: 'AA-py',
     estYield: '10,00%',
@@ -186,27 +185,27 @@ const CDS: ManagedInstrument[] = [
 // ── Mutual funds (Fondos Mutuos) ────────────────────────────────────────────
 // Row: [name, rating, return%, horizon, incomePayment, redemption, min, currency, aggressive]
 const MUTUAL: ManagedInstrument[] = [
-  make('Mutual funds', fundVector('AAfpy', false), 'Fondo Mutuo Disponible en Guaraníes', 'FM', 1, 0, {
+  make('Mutual funds', fundVector('AAfpy', false), 'Fondo Mutuo Disponible en Guaraníes', 1, 0, {
     fundManager: 'Cadiem', rating: 'AAfpy', estYield: '6,83%', horizon: 'Corto plazo',
     dividendPayment: 'Diario', redemption: '1 día hábil', minInvestment: '₲ 1.000.000', currency: 'PYG (₲)',
   }),
-  make('Mutual funds', fundVector('Af-py', true), 'Fondo Mutuo Proyección en Guaraníes', 'FM', 1, 0, {
+  make('Mutual funds', fundVector('Af-py', true), 'Fondo Mutuo Proyección en Guaraníes', 1, 0, {
     fundManager: 'Cadiem', estYield: '9,23%', horizon: 'Mediano plazo',
     dividendPayment: 'Diario', redemption: '5 días hábiles', minInvestment: 'Sin límite', currency: 'PYG (₲)',
   }),
-  make('Mutual funds', fundVector('Af-py', true), 'Fondo Mutuo Crecimiento', 'FM', 1, 0, {
+  make('Mutual funds', fundVector('Af-py', true), 'Fondo Mutuo Crecimiento', 1, 0, {
     fundManager: 'Cadiem', rating: 'Af-py', estYield: '8,68%', horizon: 'Mediano - largo plazo',
     dividendPayment: 'Diario', redemption: '5 días hábiles', minInvestment: '₲ 10.000.000', currency: 'PYG (₲)',
   }),
-  make('Mutual funds', fundVector('Af-py', true), 'Fondo Mutuo Para Todos', 'FM', 1, 0, {
+  make('Mutual funds', fundVector('Af-py', true), 'Fondo Mutuo Para Todos', 1, 0, {
     fundManager: 'Cadiem', estYield: '8,36%', horizon: 'Mediano - largo plazo',
     dividendPayment: 'Diario', redemption: '2 días hábiles', minInvestment: '₲ 300.000', currency: 'PYG (₲)',
   }),
-  make('Mutual funds', fundVector('AAf-py', false), 'Fondo Mutuo Disponible en Dólares Americanos', 'FM', 1, 0, {
+  make('Mutual funds', fundVector('AAf-py', false), 'Fondo Mutuo Disponible en Dólares Americanos', 1, 0, {
     fundManager: 'Cadiem', rating: 'AAf-py', estYield: '4,34%', horizon: 'Corto plazo',
     dividendPayment: 'Diario', redemption: '1 día hábil', minInvestment: 'USD 250', currency: 'USD ($)',
   }),
-  make('Mutual funds', fundVector('AAf-py', true), 'Fondo Mutuo Proyección en Dólares', 'FM', 1, 0, {
+  make('Mutual funds', fundVector('AAf-py', true), 'Fondo Mutuo Proyección en Dólares', 1, 0, {
     fundManager: 'Cadiem', estYield: '5,58%', horizon: 'Mediano plazo',
     dividendPayment: 'Diario', redemption: '5 días hábiles', minInvestment: 'Sin límite', currency: 'USD ($)',
   }),
@@ -214,11 +213,11 @@ const MUTUAL: ManagedInstrument[] = [
 
 // ── Investment funds (Fondos de Inversión) ──────────────────────────────────
 const INVESTMENT: ManagedInstrument[] = [
-  make('Investment funds', investmentFundVector, 'Fondo de Inversión Las Orquídeas', 'FI', 4, 12, {
+  make('Investment funds', investmentFundVector, 'Fondo de Inversión Las Orquídeas', 4, 12, {
     fundManager: 'Cadiem', estYield: '10% - 11%', dividendPayment: 'Al vencimiento',
     shareValue: '₲ 1.000.000', saleValue: '₲ 150.000.000', term: '1 año', minInvestment: '150 cuotas', currency: 'PYG (₲)',
   }),
-  make('Investment funds', investmentFundVector, 'Fondo de Inversión Link Center', 'FI', 4, 180, {
+  make('Investment funds', investmentFundVector, 'Fondo de Inversión Link Center', 4, 180, {
     fundManager: 'Cadiem', estYield: '12% - 13%', dividendPayment: 'Anual después del 5º año',
     shareValue: '$ 1.000', saleValue: '$ 1.000', term: '15 años', minInvestment: '$ 250.000', currency: 'USD ($)',
   }),
@@ -243,7 +242,7 @@ const EQUITIES: ManagedInstrument[] = EQ_ROWS.map(([issuer, rating, cls, yld, pr
   // several preferred-share classes distinguishable.
   const label = cls && cls !== '-' ? `${issuer} — Clase ${cls}` : issuer
   const name = `${label} (₲ ${price})`
-  return make('Equities', localEquityVector, name, 'ACC', 3, 0, {
+  return make('Equities', localEquityVector, name, 3, 0, {
     issuer,
     rating,
     shareClass: cls && cls !== '-' ? cls : '',

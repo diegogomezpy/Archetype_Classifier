@@ -154,7 +154,7 @@ export function localizedArchetype(key: ArchetypeKey, lang: Lang): Archetype {
 // Record keys throughout the engine. Only the display label translates.
 const ASSET_CLASS_ES: Record<AssetClass, string> = {
   'Fixed income': 'Renta fija',
-  Equities: 'Acciones',
+  Equities: 'Renta variable',
   'Income structures': 'Estructuras de renta',
   'Growth structures': 'Estructuras de crecimiento',
   Alternatives: 'Alternativos',
@@ -176,7 +176,7 @@ const LOCAL_CATEGORY_EN: Record<LocalCategory, string> = {
 }
 const LOCAL_CATEGORY_ES: Record<LocalCategory, string> = {
   'Fixed income': 'Renta fija',
-  Equities: 'Acciones',
+  Equities: 'Renta variable',
   CDs: 'CDA',
   'Mutual funds': 'Fondos mutuos',
   'Investment funds': 'Fondos de inversión',

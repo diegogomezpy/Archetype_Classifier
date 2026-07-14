@@ -66,7 +66,9 @@ export default function InstrumentList({ instruments }: Props) {
               </div>
 
               <div className="flex w-16 shrink-0 flex-col items-end">
-                <span className="font-mono text-xs text-muted">{inst.ticker}</span>
+                {inst.ticker && (
+                  <span className="font-mono text-xs text-muted">{inst.ticker}</span>
+                )}
                 <span className="font-mono text-sm font-medium text-text tnum">{inst.fit}</span>
               </div>
               <span
