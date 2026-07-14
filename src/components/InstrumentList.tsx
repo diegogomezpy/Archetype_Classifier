@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { colorForCategory } from '../lib/instruments'
 import { fieldSpecsFor, localQuickFacts, type ManagedInstrument } from '../lib/catalog'
+import InstrumentDocs from './InstrumentDocs'
 import { useLang, useT } from '../i18n/i18n'
 
 type Props = {
@@ -132,6 +133,7 @@ export default function InstrumentList({ instruments }: Props) {
                     </span>
                   </span>
                 </div>
+                <InstrumentDocs instrumentId={inst.id} editable={false} />
               </div>
             )}
           </li>

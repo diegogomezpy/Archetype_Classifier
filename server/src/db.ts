@@ -1,4 +1,5 @@
 import { Firestore } from '@google-cloud/firestore'
+import { Storage } from '@google-cloud/storage'
 
 // Firestore (GCP native). On Cloud Run the project + credentials come from the
 // runtime service account automatically; locally, set FIRESTORE_EMULATOR_HOST to
@@ -13,6 +14,12 @@ export const configCol = db.collection('config')
 export const advisorsCol = db.collection('advisors')
 export const clientsCol = db.collection('clients')
 export const sessionsCol = db.collection('sessions')
+// Attached-document metadata (the file bytes live in Cloud Storage).
+export const documentsCol = db.collection('documents')
+
+// Cloud Storage bucket for instrument attachments (reports, term sheets, …).
+const storage = new Storage({ projectId })
+export const docsBucket = storage.bucket(process.env.DOCS_BUCKET || 'archetype-classifier-docs')
 
 export const newId = () =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto

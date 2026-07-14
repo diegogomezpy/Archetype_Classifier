@@ -8,6 +8,8 @@ import {
   catalogCol,
   clientsCol,
   configCol,
+  docsBucket,
+  documentsCol,
   newId,
   normalizeName,
   sessionsCol,
@@ -158,6 +160,79 @@ app.post('/api/sessions', async (c) => {
 })
 app.delete('/api/sessions/:id', async (c) => {
   await sessionsCol.doc(c.req.param('id')).delete()
+  return c.json({ ok: true })
+})
+
+// ── documents (instrument attachments) ────────────────────────────────────────
+// File bytes live in Cloud Storage; metadata (name/size/type) lives in Firestore.
+type DocMeta = {
+  id: string
+  instrumentId: string
+  name: string
+  size: number
+  contentType: string
+  gcsPath: string
+  createdAt: string
+}
+const publicMeta = (m: DocMeta) => {
+  const { gcsPath: _gcsPath, ...rest } = m
+  return rest
+}
+
+app.get('/api/instruments/:id/docs', async (c) => {
+  const snap = await documentsCol.where('instrumentId', '==', c.req.param('id')).get()
+  const docs = snap.docs.map((d) => publicMeta(d.data() as DocMeta))
+  docs.sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? ''))
+  return c.json(docs)
+})
+
+app.post('/api/instruments/:id/docs', async (c) => {
+  const instrumentId = c.req.param('id')
+  const body = await c.req.parseBody()
+  const file = body['file']
+  if (!(file instanceof File)) return c.json({ error: 'no file' }, 400)
+  const id = newId()
+  const gcsPath = `instruments/${instrumentId}/${id}`
+  const buf = Buffer.from(await file.arrayBuffer())
+  await docsBucket.file(gcsPath).save(buf, {
+    contentType: file.type || 'application/octet-stream',
+    resumable: false,
+  })
+  const meta: DocMeta = {
+    id,
+    instrumentId,
+    name: file.name || 'document',
+    size: buf.length,
+    contentType: file.type || 'application/octet-stream',
+    gcsPath,
+    createdAt: new Date().toISOString(),
+  }
+  await documentsCol.doc(id).set(meta)
+  return c.json(publicMeta(meta))
+})
+
+app.get('/api/docs/:docId', async (c) => {
+  const doc = await documentsCol.doc(c.req.param('docId')).get()
+  if (!doc.exists) return c.json({ error: 'not found' }, 404)
+  const meta = doc.data() as DocMeta
+  const [buf] = await docsBucket.file(meta.gcsPath).download()
+  const disp = c.req.query('download') != null ? 'attachment' : 'inline'
+  return new Response(new Uint8Array(buf), {
+    headers: {
+      'Content-Type': meta.contentType || 'application/octet-stream',
+      'Content-Disposition': `${disp}; filename="${meta.name.replace(/["\r\n]/g, '')}"`,
+    },
+  })
+})
+
+app.delete('/api/docs/:docId', async (c) => {
+  const ref = documentsCol.doc(c.req.param('docId'))
+  const doc = await ref.get()
+  if (doc.exists) {
+    const meta = doc.data() as DocMeta
+    await docsBucket.file(meta.gcsPath).delete().catch(() => {})
+    await ref.delete()
+  }
   return c.json({ ok: true })
 })
 

@@ -129,6 +129,16 @@ const en = {
     housePick: 'House pick',
     updated: 'Updated',
   },
+  docs: {
+    title: 'Documents',
+    upload: 'Upload document',
+    uploading: 'Uploading…',
+    none: 'No documents attached.',
+    remove: 'Remove',
+    hint: (mb: number) => `Any file up to ${mb} MB.`,
+    tooBig: (mb: number) => `File too large (max ${mb} MB).`,
+    uploadFailed: 'Upload failed — try again.',
+  },
   advisorPanel: {
     rawScores: 'Risk profile',
     dimVariance: 'Variance tolerance',
@@ -435,6 +445,16 @@ const es: UIStrings = {
     tradeable: 'Ninguno (negociable)',
     housePick: 'Selección de la casa',
     updated: 'Actualizado',
+  },
+  docs: {
+    title: 'Documentos',
+    upload: 'Subir documento',
+    uploading: 'Subiendo…',
+    none: 'Sin documentos adjuntos.',
+    remove: 'Quitar',
+    hint: (mb: number) => `Cualquier archivo hasta ${mb} MB.`,
+    tooBig: (mb: number) => `Archivo muy grande (máx ${mb} MB).`,
+    uploadFailed: 'Falló la subida — intenta de nuevo.',
   },
   advisorPanel: {
     rawScores: 'Perfil de riesgo',

@@ -22,6 +22,7 @@ import { categoryLabel, regionLabel } from '../i18n/content'
 import AppNav from '../components/AppNav'
 import AdminNav from '../components/AdminNav'
 import ImportInstruments from '../components/ImportInstruments'
+import InstrumentDocs from '../components/InstrumentDocs'
 
 const REGIONS: Region[] = ['global', 'local']
 
@@ -348,6 +349,9 @@ function InstrumentForm({
           )
         })}
       </div>
+
+      {/* Attached documents (reports, term sheets, …) */}
+      <InstrumentDocs instrumentId={draft.id} editable />
 
       <div className="mt-6 flex items-center justify-end gap-3">
         <button
