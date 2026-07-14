@@ -21,6 +21,7 @@ import { useLang, useT } from '../i18n/i18n'
 import { categoryLabel, regionLabel } from '../i18n/content'
 import AppNav from '../components/AppNav'
 import AdminNav from '../components/AdminNav'
+import ImportInstruments from '../components/ImportInstruments'
 
 const REGIONS: Region[] = ['global', 'local']
 
@@ -588,6 +589,9 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+
+      {/* Bulk import from a spreadsheet */}
+      <ImportInstruments />
 
       {/* New-instrument form */}
       {adding && (

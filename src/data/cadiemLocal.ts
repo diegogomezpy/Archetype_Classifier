@@ -1,5 +1,6 @@
 import type { ManagedInstrument } from '../lib/catalog'
 import type { LocalCategory } from '../lib/instruments'
+import { deriveRiskVector } from '../lib/riskDerivation'
 
 // ---------------------------------------------------------------------------
 // Cadiem local (Paraguayan) instrument menu
@@ -17,46 +18,16 @@ import type { LocalCategory } from '../lib/instruments'
 
 const AS_OF = '2026-07-07'
 
-// Credit rating → risk factor r ∈ [0,1] (0 = safest, 1 = riskiest).
-const RATING_RISK: Record<string, number> = {
-  AAApy: 0.0, AAAPy: 0.0,
-  'AA+py': 0.12, 'AA+Py': 0.12, AApy: 0.15, AAf: 0.12, 'AAf-py': 0.12, AAfpy: 0.12,
-  'AA-py': 0.2,
-  'A+py': 0.32, Apy: 0.38, 'Af-py': 0.3, 'A-py': 0.42, 'A Py': 0.38,
-  'BBB+py': 0.58, BBBpy: 0.62, BBBPy: 0.62, 'BBB Py': 0.62, 'BBB-py': 0.68, 'BBB-Py': 0.68,
-  'BB+py': 0.82, 'BB+Py': 0.82,
-}
-const riskOf = (rating: string): number => RATING_RISK[rating.trim()] ?? 0.5
-const round2 = (n: number) => Math.round(n * 100) / 100
-
 type Vec = { sigmaLoad: number; alphaLoad: number; lambdaLoad: number }
 
-// Per-category risk-vector derivation from the credit-risk factor r.
-function bondVector(rating: string): Vec {
-  const r = riskOf(rating)
-  return {
-    sigmaLoad: round2(-0.35 + 0.6 * r), // riskier credit ⇒ more variance
-    alphaLoad: round2(-0.35 - 0.25 * r), // negative skew (rare default tail)
-    lambdaLoad: round2(0.45 - 0.85 * r), // safe = loss-averse, junk = loss-tolerant
-  }
-}
-function cdVector(rating: string): Vec {
-  const r = riskOf(rating)
-  return { sigmaLoad: round2(-0.75 + 0.3 * r), alphaLoad: 0, lambdaLoad: round2(0.7 - 0.4 * r) }
-}
-function fundVector(rating: string, aggressive: boolean): Vec {
-  const r = riskOf(rating)
-  const base = aggressive ? -0.35 : -0.6
-  return {
-    sigmaLoad: round2(base + 0.35 * r),
-    alphaLoad: 0,
-    lambdaLoad: round2((aggressive ? 0.4 : 0.6) - 0.4 * r),
-  }
-}
-// Investment funds: illiquid, longer horizon, moderate convexity.
-const investmentFundVector: Vec = { sigmaLoad: 0.1, alphaLoad: 0.2, lambdaLoad: 0.15 }
-// Local equities (preferred / electronic shares): equity-like with an income tilt.
-const localEquityVector: Vec = { sigmaLoad: 0.4, alphaLoad: 0.0, lambdaLoad: -0.2 }
+// Risk vectors come from the shared derivation (lib/riskDerivation.ts) so the
+// menu and the file importers stay in sync and the admin can retune both at once.
+const bondVector = (rating: string): Vec => deriveRiskVector('local', 'Fixed income', { rating })
+const cdVector = (rating: string): Vec => deriveRiskVector('local', 'CDs', { rating })
+const fundVector = (rating: string, _aggressive?: boolean): Vec =>
+  deriveRiskVector('local', 'Mutual funds', { rating })
+const investmentFundVector: Vec = deriveRiskVector('local', 'Investment funds', {})
+const localEquityVector: Vec = deriveRiskVector('local', 'Equities', {})
 
 // Amount formatting helpers (Paraguayan thousands separator is '.').
 const pyg = (s: string) => `₲ ${s}`
