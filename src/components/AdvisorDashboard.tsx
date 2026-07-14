@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { computeAllocation, type DashboardData } from '../lib/scoring'
 import { colorForCategory, type Category, type Region } from '../lib/instruments'
 import { useArchetypeConfig } from '../lib/archetypeConfig'
-import { getTalkingPoints } from '../lib/advisorCopy'
 import { useLang, useT } from '../i18n/i18n'
 import { categoryLabel, localizedArchetype, regionLabel } from '../i18n/content'
 import DonutChart from './DonutChart'
@@ -98,8 +97,6 @@ export default function AdvisorDashboard({ data, clientName }: Props) {
   if (Math.abs(scores.alpha) < 0.2) lowSignals.push(t.advisorPanel.dimSkew)
   if (Math.abs(scores.lambda) < 0.2) lowSignals.push(t.advisorPanel.dimLoss)
   if (Math.abs(scores.ev) < 0.2) lowSignals.push(t.advisorPanel.dimEv)
-
-  const talkingPoints = getTalkingPoints(data.archetype, scores, lang)
 
   return (
     <div className="animate-fade-300 mx-auto w-full max-w-5xl px-6 pb-16 pt-6 min-[900px]:px-8">
@@ -210,22 +207,6 @@ export default function AdvisorDashboard({ data, clientName }: Props) {
             )}
           </div>
         </div>
-      </section>
-
-      {/* ── Talking points ──────────────────────────────────────────────────── */}
-      <section className="mt-12">
-        <h2 className={sectionLabel}>{t.advisorPanel.talkingPoints}</h2>
-        <ul className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {talkingPoints.map((point, i) => (
-            <li
-              key={i}
-              className="print-avoid-break flex items-start gap-3 rounded-2xl border border-border bg-surface p-4 text-sm leading-relaxed text-text shadow-soft"
-            >
-              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-teal" />
-              <span>{point}</span>
-            </li>
-          ))}
-        </ul>
       </section>
 
       {/* ── Actions ─────────────────────────────────────────────────────────── */}
