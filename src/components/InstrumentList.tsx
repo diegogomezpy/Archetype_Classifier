@@ -48,6 +48,11 @@ export default function InstrumentList({ instruments }: Props) {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="truncate text-sm font-medium text-text">{inst.name}</span>
+                  {inst.kind && (
+                    <span className="shrink-0 rounded-md bg-surface2 px-1.5 py-0.5 text-[10px] font-medium text-muted">
+                      {inst.kind}
+                    </span>
+                  )}
                   {inst.emphasized && (
                     <span className="shrink-0 rounded-md bg-teal/12 px-2 py-0.5 text-[11px] font-medium text-teal">
                       {t.instrumentDetail.housePick}

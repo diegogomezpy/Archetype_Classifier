@@ -27,6 +27,7 @@ const ALIASES: Record<string, string[]> = {
   name: ['security', 'security name', 'issuer name', 'long name', 'short name'],
   isin: ['id isin', 'isin number'],
   ticker: ['bbg ticker', 'bloomberg ticker', 'symbol', 'ticker symbol'],
+  kind: ['type', 'security type', 'instrument type', 'sec type', 'type of security'],
   currency: ['crncy', 'ccy', 'curr'],
   // detail keys
   issuer: ['issuer name', 'obligor'],
@@ -62,6 +63,7 @@ const ALIASES: Record<string, string[]> = {
 function coreColumns(): ImportColumn[] {
   return [
     { key: 'name', label: 'Name', aliases: ALIASES.name, required: true },
+    { key: 'kind', label: 'Type', aliases: ALIASES.kind },
     { key: 'isin', label: 'ISIN', aliases: ALIASES.isin },
     { key: 'ticker', label: 'Ticker', aliases: ALIASES.ticker },
     { key: 'currency', label: 'Currency', aliases: ALIASES.currency },
@@ -172,6 +174,7 @@ export function parseInstruments(region: Region, category: Category, rows: strin
       name,
       ticker: (v.ticker ?? '').trim(),
       isin: v.isin?.trim() || undefined,
+      kind: v.kind?.trim() || undefined,
       region,
       assetClass: category,
       sigmaLoad: sigma ?? derived.sigmaLoad,

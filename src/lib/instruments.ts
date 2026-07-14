@@ -33,6 +33,7 @@ export interface Instrument {
   ticker: string
   region?: Region // defaults to 'global' when absent
   assetClass: Category
+  kind?: string // specific instrument type within the class (Bond, CDA, Preferred stock, ETF…)
   sigmaLoad: number
   alphaLoad: number
   lambdaLoad: number

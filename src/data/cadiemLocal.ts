@@ -18,6 +18,15 @@ import { deriveRiskVector } from '../lib/riskDerivation'
 
 const AS_OF = '2026-07-07'
 
+// Specific instrument type per local category (equities use their share type).
+const LOCAL_KIND: Record<LocalCategory, string> = {
+  'Fixed income': 'Bono',
+  CDs: 'CDA',
+  'Mutual funds': 'Fondo mutuo',
+  'Investment funds': 'Fondo de inversión',
+  Equities: 'Acción',
+}
+
 type Vec = { sigmaLoad: number; alphaLoad: number; lambdaLoad: number }
 
 // Risk vectors come from the shared derivation (lib/riskDerivation.ts) so the
@@ -53,6 +62,7 @@ function make(
     ticker: '', // local securities are OTC — no exchange ticker
     region: 'local',
     assetClass: category,
+    kind: category === 'Equities' ? clean.shareType || 'Acción' : LOCAL_KIND[category],
     ...vec,
     liquidityTier,
     lockupMonths,

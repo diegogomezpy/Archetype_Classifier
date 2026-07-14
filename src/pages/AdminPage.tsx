@@ -135,6 +135,7 @@ function InstrumentForm({
       ...draft,
       name: draft.name.trim(),
       ticker: draft.ticker.trim(),
+      kind: draft.kind?.trim() || undefined,
       isin: draft.isin?.trim() || undefined,
       sigmaLoad: clamp(draft.sigmaLoad, -1, 1),
       alphaLoad: clamp(draft.alphaLoad, -1, 1),
@@ -156,6 +157,15 @@ function InstrumentForm({
             className={inputCls}
             value={draft.name}
             onChange={(e) => set('name', e.target.value)}
+          />
+        </div>
+        <div>
+          <label className={labelCls}>{t.admin.kind}</label>
+          <input
+            className={inputCls}
+            value={draft.kind ?? ''}
+            placeholder={t.admin.kindPlaceholder}
+            onChange={(e) => set('kind', e.target.value)}
           />
         </div>
         <div>
@@ -644,6 +654,11 @@ export default function AdminPage() {
                   <span className="truncate text-sm font-medium text-text">{inst.name}</span>
                   {inst.ticker && (
                     <span className="shrink-0 font-mono text-xs text-muted">{inst.ticker}</span>
+                  )}
+                  {inst.kind && (
+                    <span className="shrink-0 rounded-md bg-surface2 px-1.5 py-0.5 text-[10px] font-medium text-muted">
+                      {inst.kind}
+                    </span>
                   )}
                   {(inst.region ?? 'global') === 'local' && (
                     <span className="shrink-0 rounded-md bg-surface2 px-1.5 py-0.5 text-[10px] font-medium text-muted">
