@@ -31,13 +31,13 @@ const en = {
     welcomeBack: (name: string) => `Continuing as ${name}.`,
     startFresh: 'Not you?',
     start: 'Start',
-    footnote: 'Each round takes under 30 seconds. There are no wrong choices.',
+    footnote: 'Under 30 seconds a round.',
     advisorAccess: 'Advisor access',
     adminAccess: 'Admin access',
   },
   halfway: {
     title: 'Halfway there',
-    body: "Nice work — 5 more decisions to go. Same idea as before: look at both sides and go with the one you'd actually want.",
+    body: 'Five more to go — same idea as before.',
     continue: 'Continue',
   },
   round: {
@@ -78,32 +78,31 @@ const en = {
     steps: [
       {
         title: 'This is your money',
-        body: 'You start with $10,000. Every round we draw one real outcome from your choice and add it to your capital — so your decisions actually play out as you go.',
+        body: '$10,000 to start. Each round draws one real outcome and adds it to your capital.',
       },
       {
         title: 'Two options each round',
-        body: 'Every round pits a bolder “Growth” side against a calmer “Anchor” side. Each card lists that side’s possible results and how likely each one is.',
+        body: 'A bolder Growth side vs a calmer Anchor side, each with its own outcomes and odds.',
       },
       {
         title: 'Your combined odds',
-        body: 'This bar is everything that could happen given your split. Each block is a possible result — wider means more likely, green is a gain, red is a loss.',
+        body: 'This bar shows every outcome for your split — wider = likelier, green = gain, red = loss.',
       },
       {
         title: 'Set your split',
-        body: 'Drag to divide your $10,000 between the two sides. The bar above updates live as you move it, so you can see how the mix changes your odds.',
+        body: 'Drag to split your $10,000. The bar updates live.',
       },
       {
         title: 'Lock it in',
-        body: 'Happy with your mix? Lock it in — a pointer spins and lands on one real outcome, which is added to your capital. There are no wrong answers; go with your gut.',
+        body: 'A pointer lands on one outcome, added to your capital. No wrong answers.',
       },
     ],
   },
   result: {
     eyebrow: 'Your investor profile',
     secondaryLean: 'with a secondary lean toward',
-    tentative: "Tentative read — your choices didn't lean strongly, so this is a best fit",
-    advisorNote:
-      'Thanks for playing — your advisor will walk you through what this means for your portfolio.',
+    tentative: 'Tentative — a best-fit read.',
+    advisorNote: 'Your advisor will take it from here.',
     retake: 'Retake the assessment',
   },
   dashboard: {
@@ -326,13 +325,13 @@ const es: UIStrings = {
     welcomeBack: (name: string) => `Continuando como ${name}.`,
     startFresh: '¿No eres tú?',
     start: 'Comenzar',
-    footnote: 'Cada ronda toma menos de 30 segundos. No hay elecciones incorrectas.',
+    footnote: 'Menos de 30 segundos por ronda.',
     advisorAccess: 'Acceso asesor',
     adminAccess: 'Acceso administrador',
   },
   halfway: {
     title: 'Vas por la mitad',
-    body: 'Buen trabajo — quedan 5 decisiones. La misma idea que antes: mira ambos lados y elige el que realmente querrías.',
+    body: 'Quedan cinco — la misma idea que antes.',
     continue: 'Continuar',
   },
   round: {
@@ -373,33 +372,31 @@ const es: UIStrings = {
     steps: [
       {
         title: 'Este es tu dinero',
-        body: 'Comienzas con $10,000. En cada ronda sorteamos un resultado real según tu elección y lo sumamos a tu capital — tus decisiones se materializan sobre la marcha.',
+        body: '$10,000 para empezar. Cada ronda sortea un resultado real y lo suma a tu capital.',
       },
       {
         title: 'Dos opciones por ronda',
-        body: 'Cada ronda enfrenta un lado más audaz («Crecimiento») contra uno más calmo («Ancla»). Cada tarjeta muestra los resultados posibles de ese lado y qué tan probable es cada uno.',
+        body: 'Un lado Crecimiento más audaz vs uno Ancla más calmo, cada uno con sus resultados y probabilidades.',
       },
       {
         title: 'Tus probabilidades combinadas',
-        body: 'Esta barra es todo lo que podría pasar con tu división. Cada bloque es un resultado posible — más ancho es más probable, verde es ganancia, rojo es pérdida.',
+        body: 'Esta barra muestra todo lo posible con tu división — más ancho = más probable, verde = ganancia, rojo = pérdida.',
       },
       {
         title: 'Define tu división',
-        body: 'Arrastra para repartir tus $10,000 entre los dos lados. La barra de arriba se actualiza en vivo, así ves cómo la mezcla cambia tus probabilidades.',
+        body: 'Arrastra para repartir tus $10,000. La barra se actualiza en vivo.',
       },
       {
         title: 'Confírmalo',
-        body: '¿Conforme con tu mezcla? Confírmala — un puntero gira y cae en un resultado real, que se suma a tu capital. No hay respuestas incorrectas; sigue tu instinto.',
+        body: 'Un puntero cae en un resultado, que se suma a tu capital. No hay respuestas incorrectas.',
       },
     ],
   },
   result: {
     eyebrow: 'Tu perfil de inversor',
     secondaryLean: 'con una inclinación secundaria hacia',
-    tentative:
-      'Lectura tentativa — tus elecciones no marcaron una tendencia fuerte; esto es la mejor aproximación',
-    advisorNote:
-      'Gracias por participar — tu asesor te explicará qué significa esto para tu portafolio.',
+    tentative: 'Tentativo — la mejor aproximación.',
+    advisorNote: 'Tu asesor sigue desde aquí.',
     retake: 'Repetir la evaluación',
   },
   dashboard: {

@@ -24,7 +24,7 @@ export const ARCHETYPE_COLORS: Record<ArchetypeKey, string> = {
 export const ARCHETYPES: Record<ArchetypeKey, Archetype> = {
   banker: {
     name: 'The Banker',
-    desc: "You safeguard capital first. Losses weigh heavily, and you'll give up expected return for certainty — better to protect what you've built than to reach for more.",
+    desc: "You protect capital first — you'll trade upside for certainty.",
     traits: ['Capital-preserving', 'Prefers certainty', 'Conservative', 'Low drawdown'],
     products: [
       'Capital-protected autocallables',
@@ -35,7 +35,7 @@ export const ARCHETYPES: Record<ArchetypeKey, Archetype> = {
   },
   quant: {
     name: 'The Quant',
-    desc: "You follow the expected value. When one option pays more on average you take it — risky, safe, flashy or dull doesn't sway you. Models over narrative, math over feel. This is less a risk personality than a discipline that sits on top of one.",
+    desc: 'You follow the expected value — models over narrative, math over feel.',
     traits: ['EV-driven', 'Shape-indifferent', 'Systematic', 'Low behavioral bias'],
     products: [
       'Low-cost factor ETFs',
@@ -46,7 +46,7 @@ export const ARCHETYPES: Record<ArchetypeKey, Archetype> = {
   },
   venture: {
     name: 'The Venture Capitalist',
-    desc: "You back bold bets for the chance at an outsized win. Asymmetric upside is worth more to you than its expected value suggests — a few big winners justify the ones that go nowhere, and you'll pass on a safer, richer option to keep the long-shot.",
+    desc: 'You back bold bets for the shot at an outsized win.',
     traits: ['Upside-oriented', 'Risk-tolerant', 'Conviction-driven', 'Loss-resilient'],
     products: [
       'Structured notes with uncapped upside',
@@ -57,7 +57,7 @@ export const ARCHETYPES: Record<ArchetypeKey, Archetype> = {
   },
   insurer: {
     name: 'The Insurer',
-    desc: "Like an underwriter, you collect a steady premium for taking on the risks others want to avoid. You're comfortable with the occasional large loss in exchange for reliable income — the professional's trade.",
+    desc: 'You collect steady premium for taking on the risk others avoid.',
     traits: ['Premium-collecting', 'Negative-skew tolerant', 'Yield-seeking', 'Underwrites risk'],
     products: [
       'Autocallable reverse convertibles',
@@ -68,7 +68,7 @@ export const ARCHETYPES: Record<ArchetypeKey, Archetype> = {
   },
   indexer: {
     name: 'The Indexer',
-    desc: "You'd rather own the market than try to outguess it. No strong view on direction or payoff shape — you favor simple, transparent, low-cost exposure you can understand and track.",
+    desc: "You'd rather own the market than try to outguess it.",
     traits: ['Transparency-first', 'Low-cost', 'Broad-market', 'Low complexity'],
     products: [
       'MSCI World / S&P 500 trackers',

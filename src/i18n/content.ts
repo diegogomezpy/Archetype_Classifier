@@ -84,7 +84,7 @@ export function localizeRound(round: AllocRound, lang: Lang): AllocRound {
 const ARCHETYPES_ES: Record<ArchetypeKey, Archetype> = {
   banker: {
     name: 'El Banquero',
-    desc: 'Proteges el capital ante todo. Las pérdidas pesan mucho, y estás dispuesto a ceder rendimiento esperado a cambio de certeza — mejor proteger lo construido que arriesgarlo por más.',
+    desc: 'Proteges el capital ante todo — cedes rendimiento a cambio de certeza.',
     traits: ['Preserva capital', 'Prefiere certeza', 'Conservador', 'Caídas acotadas'],
     products: [
       'Autocallables con capital protegido',
@@ -95,7 +95,7 @@ const ARCHETYPES_ES: Record<ArchetypeKey, Archetype> = {
   },
   quant: {
     name: 'El Cuantitativo',
-    desc: 'Sigues el valor esperado. Cuando una opción paga más en promedio, la tomas — arriesgada, segura, llamativa o aburrida, no te influye. Modelos sobre narrativa, matemática sobre intuición. Más que una personalidad de riesgo, es una disciplina que se superpone a una.',
+    desc: 'Sigues el valor esperado — modelos sobre narrativa, matemática sobre intuición.',
     traits: ['Guiado por VE', 'Indiferente a la forma', 'Sistemático', 'Bajo sesgo conductual'],
     products: [
       'ETFs de factores de bajo costo',
@@ -106,7 +106,7 @@ const ARCHETYPES_ES: Record<ArchetypeKey, Archetype> = {
   },
   venture: {
     name: 'El Capitalista de Riesgo',
-    desc: 'Apuestas fuerte por la chance de una ganancia extraordinaria. El potencial asimétrico vale para ti más de lo que sugiere su valor esperado — unos pocos grandes aciertos justifican los que no llegan, y dejarías pasar una opción más segura y rentable por conservar la apuesta a lo grande.',
+    desc: 'Apuestas fuerte por la chance de una ganancia extraordinaria.',
     traits: [
       'Orientado al alza',
       'Tolerante al riesgo',
@@ -122,7 +122,7 @@ const ARCHETYPES_ES: Record<ArchetypeKey, Archetype> = {
   },
   insurer: {
     name: 'El Asegurador',
-    desc: 'Como un asegurador, cobras una prima constante por asumir los riesgos que otros evitan. Aceptas la pérdida grande ocasional a cambio de ingresos confiables — el negocio del profesional.',
+    desc: 'Cobras una prima constante por asumir el riesgo que otros evitan.',
     traits: ['Cobra primas', 'Tolera asimetría negativa', 'Busca rendimiento', 'Suscribe riesgo'],
     products: [
       'Reverse convertibles autocallables',
@@ -133,7 +133,7 @@ const ARCHETYPES_ES: Record<ArchetypeKey, Archetype> = {
   },
   indexer: {
     name: 'El Indexador',
-    desc: 'Prefieres ser dueño del mercado antes que intentar ganarle. Sin una visión fuerte de dirección ni de forma de pago — prefieres exposición simple, transparente y de bajo costo que puedas entender y seguir.',
+    desc: 'Prefieres ser dueño del mercado antes que intentar ganarle.',
     traits: ['Transparencia primero', 'Bajo costo', 'Mercado amplio', 'Baja complejidad'],
     products: [
       'Trackers MSCI World / S&P 500',
