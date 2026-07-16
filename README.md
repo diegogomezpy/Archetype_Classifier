@@ -9,6 +9,15 @@ of fitting instruments.
 Built as a single-page app with **React + TypeScript + Vite + Tailwind CSS +
 React Router** — no external UI libraries.
 
+The visual language is the **Mercator design system** (warm paper, ink, a deep
+viridian accent, and three type voices — Source Serif 4 titles / Hanken Grotesk
+UI / IBM Plex Mono figures — on a faint graph-paper ground), with a **light/dark
+theme** toggled bottom-left. Colours live as RGB-triplet CSS variables in
+`src/index.css` (light + dark under `[data-theme]` on `<html>`); the Tailwind
+config maps its colour tokens to those variables so a single attribute flip
+re-themes the whole app and every opacity modifier keeps working. The source
+package sits in `mercator_design_system/`.
+
 ## Localization
 
 The whole app is bilingual **English / Spanish** — a fixed toggle (bottom-right)
