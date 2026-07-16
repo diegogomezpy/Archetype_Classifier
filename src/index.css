@@ -82,6 +82,11 @@ body,
   height: 100%;
 }
 
+/* Keep the overscroll/canvas gutter in-theme (not the browser default). */
+html {
+  background-color: rgb(var(--c-bg));
+}
+
 body {
   margin: 0;
   background-color: rgb(var(--c-bg));
