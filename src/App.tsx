@@ -1,10 +1,12 @@
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { LanguageProvider } from './i18n/i18n'
+import { ThemeProvider } from './lib/theme'
 import { CatalogProvider } from './lib/catalog'
 import { ArchetypeConfigProvider } from './lib/archetypeConfig'
 import { RiskParamsProvider } from './lib/riskParamsConfig'
 import { DirectoryProvider } from './lib/directory'
 import LanguageToggle from './components/LanguageToggle'
+import ThemeToggle from './components/ThemeToggle'
 import TestFlowPage from './pages/TestFlowPage'
 import AdvisorListPage from './pages/AdvisorListPage'
 import AdvisorClientPage from './pages/AdvisorClientPage'
@@ -27,12 +29,13 @@ import AdminAdvisorsPage from './pages/AdminAdvisorsPage'
 //   #/admin/advisors        advisor accounts
 export default function App() {
   return (
-    <LanguageProvider>
+    <ThemeProvider>
+      <LanguageProvider>
       <DirectoryProvider>
         <ArchetypeConfigProvider>
           <RiskParamsProvider>
           <CatalogProvider>
-            <div className="relative min-h-[100svh] w-full bg-bg text-text">
+            <div className="relative min-h-[100svh] w-full ground text-text">
               <HashRouter>
                 <Routes>
                   <Route path="/" element={<TestFlowPage />} />
@@ -47,11 +50,13 @@ export default function App() {
                 </Routes>
               </HashRouter>
               <LanguageToggle />
+              <ThemeToggle />
             </div>
           </CatalogProvider>
           </RiskParamsProvider>
         </ArchetypeConfigProvider>
       </DirectoryProvider>
-    </LanguageProvider>
+      </LanguageProvider>
+    </ThemeProvider>
   )
 }

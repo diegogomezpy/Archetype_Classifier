@@ -2,8 +2,78 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+/* ────────────────────────────────────────────────────────────────────────
+   Mercator design system — colour layer
+   Palette lives here as RGB triplets so Tailwind can inject alpha
+   (rgb(var(--x) / <alpha>)) and every `bg-teal/15`-style modifier keeps
+   working across BOTH themes. Theme is driven by [data-theme] on <html>.
+   ──────────────────────────────────────────────────────────────────────── */
+:root,
+:root[data-theme='light'] {
   color-scheme: light;
+  /* surfaces */
+  --c-bg: 247 245 239;          /* warm paper */
+  --c-bg-elev: 241 238 228;
+  --c-surface: 255 254 251;
+  --c-surface-2: 241 238 228;
+  --c-surface-hover: 239 236 227;
+  /* ink */
+  --c-text: 28 36 31;
+  --c-text-muted: 92 99 91;
+  --c-text-faint: 140 145 137;
+  /* lines */
+  --c-border: 230 225 213;
+  --c-border-strong: 212 205 189;
+  --c-hairline: 236 232 221;
+  /* accent — deep viridian */
+  --c-accent: 21 105 78;
+  --c-accent-hover: 17 78 58;
+  --c-accent-weak: 228 239 233;
+  /* semantic — calm, not alarm */
+  --c-red: 156 59 48;           /* claret, losses */
+  --c-red-weak: 245 230 227;
+  --c-amber: 154 107 26;        /* ochre, caution */
+  --c-amber-weak: 245 237 217;
+  /* graph-paper ground */
+  --grid-minor: 231 224 207;
+  --grid-major: 221 212 191;
+  /* effects */
+  --ring: rgba(21, 105, 78, 0.28);
+  --shadow-card: 0 1px 2px rgba(40, 35, 20, 0.05), 0 14px 34px -20px rgba(40, 35, 20, 0.2);
+  --shadow-soft: 0 1px 2px rgba(40, 35, 20, 0.05), 0 6px 18px -12px rgba(40, 35, 20, 0.16);
+  --shadow-thumb: 0 1px 3px rgba(40, 35, 20, 0.18), 0 4px 12px -2px rgba(40, 35, 20, 0.2);
+  /* type */
+  --font-serif: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+  --font-sans: 'Hanken Grotesk', system-ui, -apple-system, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --c-bg: 14 19 16;
+  --c-bg-elev: 18 23 18;
+  --c-surface: 22 28 23;
+  --c-surface-2: 30 38 31;
+  --c-surface-hover: 35 44 36;
+  --c-text: 238 241 234;
+  --c-text-muted: 154 164 155;
+  --c-text-faint: 107 117 108;
+  --c-border: 42 51 44;
+  --c-border-strong: 58 69 60;
+  --c-hairline: 35 44 36;
+  --c-accent: 63 174 134;
+  --c-accent-hover: 92 192 156;
+  --c-accent-weak: 20 48 38;
+  --c-red: 217 122 110;
+  --c-red-weak: 58 36 32;
+  --c-amber: 210 162 78;
+  --c-amber-weak: 53 42 22;
+  --grid-minor: 28 36 29;
+  --grid-major: 35 44 36;
+  --ring: rgba(63, 174, 134, 0.35);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.5), 0 14px 36px -18px rgba(0, 0, 0, 0.7);
+  --shadow-soft: 0 1px 3px rgba(0, 0, 0, 0.45), 0 8px 20px -12px rgba(0, 0, 0, 0.6);
+  --shadow-thumb: 0 1px 3px rgba(0, 0, 0, 0.5), 0 4px 12px -2px rgba(0, 0, 0, 0.55);
 }
 
 html,
@@ -14,21 +84,129 @@ body,
 
 body {
   margin: 0;
-  background-color: #f5f4f0;
-  color: #23262f;
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: rgb(var(--c-bg));
+  color: rgb(var(--c-text));
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
   overscroll-behavior: none;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-/* Tabular numbers keep dollar amounts from jittering as they update */
+/* Titles are the serif — never numbers (those stay mono via .tnum/.font-mono). */
+h1,
+h2,
+h3 {
+  font-family: var(--font-serif);
+  letter-spacing: -0.01em;
+}
+
+/* Tabular numbers keep figures from jittering as they update */
 .tnum {
   font-variant-numeric: tabular-nums;
 }
 
+/* ── THE REGISTER — helpers ────────────────────────────────────────────────
+   Figures in mono + tabular; units split small + muted; deltas signed +
+   coloured (viridian up / claret down); eyebrows mono uppercase. */
+.fig {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+.fig-unit {
+  font-style: normal;
+  font-size: 0.6em;
+  color: rgb(var(--c-text-faint));
+  margin-left: 1px;
+}
+.delta-pos {
+  color: rgb(var(--c-accent));
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.delta-neg {
+  color: rgb(var(--c-red));
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgb(var(--c-text-faint));
+}
+
+/* ── ledger table — heavy header rule, hairline rows + vertical rules ──────── */
+.ledger {
+  width: 100%;
+  border-collapse: collapse;
+}
+.ledger th {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgb(var(--c-text-faint));
+  text-align: left;
+  padding: 9px 12px;
+  border-bottom: 1.5px solid rgb(var(--c-text));
+}
+.ledger td {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: rgb(var(--c-text));
+  padding: 9px 12px;
+  border-bottom: 1px solid rgb(var(--c-hairline));
+}
+.ledger th + th,
+.ledger td + td {
+  border-left: 1px solid rgb(var(--c-hairline));
+}
+.ledger td.num,
+.ledger th.num {
+  text-align: right;
+}
+.ledger tr:last-child td {
+  border-bottom: none;
+}
+
+/* ── graph-paper ground — apply to the app shell behind the panels ────────── */
+.ground {
+  background-color: rgb(var(--c-bg-elev));
+  background-image:
+    linear-gradient(rgb(var(--grid-minor)) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(var(--grid-minor)) 1px, transparent 1px),
+    linear-gradient(rgb(var(--grid-major)) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(var(--grid-major)) 1px, transparent 1px);
+  background-size: 26px 26px, 26px 26px, 130px 130px, 130px 130px;
+  background-position: -1px -1px;
+}
+
+/* ── scrollbar ─────────────────────────────────────────────────────────────*/
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--c-border-strong));
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 /* PayoffBar allocation slider — native range styled to match the brand.
-   Left end = X (teal), right end = Y (amber). */
+   Left end = X (viridian), right end = Y (ochre). */
 .payoff-range {
   -webkit-appearance: none;
   appearance: none;
@@ -42,11 +220,11 @@ body {
   border-radius: 9999px;
   background: linear-gradient(
     90deg,
-    rgba(10, 160, 136, 0.32) 0%,
-    rgba(10, 160, 136, 0.12) 30%,
-    #edebe5 50%,
-    rgba(181, 131, 44, 0.14) 70%,
-    rgba(181, 131, 44, 0.34) 100%
+    rgb(var(--c-accent) / 0.34) 0%,
+    rgb(var(--c-accent) / 0.12) 30%,
+    rgb(var(--c-surface-2)) 50%,
+    rgb(var(--c-amber) / 0.16) 70%,
+    rgb(var(--c-amber) / 0.36) 100%
   );
 }
 .payoff-range::-moz-range-track {
@@ -54,11 +232,11 @@ body {
   border-radius: 9999px;
   background: linear-gradient(
     90deg,
-    rgba(10, 160, 136, 0.32) 0%,
-    rgba(10, 160, 136, 0.12) 30%,
-    #edebe5 50%,
-    rgba(181, 131, 44, 0.14) 70%,
-    rgba(181, 131, 44, 0.34) 100%
+    rgb(var(--c-accent) / 0.34) 0%,
+    rgb(var(--c-accent) / 0.12) 30%,
+    rgb(var(--c-surface-2)) 50%,
+    rgb(var(--c-amber) / 0.16) 70%,
+    rgb(var(--c-amber) / 0.36) 100%
   );
 }
 .payoff-range::-webkit-slider-thumb {
@@ -68,23 +246,23 @@ body {
   height: 24px;
   margin-top: -6px;
   border-radius: 9999px;
-  background: #ffffff;
-  border: 1px solid #e7e4de;
-  box-shadow: 0 1px 3px rgba(35, 38, 47, 0.18), 0 4px 12px -2px rgba(35, 38, 47, 0.2);
+  background: rgb(var(--c-surface));
+  border: 1px solid rgb(var(--c-border-strong));
+  box-shadow: var(--shadow-thumb);
 }
 .payoff-range::-moz-range-thumb {
   width: 24px;
   height: 24px;
   border-radius: 9999px;
-  background: #ffffff;
-  border: 1px solid #e7e4de;
-  box-shadow: 0 1px 3px rgba(35, 38, 47, 0.18), 0 4px 12px -2px rgba(35, 38, 47, 0.2);
+  background: rgb(var(--c-surface));
+  border: 1px solid rgb(var(--c-border-strong));
+  box-shadow: var(--shadow-thumb);
 }
 .payoff-range:focus-visible::-webkit-slider-thumb {
-  box-shadow: 0 0 0 4px rgba(10, 160, 136, 0.3);
+  box-shadow: 0 0 0 4px var(--ring);
 }
 .payoff-range:focus-visible::-moz-range-thumb {
-  box-shadow: 0 0 0 4px rgba(10, 160, 136, 0.3);
+  box-shadow: 0 0 0 4px var(--ring);
 }
 /* Untouched: hide the thumb until the player makes their first move, so the
    slider can't suggest a pre-set default (which would anchor the answer). */
@@ -130,11 +308,36 @@ body {
   animation: fadeSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+/* Skeleton shimmer (determinate loading, no spinners) */
+.skeleton {
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    rgb(var(--c-surface-2)) 25%,
+    rgb(var(--c-surface-hover)) 37%,
+    rgb(var(--c-surface-2)) 63%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+@keyframes shimmer {
+  0% {
+    background-position: -400px 0;
+  }
+  100% {
+    background-position: 400px 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-slide-up,
   .animate-fade-300,
-  .round-enter {
+  .round-enter,
+  .skeleton {
     animation: none;
+  }
+  * {
+    transition-duration: 0.01ms !important;
   }
 }
 

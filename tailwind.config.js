@@ -1,28 +1,57 @@
 /** @type {import('tailwindcss').Config} */
+// Colours resolve to CSS variables (RGB triplets in src/index.css) so a single
+// [data-theme] flip on <html> re-themes the whole app — and Tailwind's alpha
+// modifiers (bg-teal/15, border-border/60) still work via <alpha-value>.
+const withAlpha = (v) => `rgb(var(${v}) / <alpha-value>)`
+
 module.exports = {
+  darkMode: ['selector', '[data-theme="dark"]'],
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
     extend: {
       colors: {
-        // Calm, light fintech palette
-        bg: '#F5F4F0', // warm paper background
-        surface: '#FFFFFF', // cards
-        surface2: '#EDEBE5', // tracks, subtle fills
-        text: '#23262F', // deep slate (softer than black)
-        muted: '#7C808B', // secondary text
-        teal: '#0AA088', // primary accent / X / gains
-        amber: '#B5832C', // Y / loss-lean
-        red: '#CE5454', // loss amounts
-        border: '#E7E4DE', // soft hairlines
+        // Mercator — warm paper, ink, deep viridian, on a graph-paper ground.
+        bg: withAlpha('--c-bg'),
+        bgElev: withAlpha('--c-bg-elev'),
+        surface: withAlpha('--c-surface'),
+        surface2: withAlpha('--c-surface-2'),
+        surfaceHover: withAlpha('--c-surface-hover'),
+        text: withAlpha('--c-text'),
+        muted: withAlpha('--c-text-muted'),
+        faint: withAlpha('--c-text-faint'),
+        border: withAlpha('--c-border'),
+        borderStrong: withAlpha('--c-border-strong'),
+        hairline: withAlpha('--c-hairline'),
+        // `teal` name kept (used everywhere) but now the deep viridian accent.
+        teal: withAlpha('--c-accent'),
+        tealHover: withAlpha('--c-accent-hover'),
+        tealWeak: withAlpha('--c-accent-weak'),
+        green: withAlpha('--c-accent'), // positive = the viridian family
+        amber: withAlpha('--c-amber'),
+        red: withAlpha('--c-red'),
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
-        mono: ['"DM Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+        serif: ['"Source Serif 4"', 'Georgia', 'Times New Roman', 'serif'],
+        sans: ['"Hanken Grotesk"', 'system-ui', '-apple-system', 'sans-serif'],
+        mono: ['"IBM Plex Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+      },
+      // Mercator runs tighter/squarer than the old scale — remap the class names
+      // the app already uses so radii shift app-wide with no per-component edits.
+      borderRadius: {
+        none: '0',
+        sm: '4px',
+        DEFAULT: '5px',
+        md: '6px',
+        lg: '6px',
+        xl: '8px',
+        '2xl': '9px',
+        '3xl': '12px',
+        full: '9999px',
       },
       boxShadow: {
-        card: '0 1px 2px rgba(35,38,47,0.04), 0 14px 34px -20px rgba(35,38,47,0.22)',
-        soft: '0 1px 2px rgba(35,38,47,0.05), 0 6px 18px -12px rgba(35,38,47,0.16)',
-        thumb: '0 1px 3px rgba(35,38,47,0.18), 0 4px 12px -2px rgba(35,38,47,0.20)',
+        card: 'var(--shadow-card)',
+        soft: 'var(--shadow-soft)',
+        thumb: 'var(--shadow-thumb)',
       },
     },
   },

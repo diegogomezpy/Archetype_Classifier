@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import { useT } from '../i18n/i18n'
 import { useDirectory } from '../lib/directory'
+import BrandMark from './BrandMark'
 
 // One consistent top bar across the app (intro, advisor, admin — everywhere
 // except mid-game). Three obvious sections; the active one is highlighted.
@@ -18,8 +19,16 @@ export default function AppNav() {
   return (
     <nav className="no-print sticky top-0 z-40 border-b border-border bg-bg/90 backdrop-blur">
       <div className="mx-auto flex w-full max-w-6xl items-center gap-2 px-4 py-2.5 sm:px-6">
-        <span className="mr-2 hidden font-mono text-[11px] uppercase tracking-[0.18em] text-muted sm:block">
-          {t.nav.brand}
+        <span className="mr-2 flex items-center gap-2">
+          <span
+            className="flex h-6 w-6 items-center justify-center rounded-md bg-teal text-[#fffefb]"
+            aria-hidden="true"
+          >
+            <BrandMark size={16} />
+          </span>
+          <span className="hidden font-mono text-[11px] uppercase tracking-[0.18em] text-muted sm:block">
+            {t.nav.brand}
+          </span>
         </span>
         <NavLink to="/" end className={tab}>
           {t.nav.test}
