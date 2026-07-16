@@ -15,10 +15,12 @@ export default function DimensionScoreBar({ label, value }: Props) {
         <span className="font-mono text-sm text-text tnum">{signed}</span>
       </div>
 
-      {/* Center-anchored signed bar */}
-      <div className="relative mt-2 h-2 w-full rounded-full bg-surface2">
+      {/* Center-anchored signed bar. The rail uses `border` (not `surface2`,
+          which matches the graph-paper ground and would vanish); the tick is a
+          shade darker so it reads against the rail. */}
+      <div className="relative mt-2 h-2 w-full rounded-full bg-border">
         {/* center tick */}
-        <div className="absolute left-1/2 top-1/2 h-3 w-px -translate-x-1/2 -translate-y-1/2 bg-border" />
+        <div className="absolute left-1/2 top-1/2 h-3 w-px -translate-x-1/2 -translate-y-1/2 bg-borderStrong" />
         {positive ? (
           <div
             className="absolute left-1/2 top-0 h-full rounded-r-full bg-teal"

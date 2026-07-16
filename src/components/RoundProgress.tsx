@@ -17,7 +17,7 @@ export default function RoundProgress({ index, total }: Props) {
           <span
             key={i}
             className={`h-1.5 w-3 rounded-full transition-colors duration-300 ${
-              i < index ? 'bg-teal' : 'bg-surface2'
+              i < index ? 'bg-teal' : 'bg-border'
             }`}
           />
         ))}

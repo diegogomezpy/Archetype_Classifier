@@ -273,9 +273,9 @@ export default function RoundDecision({ round, index, total, runningPnl, onNext 
               onClick={done ? () => onNext(displayX, delta) : drawing ? handleSkip : lockIn}
               className={`mt-7 w-full rounded-2xl py-4 text-base font-semibold shadow-soft transition-all duration-200 ${
                 waiting
-                  ? 'cursor-not-allowed bg-surface2 text-muted/60'
+                  ? 'cursor-not-allowed border border-border bg-surface text-muted/60'
                   : drawing
-                    ? 'cursor-pointer bg-surface2 text-muted hover:text-text'
+                    ? 'cursor-pointer border border-border bg-surface text-muted hover:text-text'
                     : 'bg-teal text-white hover:-translate-y-0.5 hover:shadow-card active:translate-y-0'
               }`}
             >

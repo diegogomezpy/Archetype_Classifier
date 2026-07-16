@@ -205,7 +205,7 @@ export default function AdminArchetypesPage() {
           ))}
         </div>
 
-        <p className="mt-4 rounded-lg bg-surface2/50 px-3 py-2 text-xs leading-snug text-muted">
+        <p className="mt-4 rounded-lg border border-border bg-surface px-3 py-2 text-xs leading-snug text-muted shadow-soft">
           {t.adminArch.notVectorNote}
         </p>
 

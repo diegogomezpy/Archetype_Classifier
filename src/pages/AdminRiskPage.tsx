@@ -113,7 +113,7 @@ export default function AdminRiskPage() {
         </div>
 
         {/* How it works */}
-        <div className="mt-6 rounded-2xl bg-surface2/50 px-4 py-3 text-xs leading-relaxed text-muted">
+        <div className="mt-6 rounded-2xl border border-border bg-surface px-4 py-3 text-xs leading-relaxed text-muted shadow-soft">
           {t.adminRisk.howBody}
         </div>
 
