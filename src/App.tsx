@@ -2,6 +2,7 @@ import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { LanguageProvider } from './i18n/i18n'
 import { CatalogProvider } from './lib/catalog'
 import { ArchetypeConfigProvider } from './lib/archetypeConfig'
+import { RiskParamsProvider } from './lib/riskParamsConfig'
 import { DirectoryProvider } from './lib/directory'
 import LanguageToggle from './components/LanguageToggle'
 import TestFlowPage from './pages/TestFlowPage'
@@ -10,6 +11,7 @@ import AdvisorClientPage from './pages/AdvisorClientPage'
 import AdvisorSessionPage from './pages/AdvisorSessionPage'
 import AdminPage from './pages/AdminPage'
 import AdminArchetypesPage from './pages/AdminArchetypesPage'
+import AdminRiskPage from './pages/AdminRiskPage'
 import AdminAdvisorsPage from './pages/AdminAdvisorsPage'
 
 // Route shell. Hash routing keeps every route working on static hosting with no
@@ -28,6 +30,7 @@ export default function App() {
     <LanguageProvider>
       <DirectoryProvider>
         <ArchetypeConfigProvider>
+          <RiskParamsProvider>
           <CatalogProvider>
             <div className="relative min-h-[100svh] w-full bg-bg text-text">
               <HashRouter>
@@ -38,6 +41,7 @@ export default function App() {
                   <Route path="/advisor/session/:id" element={<AdvisorSessionPage />} />
                   <Route path="/admin" element={<AdminPage />} />
                   <Route path="/admin/archetypes" element={<AdminArchetypesPage />} />
+                  <Route path="/admin/risk" element={<AdminRiskPage />} />
                   <Route path="/admin/advisors" element={<AdminAdvisorsPage />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
@@ -45,6 +49,7 @@ export default function App() {
               <LanguageToggle />
             </div>
           </CatalogProvider>
+          </RiskParamsProvider>
         </ArchetypeConfigProvider>
       </DirectoryProvider>
     </LanguageProvider>

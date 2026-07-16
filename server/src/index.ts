@@ -77,6 +77,17 @@ app.put('/api/config/archetypes', async (c) => {
   return c.json(body)
 })
 
+// ── risk-derivation params (single doc) ──────────────────────────────────────
+app.get('/api/config/riskParams', async (c) => {
+  const doc = await configCol.doc('riskParams').get()
+  return c.json(doc.exists ? doc.data() : null)
+})
+app.put('/api/config/riskParams', async (c) => {
+  const body = await c.req.json()
+  await configCol.doc('riskParams').set(body)
+  return c.json(body)
+})
+
 // ── advisors ─────────────────────────────────────────────────────────────────
 app.get('/api/advisors', async (c) => {
   const snap = await advisorsCol.get()

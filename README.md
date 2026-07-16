@@ -30,8 +30,9 @@ Hash-based routing (works on static hosting with no server rewrites):
 | `#/advisor` | Advisor | A one-click "Who are you?" picker → that advisor's clients, each with their play history. |
 | `#/advisor/client/:clientId` | Advisor | One client's session history, newest first (replays accumulate here). |
 | `#/advisor/session/:id` | Advisor | One session's dashboard: classification, allocation, and recommended instruments with per-asset detail drill-down. Strictly advisor-facing. |
-| `#/admin` | Admin | Instrument catalog console: curate everything offerable to clients — risk vectors (σ/α/λ), visibility, "house pick" emphasis, and per-asset-class details. |
+| `#/admin` | Admin | Instrument catalog console: curate everything offerable to clients — risk vectors (σ/α/λ), visibility, "house pick" emphasis, and per-asset-class details. Bulk-load from a CSV/Bloomberg export, or (local) auto-parse the Cadiem bulletin PDF. |
 | `#/admin/archetypes` | Admin | Archetype console: edit the classification shape vectors (Banker/Venture/Insurer) and each archetype's recommended model asset mix. |
+| `#/admin/risk` | Admin | Risk model: the σ/α/λ auto-derivation coefficients used on import (global base per asset class, local base + per-credit-risk sensitivity, the credit-rating → risk-factor table, and equity β sensitivity). Editable and persisted; drives every subsequent import. |
 | `#/admin/advisors` | Admin | Advisor accounts: create the advisors clients pick from (just names). |
 
 A consistent top nav (**Client test · Advisor · Admin**) sits on every screen

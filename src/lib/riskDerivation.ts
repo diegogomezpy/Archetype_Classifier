@@ -56,6 +56,15 @@ export const RISK_PARAMS: RiskParams = {
   equityBetaSensitivity: 0.4,
 }
 
+// The params the derivation actually uses. Defaults to the built-ins; the admin
+// "Risk model" editor overrides them at runtime (and persists to Firestore), so
+// tuning retunes every import + re-seed uniformly.
+let ACTIVE: RiskParams = RISK_PARAMS
+export const setActiveRiskParams = (p: RiskParams): void => {
+  ACTIVE = p
+}
+export const getActiveRiskParams = (): RiskParams => ACTIVE
+
 const clamp1 = (n: number) => Math.max(-1, Math.min(1, Math.round(n * 100) / 100))
 
 const numOr = (v: string | undefined): number | null => {
@@ -75,7 +84,7 @@ export function normalizeRating(raw: string): string {
   return s
 }
 
-export function ratingFactor(rating: string | undefined, params: RiskParams = RISK_PARAMS): number {
+export function ratingFactor(rating: string | undefined, params: RiskParams = ACTIVE): number {
   if (!rating || !rating.trim()) return 0.5 // unrated → mid
   const s = normalizeRating(rating)
   const keys = Object.keys(params.ratingRisk).sort((a, b) => b.length - a.length)
@@ -88,7 +97,7 @@ export function deriveRiskVector(
   region: Region,
   category: Category,
   details: Record<string, string> = {},
-  params: RiskParams = RISK_PARAMS,
+  params: RiskParams = ACTIVE,
 ): { sigmaLoad: number; alphaLoad: number; lambdaLoad: number } {
   if (region === 'local') {
     const p = params.local[category as LocalCategory]

@@ -19,6 +19,9 @@ export default function AdminNav() {
       <NavLink to="/admin/archetypes" className={tab}>
         {t.adminNav.archetypes}
       </NavLink>
+      <NavLink to="/admin/risk" className={tab}>
+        {t.adminNav.risk}
+      </NavLink>
       <NavLink to="/admin/advisors" className={tab}>
         {t.adminNav.advisors}
       </NavLink>

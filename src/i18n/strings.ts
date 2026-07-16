@@ -221,6 +221,12 @@ const en = {
       `${n} ready${skipped ? ` · ${skipped} skipped (no name)` : ''}`,
     importMatched: (n: number) => `${n} column${n === 1 ? '' : 's'} matched`,
     importUnmatched: (cols: string) => `ignored: ${cols}`,
+    importBulletin: 'Upload bulletin (PDF)',
+    importBulletinHint:
+      'Local only: upload the Cadiem bulletin PDF and it auto-parses the bond, CDA, fund and equity tables. Best-effort — review the preview before adding. σ/α/λ are auto-derived.',
+    importParsing: 'Reading PDF…',
+    importBulletinSections: (s: string) => `sections: ${s}`,
+    importBulletinError: 'Could not read that PDF. Try the CSV template instead.',
     autofill: 'Fetch data',
     autofillFetching: 'Fetching…',
     autofillHint: 'Ticker or ISIN → auto-fills the details. Equities pull from Yahoo Finance; crypto from CoinGecko + Deribit. Bond/structured data stays manual.',
@@ -259,6 +265,7 @@ const en = {
   adminNav: {
     instruments: 'Instruments',
     archetypes: 'Archetypes',
+    risk: 'Risk model',
     advisors: 'Advisors',
   },
   adminArch: {
@@ -282,6 +289,22 @@ const en = {
     saved: 'Saved',
     resetDefaults: 'Reset archetypes to defaults',
     resetConfirm: 'Reset all archetype vectors and mixes to the built-in defaults?',
+  },
+  adminRisk: {
+    title: 'Risk model',
+    subtitle: 'How σ/α/λ are auto-derived when instruments are imported.',
+    howBody:
+      'On import, a blank risk vector is filled as base + rating-sensitivity × credit-risk. Credit-risk runs 0 (safest, AAA) to 1 (riskiest) from the table below; unrated or non-debt instruments use base alone. Equities also shift σ by (β − 1) × the equity β sensitivity. Every value here is a starting point — you can still override any instrument by hand.',
+    globalTitle: 'Global — base by asset class',
+    betaSensitivity: 'Equity β sensitivity',
+    localTitle: 'Local — base + rating sensitivity',
+    base: 'Base',
+    byRating: 'Per credit-risk',
+    ratingTitle: 'Credit rating → risk factor',
+    save: 'Save model',
+    saved: 'Saved',
+    reset: 'Reset to defaults',
+    resetConfirm: 'Reset the whole risk model to the built-in defaults?',
   },
   adminAdvisors: {
     title: 'Advisors',
@@ -539,6 +562,12 @@ const es: UIStrings = {
       `${n} listos${skipped ? ` · ${skipped} omitidos (sin nombre)` : ''}`,
     importMatched: (n: number) => `${n} columna${n === 1 ? '' : 's'} reconocida${n === 1 ? '' : 's'}`,
     importUnmatched: (cols: string) => `ignoradas: ${cols}`,
+    importBulletin: 'Subir boletín (PDF)',
+    importBulletinHint:
+      'Solo local: subí el PDF del boletín de Cadiem y se parsean automáticamente las tablas de bonos, CDA, fondos y renta variable. Es una aproximación — revisá la vista previa antes de agregar. σ/α/λ se derivan solos.',
+    importParsing: 'Leyendo PDF…',
+    importBulletinSections: (s: string) => `secciones: ${s}`,
+    importBulletinError: 'No se pudo leer ese PDF. Probá con la plantilla CSV.',
     autofill: 'Obtener datos',
     autofillFetching: 'Obteniendo…',
     autofillHint: 'Ticker o ISIN → autocompleta los detalles. Acciones vía Yahoo Finance; cripto vía CoinGecko + Deribit. Los datos de bonos/estructurados quedan manuales.',
@@ -577,6 +606,7 @@ const es: UIStrings = {
   adminNav: {
     instruments: 'Instrumentos',
     archetypes: 'Arquetipos',
+    risk: 'Modelo de riesgo',
     advisors: 'Asesores',
   },
   adminArch: {
@@ -600,6 +630,22 @@ const es: UIStrings = {
     saved: 'Guardado',
     resetDefaults: 'Restaurar arquetipos por defecto',
     resetConfirm: '¿Restaurar todos los vectores y mezclas de arquetipos a los valores por defecto?',
+  },
+  adminRisk: {
+    title: 'Modelo de riesgo',
+    subtitle: 'Cómo se derivan σ/α/λ al importar instrumentos.',
+    howBody:
+      'Al importar, un vector de riesgo vacío se completa como base + sensibilidad-al-rating × riesgo-de-crédito. El riesgo de crédito va de 0 (más seguro, AAA) a 1 (más riesgoso) según la tabla de abajo; los instrumentos sin rating o que no son deuda usan solo la base. La renta variable además ajusta σ por (β − 1) × la sensibilidad β. Todo aquí es un punto de partida — siempre podés ajustar cualquier instrumento a mano.',
+    globalTitle: 'Global — base por clase de activo',
+    betaSensitivity: 'Sensibilidad β renta variable',
+    localTitle: 'Local — base + sensibilidad al rating',
+    base: 'Base',
+    byRating: 'Por riesgo de crédito',
+    ratingTitle: 'Calificación → factor de riesgo',
+    save: 'Guardar modelo',
+    saved: 'Guardado',
+    reset: 'Restaurar por defecto',
+    resetConfirm: '¿Restaurar todo el modelo de riesgo a los valores por defecto?',
   },
   adminAdvisors: {
     title: 'Asesores',
