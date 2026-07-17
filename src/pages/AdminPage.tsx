@@ -15,7 +15,7 @@ import {
   useCatalog,
   type ManagedInstrument,
 } from '../lib/catalog'
-import { CADIEM_LOCAL } from '../data/cadiemLocal'
+import ImportBulletin from '../components/ImportBulletin'
 import { fetchInstrumentData } from '../lib/marketData'
 import { useLang, useT } from '../i18n/i18n'
 import { categoryLabel, regionLabel } from '../i18n/content'
@@ -379,7 +379,7 @@ function InstrumentForm({
 export default function AdminPage() {
   const t = useT()
   const { lang } = useLang()
-  const { instruments, upsert, remove, removeMany, addMany } = useCatalog()
+  const { instruments, upsert, remove, removeMany } = useCatalog()
   const [regionFilter, setRegionFilter] = useState<Region | 'all'>('all')
   const [filter, setFilter] = useState<Category | 'all'>('all')
   const [visFilter, setVisFilter] = useState<'all' | 'visible' | 'hidden'>('all')
@@ -387,7 +387,6 @@ export default function AdminPage() {
   const [adding, setAdding] = useState(false)
   const [bulkOpen, setBulkOpen] = useState(false)
   const [confirmText, setConfirmText] = useState('')
-  const [loadMsg, setLoadMsg] = useState<string | null>(null)
 
   const shown = useMemo(
     () =>
@@ -416,12 +415,6 @@ export default function AdminPage() {
     if (r !== 'all' && filter !== 'all' && !(categoriesForRegion(r) as string[]).includes(filter)) {
       setFilter('all')
     }
-  }
-
-  const loadCadiem = () => {
-    addMany(CADIEM_LOCAL)
-    setLoadMsg(t.admin.loadCadiemDone(CADIEM_LOCAL.length))
-    window.setTimeout(() => setLoadMsg(null), 2500)
   }
 
   const handleDelete = (inst: ManagedInstrument) => {
@@ -467,15 +460,7 @@ export default function AdminPage() {
       </p>
 
       {/* Actions — right-aligned, distinct from the filters below */}
-      <div className="mt-6 flex flex-wrap items-center gap-2">
-        {loadMsg && <span className="text-xs font-medium text-teal">{loadMsg}</span>}
-        <button
-          type="button"
-          onClick={loadCadiem}
-          className="ml-auto rounded-full border border-border bg-surface px-3.5 py-1.5 text-sm font-medium text-muted transition-colors hover:text-teal"
-        >
-          {t.admin.loadCadiem(CADIEM_LOCAL.length)}
-        </button>
+      <div className="mt-6 flex flex-wrap items-center justify-end gap-2">
         <button
           type="button"
           onClick={() => {
@@ -487,6 +472,9 @@ export default function AdminPage() {
           + {t.admin.add}
         </button>
       </div>
+
+      {/* Local menu comes from the boletín — upload it, review, add. */}
+      <ImportBulletin />
 
       {/* Filter panel — Market · Visibility · Category, grouped and labeled */}
       <div className="mt-4 rounded-2xl border border-border bg-surface/60 p-4 shadow-soft">

@@ -208,8 +208,6 @@ const en = {
     sharePreferred: 'Preferred',
     yrsShort: 'yr',
     assetClass: 'Category',
-    loadCadiem: (n: number) => `Load local menu (${n})`,
-    loadCadiemDone: (n: number) => `Loaded ${n} local instruments.`,
     importTitle: 'Import from file',
     importHint:
       'Pick a market + category, download the template (columns also accept Bloomberg field names), fill it, and upload the CSV. Blank σ/α/λ are auto-derived.',
@@ -221,9 +219,15 @@ const en = {
       `${n} ready${skipped ? ` · ${skipped} skipped (no name)` : ''}`,
     importMatched: (n: number) => `${n} column${n === 1 ? '' : 's'} matched`,
     importUnmatched: (cols: string) => `ignored: ${cols}`,
-    importBulletin: 'Upload bulletin (PDF)',
+    importBulletin: 'Upload boletín (PDF)',
     importBulletinHint:
       'Local only: upload the Cadiem bulletin PDF and it auto-parses the bond, CDA, fund and equity tables. Best-effort — review the preview before adding. σ/α/λ are auto-derived.',
+    bulletinTitle: 'Local menu — from the boletín',
+    bulletinHint:
+      'Upload the boletín PDF: its bond, CDA, fund and equity tables are parsed into instruments with σ/α/λ auto-derived. Review the preview, then add. Re-upload each new boletín to refresh the menu.',
+    bulletinNothing:
+      'No instruments found in that PDF. It may be a scan (no text layer) or a layout the parser does not recognise yet.',
+    bulletinDiscard: 'Discard',
     importParsing: 'Reading PDF…',
     importBulletinSections: (s: string) => `sections: ${s}`,
     importBulletinError: 'Could not read that PDF. Try the CSV template instead.',
@@ -549,8 +553,6 @@ const es: UIStrings = {
     sharePreferred: 'Preferida',
     yrsShort: 'años',
     assetClass: 'Categoría',
-    loadCadiem: (n: number) => `Cargar menú local (${n})`,
-    loadCadiemDone: (n: number) => `Se cargaron ${n} instrumentos locales.`,
     importTitle: 'Importar desde archivo',
     importHint:
       'Elige mercado + categoría, descarga la plantilla (las columnas también aceptan nombres de campo de Bloomberg), complétala y sube el CSV. σ/α/λ en blanco se derivan automáticamente.',
@@ -565,6 +567,12 @@ const es: UIStrings = {
     importBulletin: 'Subir boletín (PDF)',
     importBulletinHint:
       'Solo local: subí el PDF del boletín de Cadiem y se parsean automáticamente las tablas de bonos, CDA, fondos y renta variable. Es una aproximación — revisá la vista previa antes de agregar. σ/α/λ se derivan solos.',
+    bulletinTitle: 'Menú local — desde el boletín',
+    bulletinHint:
+      'Subí el PDF del boletín: sus tablas de bonos, CDA, fondos y renta variable se parsean en instrumentos con σ/α/λ derivados. Revisá la vista previa y agregá. Volvé a subir cada boletín nuevo para actualizar el menú.',
+    bulletinNothing:
+      'No se encontraron instrumentos en ese PDF. Puede ser un escaneo (sin capa de texto) o un formato que el parser aún no reconoce.',
+    bulletinDiscard: 'Descartar',
     importParsing: 'Leyendo PDF…',
     importBulletinSections: (s: string) => `secciones: ${s}`,
     importBulletinError: 'No se pudo leer ese PDF. Probá con la plantilla CSV.',

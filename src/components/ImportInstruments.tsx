@@ -3,8 +3,6 @@ import { categoriesForRegion, type Category, type Region } from '../lib/instrume
 import { useCatalog } from '../lib/catalog'
 import { downloadText, parseCsv } from '../lib/csv'
 import { parseInstruments, templateCsv, type ImportResult } from '../lib/importSchema'
-import { parseBulletin } from '../lib/bulletinParse'
-import { extractPdfLines } from '../lib/pdfText'
 import { useLang, useT } from '../i18n/i18n'
 import { categoryLabel, regionLabel } from '../i18n/content'
 
@@ -26,18 +24,13 @@ export default function ImportInstruments() {
   const [category, setCategory] = useState<Category>('Equities')
   const [result, setResult] = useState<ImportResult | null>(null)
   const [done, setDone] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [pdfMode, setPdfMode] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
-  const pdfRef = useRef<HTMLInputElement>(null)
 
   const pickRegion = (r: Region) => {
     setRegion(r)
     setCategory(categoriesForRegion(r)[0])
     setResult(null)
     setDone(null)
-    setError(null)
   }
 
   const download = () => {
@@ -49,30 +42,8 @@ export default function ImportInstruments() {
     const file = e.target.files?.[0]
     if (!file) return
     const text = await file.text()
-    setError(null)
-    setPdfMode(false)
     setResult(parseInstruments(region, category, parseCsv(text)))
     setDone(null)
-  }
-
-  const onPdf = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setBusy(true)
-    setError(null)
-    setDone(null)
-    setPdfMode(true)
-    try {
-      const lines = await extractPdfLines(file)
-      setResult(parseBulletin(lines))
-    } catch (err) {
-      console.error('bulletin parse:', err)
-      setError(t.admin.importBulletinError)
-      setResult(null)
-    } finally {
-      setBusy(false)
-      if (pdfRef.current) pdfRef.current.value = ''
-    }
   }
 
   const add = () => {
@@ -133,16 +104,6 @@ export default function ImportInstruments() {
           >
             {t.admin.importUpload}
           </button>
-          {region === 'local' && (
-            <button
-              type="button"
-              onClick={() => pdfRef.current?.click()}
-              disabled={busy}
-              className="rounded-lg border border-teal/40 bg-teal/10 px-3.5 py-2 text-sm font-medium text-teal transition-colors hover:bg-teal/15 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {busy ? t.admin.importParsing : t.admin.importBulletin}
-            </button>
-          )}
           <input
             ref={fileRef}
             type="file"
@@ -150,15 +111,9 @@ export default function ImportInstruments() {
             className="hidden"
             onChange={onFile}
           />
-          <input ref={pdfRef} type="file" accept=".pdf,application/pdf" className="hidden" onChange={onPdf} />
         </div>
 
-        {region === 'local' && (
-          <p className="mt-3 max-w-2xl text-xs leading-relaxed text-muted">{t.admin.importBulletinHint}</p>
-        )}
-
         {done && <p className="mt-3 text-sm font-medium text-teal">{done}</p>}
-        {error && <p className="mt-3 text-sm font-medium text-red">{error}</p>}
 
         {result && (
           <div className="mt-4 rounded-xl border border-border bg-surface p-4">
@@ -166,10 +121,8 @@ export default function ImportInstruments() {
               {t.admin.importPreview(result.instruments.length, result.skipped)}
             </p>
             <p className="mt-1 text-xs text-muted">
-              {pdfMode
-                ? t.admin.importBulletinSections(result.matched.join(', ') || '—')
-                : t.admin.importMatched(result.matched.length)}
-              {!pdfMode && result.unmatched.length > 0 &&
+              {t.admin.importMatched(result.matched.length)}
+              {result.unmatched.length > 0 &&
                 ` · ${t.admin.importUnmatched(result.unmatched.join(', '))}`}
             </p>
             {result.instruments.length > 0 && (
