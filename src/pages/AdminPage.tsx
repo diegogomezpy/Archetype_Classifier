@@ -13,6 +13,7 @@ import {
   localQuickFacts,
   supportsFetch,
   useCatalog,
+  type FieldSpec,
   type ManagedInstrument,
 } from '../lib/catalog'
 import { fetchInstrumentData } from '../lib/marketData'
@@ -65,6 +66,62 @@ const chipCls = (active: boolean) =>
       ? 'border-transparent bg-teal/15 font-medium text-teal shadow-soft'
       : 'border-border bg-surface text-muted hover:text-text'
   }`
+const subLabel = 'font-mono text-[11px] uppercase tracking-[0.14em] text-faint'
+
+const pick = (lang: 'en' | 'es', en: string, es: string) => (lang === 'es' ? es : en)
+
+// Detail fields are bucketed into labelled sub-sections so the edit form reads
+// as groups instead of one 20-field wall. A field lands in the first group whose
+// key list contains it; anything unmatched falls through to "Other". `kind` and
+// `name` are intentionally omitted — they're edited up top on the instrument
+// itself, not as details.
+const DETAIL_GROUPS: { en: string; es: string; keys: string[] }[] = [
+  { en: 'Rationale', es: 'Racional', keys: ['description', 'diversificationNote', 'volatilityNote'] },
+  {
+    en: 'Analyst consensus',
+    es: 'Consenso de analistas',
+    keys: ['priceTarget', 'potentialReturn', 'recBuyPct', 'analystCount'],
+  },
+  {
+    en: 'Classification',
+    es: 'Clasificación',
+    keys: ['issuer', 'sectorIndex', 'exchange', 'underlying', 'exposure', 'currency'],
+  },
+  {
+    en: 'Terms',
+    es: 'Condiciones',
+    keys: [
+      'couponRate', 'couponFrequency', 'couponYield', 'maturity', 'maturityMonths', 'duration',
+      'ytm', 'creditRating', 'issuerRating', 'minInvestment', 'barrier', 'autocallLevel',
+      'observationFrequency', 'capitalProtection', 'participationRate', 'cap', 'protectionLevel',
+      'expenseRatio', 'distributionYield', 'worstCase',
+    ],
+  },
+  {
+    en: 'Market data',
+    es: 'Datos de mercado',
+    keys: [
+      'lastPrice', 'range52w', 'change1Y', 'avgVolume', 'marketCapAum', 'dividendYield',
+      'peRatio', 'peForward', 'beta', 'impliedVol3m',
+    ],
+  },
+  { en: 'Source', es: 'Fuente', keys: ['asOf'] },
+]
+
+/** Bucket a class's field specs into the ordered groups above (empty groups dropped). */
+function groupedSpecs(specs: FieldSpec[]): { en: string; es: string; specs: FieldSpec[] }[] {
+  const fields = specs.filter((s) => s.key !== 'kind' && s.key !== 'name')
+  const claimed = new Set<string>()
+  const groups = DETAIL_GROUPS.map((g) => {
+    const inGroup = fields.filter((s) => g.keys.includes(s.key))
+    inGroup.forEach((s) => claimed.add(s.key))
+    return { en: g.en, es: g.es, specs: inGroup }
+  })
+  const leftover = fields.filter((s) => !claimed.has(s.key))
+  if (leftover.length) groups.push({ en: 'Other', es: 'Otros', specs: leftover })
+  return groups.filter((g) => g.specs.length > 0)
+}
+const LONG_FIELDS = new Set(['description', 'worstCase', 'diversificationNote', 'volatilityNote'])
 
 // ── Edit / create form ───────────────────────────────────────────────────────
 
@@ -107,7 +164,14 @@ function InstrumentForm({
     setFetching(false)
     if (res.ok) {
       const n = Object.keys(res.fields).length
-      setDraft((d) => ({ ...d, details: { ...d.details, ...res.fields } }))
+      // name + kind belong on the instrument, not in the detail sheet.
+      const { name: fName, kind: fKind, ...detailFields } = res.fields
+      setDraft((d) => ({
+        ...d,
+        name: d.name.trim() || fName || d.name,
+        kind: d.kind?.trim() || fKind || d.kind,
+        details: { ...d.details, ...detailFields },
+      }))
       setFetchMsg(n > 0 ? t.admin.autofillFilled(n) : t.admin.autofillNotFound(sym))
     } else {
       setFetchMsg(
@@ -146,9 +210,9 @@ function InstrumentForm({
 
   return (
     <div className="rounded-2xl border border-teal/30 bg-surface p-6 shadow-card">
-      {/* Identity & risk vector */}
+      {/* Identity */}
       <h3 className="font-mono text-xs uppercase tracking-[0.14em] text-muted">
-        {t.admin.baseSection}
+        {pick(lang, 'Identity', 'Identidad')}
       </h3>
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="sm:col-span-2">
@@ -227,6 +291,20 @@ function InstrumentForm({
             <span className="text-xs leading-snug text-muted">{fetchMsg ?? t.admin.autofillHint}</span>
           </div>
         )}
+      </div>
+
+      {/* Risk vector — what the client's profile is matched against */}
+      <h3 className="mt-8 font-mono text-xs uppercase tracking-[0.14em] text-muted">
+        {pick(lang, 'Risk vector', 'Vector de riesgo')}
+      </h3>
+      <p className="mt-1 text-xs leading-snug text-muted">
+        {pick(
+          lang,
+          'σ/α/λ run −1…1 and are matched against the client. Auto-derived on import — override here if needed.',
+          'σ/α/λ van de −1 a 1 y se comparan con el cliente. Se derivan al importar — ajustá acá si hace falta.',
+        )}
+      </p>
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <label className={labelCls}>{t.admin.sigma}</label>
           <input
@@ -288,6 +366,10 @@ function InstrumentForm({
             onChange={(e) => set('lockupMonths', num(e.target.value))}
           />
         </div>
+      </div>
+
+      {/* Visibility */}
+      <div className="mt-6 flex flex-wrap items-center gap-x-8 gap-y-3">
         <label className="flex items-center gap-2.5 text-sm text-text">
           <input
             type="checkbox"
@@ -308,45 +390,52 @@ function InstrumentForm({
         </label>
       </div>
 
-      {/* Per-class asset details */}
+      {/* Per-class asset details — bucketed into labelled sub-sections */}
       <h3 className="mt-8 font-mono text-xs uppercase tracking-[0.14em] text-muted">
         {t.admin.detailsSection}
       </h3>
       <p className="mt-1 text-xs text-muted">{t.admin.detailsHint}</p>
-      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {specs.map((s) => {
-          const label = lang === 'es' ? s.es : s.en
-          const long = s.key === 'description' || s.key === 'worstCase' || s.key === 'diversificationNote' || s.key === 'volatilityNote'
-          return (
-            <div key={s.key} className={long ? 'sm:col-span-2' : undefined}>
-              <label className={labelCls}>
-                {label}
-                {fetchSet.has(s.key) && (
-                  <span
-                    title={t.admin.fetchTagTitle}
-                    className="ml-1.5 inline-block rounded bg-teal/12 px-1 py-0.5 align-middle text-[9px] font-semibold uppercase tracking-wide text-teal"
-                  >
-                    ⚡ {t.admin.fetchTag}
-                  </span>
-                )}
-              </label>
-              {long ? (
-                <textarea
-                  rows={2}
-                  className={inputCls}
-                  value={draft.details[s.key] ?? ''}
-                  onChange={(e) => setDetail(s.key, e.target.value)}
-                />
-              ) : (
-                <input
-                  className={inputCls}
-                  value={draft.details[s.key] ?? ''}
-                  onChange={(e) => setDetail(s.key, e.target.value)}
-                />
-              )}
+      <div className="mt-4 space-y-6">
+        {groupedSpecs(specs).map((group) => (
+          <div key={group.en}>
+            <p className={subLabel}>{pick(lang, group.en, group.es)}</p>
+            <div className="mt-2.5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {group.specs.map((s) => {
+                const label = pick(lang, s.en, s.es)
+                const long = LONG_FIELDS.has(s.key)
+                return (
+                  <div key={s.key} className={long ? 'sm:col-span-2' : undefined}>
+                    <label className={labelCls}>
+                      {label}
+                      {fetchSet.has(s.key) && (
+                        <span
+                          title={t.admin.fetchTagTitle}
+                          className="ml-1.5 inline-block rounded bg-teal/12 px-1 py-0.5 align-middle text-[9px] font-semibold uppercase tracking-wide text-teal"
+                        >
+                          ⚡ {t.admin.fetchTag}
+                        </span>
+                      )}
+                    </label>
+                    {long ? (
+                      <textarea
+                        rows={2}
+                        className={inputCls}
+                        value={draft.details[s.key] ?? ''}
+                        onChange={(e) => setDetail(s.key, e.target.value)}
+                      />
+                    ) : (
+                      <input
+                        className={inputCls}
+                        value={draft.details[s.key] ?? ''}
+                        onChange={(e) => setDetail(s.key, e.target.value)}
+                      />
+                    )}
+                  </div>
+                )
+              })}
             </div>
-          )
-        })}
+          </div>
+        ))}
       </div>
 
       {/* Attached documents (reports, term sheets, …) */}
