@@ -16,6 +16,7 @@ import {
   type ManagedInstrument,
 } from '../lib/catalog'
 import ImportBulletin from '../components/ImportBulletin'
+import ImportRanking from '../components/ImportRanking'
 import { fetchInstrumentData } from '../lib/marketData'
 import { useLang, useT } from '../i18n/i18n'
 import { categoryLabel, regionLabel } from '../i18n/content'
@@ -473,8 +474,10 @@ export default function AdminPage() {
         </button>
       </div>
 
-      {/* Local menu comes from the boletín — upload it, review, add. */}
+      {/* The two real loading paths: the boletín (local) and the research
+          firm's equity ranking (global). Generic CSV import sits below. */}
       <ImportBulletin />
+      <ImportRanking />
 
       {/* Filter panel — Market · Visibility · Category, grouped and labeled */}
       <div className="mt-4 rounded-2xl border border-border bg-surface/60 p-4 shadow-soft">

@@ -118,6 +118,9 @@ async function fetchYahoo(symbol: string): Promise<MarketDataResult> {
   return {
     ok: true,
     fields: clean({
+      // `name` isn't a detail field — importers lift it onto the instrument and
+      // drop it from details (see components/ImportRanking.tsx).
+      name: String(p?.longName || p?.shortName || ''),
       description: ap?.longBusinessSummary ? truncate(String(ap.longBusinessSummary)) : '',
       kind: isEtf ? 'ETF' : 'Single stock',
       sectorIndex: String(ap?.sector || ap?.industry || ''),

@@ -59,6 +59,11 @@ export const ASSET_FIELD_SPECS: Record<AssetClass, FieldSpec[]> = {
     { key: 'dividendYield', en: 'Dividend yield (%)', es: 'Rendimiento por dividendo (%)' },
     { key: 'peRatio', en: 'P/E ratio (stocks)', es: 'Ratio P/E (acciones)' },
     { key: 'expenseRatio', en: 'Expense ratio (%, ETFs)', es: 'Comisión de gestión (%, ETFs)' },
+    // From the research firm's ranking (see components/ImportRanking.tsx).
+    { key: 'priceTarget', en: 'Price target', es: 'Precio objetivo' },
+    { key: 'potentialReturn', en: 'Potential return (%)', es: 'Retorno potencial (%)' },
+    { key: 'recBuyPct', en: 'Buy recommendations (%)', es: 'Recomendaciones de compra (%)' },
+    { key: 'researchSource', en: 'Research source', es: 'Fuente del análisis' },
     { key: 'beta', en: 'Beta vs. market', es: 'Beta vs. mercado' },
     { key: 'impliedVol3m', en: 'ATM 3M implied vol (%)', es: 'Vol. implícita ATM 3M (%)' },
     AS_OF,

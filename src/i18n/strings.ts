@@ -228,6 +228,13 @@ const en = {
     bulletinNothing:
       'No instruments found in that PDF. It may be a scan (no text layer) or a layout the parser does not recognise yet.',
     bulletinDiscard: 'Discard',
+    rankingTitle: 'Equity ranking — from your research firm',
+    rankingHint:
+      'Upload their CSV: Ticker · % Rec Compra · Ret Potencial · Precio Objetivo · Descripción. Everything else (name, price, P/E, beta, market cap, sector) is fetched per ticker, and the potential return is recomputed off the live price rather than their stamped one.',
+    rankingUpload: 'Upload ranking (CSV)',
+    rankingFetching: (done: number, total: number) => `Fetching ${done}/${total}…`,
+    rankingFilled: (n: number, total: number) => `${n}/${total} with market data`,
+    rankingNoRows: 'No rows found. The file needs a Ticker column.',
     importParsing: 'Reading PDF…',
     importBulletinSections: (s: string) => `sections: ${s}`,
     importBulletinError: 'Could not read that PDF. Try the CSV template instead.',
@@ -597,6 +604,13 @@ const es: UIStrings = {
     bulletinNothing:
       'No se encontraron instrumentos en ese PDF. Puede ser un escaneo (sin capa de texto) o un formato que el parser aún no reconoce.',
     bulletinDiscard: 'Descartar',
+    rankingTitle: 'Ranking de acciones — de tu casa de análisis',
+    rankingHint:
+      'Subí su CSV: Ticker · % Rec Compra · Ret Potencial · Precio Objetivo · Descripción. Todo lo demás (nombre, precio, P/E, beta, capitalización, sector) se busca por ticker, y el retorno potencial se recalcula con el precio en vivo en vez del que ellos mandaron.',
+    rankingUpload: 'Subir ranking (CSV)',
+    rankingFetching: (done: number, total: number) => `Buscando ${done}/${total}…`,
+    rankingFilled: (n: number, total: number) => `${n}/${total} con datos de mercado`,
+    rankingNoRows: 'No se encontraron filas. El archivo necesita una columna Ticker.',
     importParsing: 'Leyendo PDF…',
     importBulletinSections: (s: string) => `secciones: ${s}`,
     importBulletinError: 'No se pudo leer ese PDF. Probá con la plantilla CSV.',
