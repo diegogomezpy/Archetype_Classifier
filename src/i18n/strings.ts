@@ -282,10 +282,9 @@ const en = {
     alpha: 'α skew',
     lambda: 'λ loss aversion',
     saveVectors: 'Save vectors',
-    mixTitle: 'Global model mix',
-    mixHint: 'Shown on the advisor report. Normalized to 100 on save.',
-    localMixTitle: 'Local model mix',
-    localMixHint: 'Normalized to 100 on save.',
+    mixTitle: 'Model portfolio mix',
+    mixHint:
+      'The recommended split per archetype, shown on the advisor report. Global and local are separate books — each is normalized to 100 on its own when you save.',
     total: 'Total',
     sumWarning: 'At least one class must be above 0.',
     recompute: 'Recompute from model',
@@ -296,15 +295,40 @@ const en = {
   },
   adminRisk: {
     title: 'Risk model',
-    subtitle: 'How σ/α/λ are auto-derived when instruments are imported.',
+    subtitle: 'How every instrument gets its σ/α/λ when it is imported.',
     howBody:
-      'On import, a blank risk vector is filled as base + rating-sensitivity × credit-risk. Credit-risk runs 0 (safest, AAA) to 1 (riskiest) from the table below; unrated or non-debt instruments use base alone. Equities also shift σ by (β − 1) × the equity β sensitivity. Every value here is a starting point — you can still override any instrument by hand.',
+      'Each instrument carries a vector (σ, α, λ) describing the kind of investor it suits. On import, a blank vector is filled in from the numbers on this page. Global instruments take their asset class’s base as-is. Local instruments compute Base + Per-credit-risk × the rating’s credit-risk factor. You can still override any single instrument by hand in the catalog.',
+    axesTitle: 'The three axes',
+    axesHint:
+      'The client’s test produces a vector on these same three axes. Fit = how closely an instrument’s vector points in the same direction as the client’s — so direction decides the match, not size. Everything is clamped to −1…+1.',
+    sigmaName: 'σ — variance',
+    sigmaHelp:
+      'How much the instrument swings. −1 = steady (cash, CDs), +1 = wild (crypto). Matched against the client’s variance tolerance.',
+    alphaName: 'α — skew',
+    alphaHelp:
+      'The shape of the payoff. +1 = positive skew: a small chance of a large gain (growth structures, crypto). −1 = negative skew: steady income with a rare large loss (income structures).',
+    lambdaName: 'λ — loss aversion',
+    lambdaHelp:
+      'Capital preservation. +1 = protects capital, suits a loss-averse client (cash, bonds). −1 = can draw down hard, suits a loss-tolerant client (crypto).',
     globalTitle: 'Global — base by asset class',
+    globalHelp:
+      'Global instruments use their asset class’s vector directly — there is no rating step. Equities are the only exception: their σ is nudged by β below.',
     betaSensitivity: 'Equity β sensitivity',
+    betaHelp:
+      'Equities only. σ = base σ + (β − 1) × this value. So β 1.5 at sensitivity 0.40 pushes σ up by 0.20; β 1.0 changes nothing. An equity imported with no β keeps the base σ.',
     localTitle: 'Local — base + rating sensitivity',
+    localHelp:
+      'Local instruments are rating-driven: value = Base + Per-credit-risk × credit-risk. Credit-risk comes from the rating table below (0 = AAA, 1 = riskiest).',
     base: 'Base',
+    baseHelp: 'The vector at credit-risk 0 — i.e. the safest possible instrument in this category (AAA).',
     byRating: 'Per credit-risk',
+    byRatingHelp:
+      'How far the vector travels as credit-risk goes 0 → 1. Base + this = the vector at maximum credit risk. Set to 0 to ignore the rating entirely — equities and investment funds do, so their rating never matters.',
     ratingTitle: 'Credit rating → risk factor',
+    ratingHelp:
+      'Turns a published rating into the 0…1 credit-risk factor. Local suffixes are stripped first, so AAApy → AAA and AAf-py → AA-. A rating that is missing or unrecognised falls back to 0.5 (mid) — it is NOT treated as safe.',
+    exampleLabel: 'Example',
+    exampleBeta: (beta: string, sigma: string) => `β ${beta} → σ ${sigma}`,
     save: 'Save model',
     saved: 'Saved',
     reset: 'Reset to defaults',
@@ -627,10 +651,9 @@ const es: UIStrings = {
     alpha: 'α asimetría',
     lambda: 'λ aversión a pérdidas',
     saveVectors: 'Guardar vectores',
-    mixTitle: 'Mezcla modelo global',
-    mixHint: 'Se muestra en el informe del asesor. Se normaliza a 100 al guardar.',
-    localMixTitle: 'Mezcla modelo local',
-    localMixHint: 'Se normaliza a 100 al guardar.',
+    mixTitle: 'Mezcla del portafolio modelo',
+    mixHint:
+      'La distribución recomendada por arquetipo, que se muestra en el informe del asesor. Global y local son carteras separadas — cada una se normaliza a 100 por su cuenta al guardar.',
     total: 'Total',
     sumWarning: 'Al menos una clase debe ser mayor a 0.',
     recompute: 'Recalcular desde el modelo',
@@ -641,15 +664,40 @@ const es: UIStrings = {
   },
   adminRisk: {
     title: 'Modelo de riesgo',
-    subtitle: 'Cómo se derivan σ/α/λ al importar instrumentos.',
+    subtitle: 'Cómo cada instrumento obtiene su σ/α/λ al importarse.',
     howBody:
-      'Al importar, un vector de riesgo vacío se completa como base + sensibilidad-al-rating × riesgo-de-crédito. El riesgo de crédito va de 0 (más seguro, AAA) a 1 (más riesgoso) según la tabla de abajo; los instrumentos sin rating o que no son deuda usan solo la base. La renta variable además ajusta σ por (β − 1) × la sensibilidad β. Todo aquí es un punto de partida — siempre podés ajustar cualquier instrumento a mano.',
+      'Cada instrumento lleva un vector (σ, α, λ) que describe al tipo de inversor que le calza. Al importar, un vector vacío se completa con los números de esta página. Los instrumentos globales toman la base de su clase de activo tal cual. Los locales calculan Base + Por-riesgo-de-crédito × el factor de riesgo de su calificación. Siempre podés ajustar cualquier instrumento a mano en el catálogo.',
+    axesTitle: 'Los tres ejes',
+    axesHint:
+      'El test del cliente produce un vector en estos mismos tres ejes. El calce = qué tan parecida es la dirección del vector del instrumento a la del cliente — decide la dirección, no el tamaño. Todo se limita a −1…+1.',
+    sigmaName: 'σ — varianza',
+    sigmaHelp:
+      'Cuánto oscila el instrumento. −1 = estable (efectivo, CDA), +1 = muy volátil (cripto). Se compara con la tolerancia a la varianza del cliente.',
+    alphaName: 'α — asimetría',
+    alphaHelp:
+      'La forma del pago. +1 = asimetría positiva: poca probabilidad de una ganancia grande (estructurados de crecimiento, cripto). −1 = asimetría negativa: renta estable con una pérdida grande poco frecuente (estructurados de renta).',
+    lambdaName: 'λ — aversión a pérdidas',
+    lambdaHelp:
+      'Preservación de capital. +1 = protege el capital, calza con un cliente averso a pérdidas (efectivo, bonos). −1 = puede caer fuerte, calza con un cliente tolerante a pérdidas (cripto).',
     globalTitle: 'Global — base por clase de activo',
+    globalHelp:
+      'Los instrumentos globales usan el vector de su clase de activo directamente — no hay paso de calificación. La renta variable es la única excepción: su σ se ajusta por β abajo.',
     betaSensitivity: 'Sensibilidad β renta variable',
+    betaHelp:
+      'Solo renta variable. σ = σ base + (β − 1) × este valor. Así β 1,5 con sensibilidad 0,40 sube σ en 0,20; β 1,0 no cambia nada. Una acción importada sin β mantiene la σ base.',
     localTitle: 'Local — base + sensibilidad al rating',
+    localHelp:
+      'Los locales se guían por la calificación: valor = Base + Por-riesgo-de-crédito × riesgo-de-crédito. El riesgo de crédito sale de la tabla de abajo (0 = AAA, 1 = el más riesgoso).',
     base: 'Base',
+    baseHelp: 'El vector con riesgo de crédito 0 — es decir, el instrumento más seguro posible de esta categoría (AAA).',
     byRating: 'Por riesgo de crédito',
+    byRatingHelp:
+      'Cuánto se desplaza el vector cuando el riesgo de crédito va de 0 → 1. Base + esto = el vector con riesgo máximo. Poné 0 para ignorar la calificación por completo — la renta variable y los fondos de inversión lo hacen, así que su calificación nunca influye.',
     ratingTitle: 'Calificación → factor de riesgo',
+    ratingHelp:
+      'Convierte una calificación publicada en el factor de riesgo 0…1. Primero se quitan los sufijos locales: AAApy → AAA y AAf-py → AA-. Una calificación ausente o no reconocida cae a 0,5 (medio) — NO se considera segura.',
+    exampleLabel: 'Ejemplo',
+    exampleBeta: (beta: string, sigma: string) => `β ${beta} → σ ${sigma}`,
     save: 'Guardar modelo',
     saved: 'Guardado',
     reset: 'Restaurar por defecto',

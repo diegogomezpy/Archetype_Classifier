@@ -16,7 +16,7 @@ import {
 import type { ShapeArchetype, ShapeScores } from '../lib/scoring'
 import type { ArchetypeKey } from '../data/archetypes'
 import { useLang, useT } from '../i18n/i18n'
-import { assetClassLabel, categoryLabel, localizedArchetype } from '../i18n/content'
+import { assetClassLabel, categoryLabel, localizedArchetype, regionLabel } from '../i18n/content'
 import AppNav from '../components/AppNav'
 import AdminNav from '../components/AdminNav'
 
@@ -26,8 +26,10 @@ const parseNum = (v: string, fallback = 0) => {
   return Number.isFinite(n) ? n : fallback
 }
 
+// No `w-full` here on purpose: every use sets its own fixed width, and w-full
+// would win on CSS order and collapse the sibling label.
 const numInput =
-  'w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm text-text tnum shadow-soft outline-none transition-shadow focus:ring-2 focus:ring-teal/40'
+  'rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm text-text tnum shadow-soft outline-none transition-shadow focus:ring-2 focus:ring-teal/40'
 
 type VectorDraft = Record<ShapeArchetype, ShapeScores>
 type MixDraft = Record<ArchetypeKey, Record<AssetClass, string>>
@@ -220,7 +222,7 @@ export default function AdminArchetypesPage() {
         </div>
       </section>
 
-      {/* ── Section 2: model asset mix ──────────────────────────────────────── */}
+      {/* ── Section 2: model mix — global vs local, side by side per archetype ── */}
       <section className="mt-14">
         <h2 className="font-mono text-xs uppercase tracking-[0.14em] text-muted">
           {t.adminArch.mixTitle}
@@ -229,121 +231,109 @@ export default function AdminArchetypesPage() {
 
         <div className="mt-5 space-y-4">
           {ARCHETYPE_ORDER.map((key) => {
-            const total = mixTotal(key)
-            const empty = total <= 0
+            const gTotal = mixTotal(key)
+            const lTotal = localMixTotal(key)
+            const gEmpty = gTotal <= 0
+            const lEmpty = lTotal <= 0
             return (
               <div key={key} className="rounded-2xl border border-border bg-surface p-5 shadow-soft">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-base font-semibold text-text">
-                    {localizedArchetype(key, lang).name}
-                  </h3>
-                  <span
-                    className={`font-mono text-xs tnum ${empty ? 'text-red' : 'text-muted'}`}
-                  >
-                    {t.adminArch.total}: {total}
-                  </span>
+                <h3 className="text-base font-semibold text-text">
+                  {localizedArchetype(key, lang).name}
+                </h3>
+
+                <div className="mt-4 grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  {/* Global book */}
+                  <div>
+                    <div className="flex items-baseline justify-between border-b border-hairline pb-2">
+                      <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-faint">
+                        {regionLabel('global', lang)}
+                      </span>
+                      <span className={`font-mono text-xs tnum ${gEmpty ? 'text-red' : 'text-muted'}`}>
+                        {t.adminArch.total}: {gTotal}
+                      </span>
+                    </div>
+                    <div className="mt-3 space-y-2.5">
+                      {ASSET_CLASSES.map((cls) => (
+                        <label key={cls} className="flex items-center gap-2.5">
+                          <span
+                            className="h-2.5 w-2.5 shrink-0 rounded-full"
+                            style={{ backgroundColor: ASSET_CLASS_COLORS[cls] }}
+                          />
+                          <span className="flex-1 truncate text-sm text-text">
+                            {assetClassLabel(cls, lang)}
+                          </span>
+                          <input
+                            type="number"
+                            min={0}
+                            step={1}
+                            aria-label={`${localizedArchetype(key, lang).name} — ${regionLabel('global', lang)} — ${assetClassLabel(cls, lang)}`}
+                            className={`${numInput} w-14 text-right`}
+                            value={mixDraft[key][cls]}
+                            onChange={(e) => setMixCell(key, cls, e.target.value)}
+                          />
+                          <span className="w-3 shrink-0 text-xs text-muted">%</span>
+                        </label>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => recompute(key)}
+                      className="mt-3 text-xs font-medium text-muted transition-colors hover:text-teal"
+                    >
+                      {t.adminArch.recompute}
+                    </button>
+                    {gEmpty && <p className="mt-2 text-xs text-red">{t.adminArch.sumWarning}</p>}
+                  </div>
+
+                  {/* Local book */}
+                  <div className="sm:border-l sm:border-border sm:pl-6">
+                    <div className="flex items-baseline justify-between border-b border-hairline pb-2">
+                      <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-faint">
+                        {regionLabel('local', lang)}
+                      </span>
+                      <span className={`font-mono text-xs tnum ${lEmpty ? 'text-red' : 'text-muted'}`}>
+                        {t.adminArch.total}: {lTotal}
+                      </span>
+                    </div>
+                    <div className="mt-3 space-y-2.5">
+                      {LOCAL_CATEGORIES.map((cat) => (
+                        <label key={cat} className="flex items-center gap-2.5">
+                          <span
+                            className="h-2.5 w-2.5 shrink-0 rounded-full"
+                            style={{ backgroundColor: LOCAL_CATEGORY_COLORS[cat] }}
+                          />
+                          <span className="flex-1 truncate text-sm text-text">
+                            {categoryLabel(cat, 'local', lang)}
+                          </span>
+                          <input
+                            type="number"
+                            min={0}
+                            step={1}
+                            aria-label={`${localizedArchetype(key, lang).name} — ${regionLabel('local', lang)} — ${categoryLabel(cat, 'local', lang)}`}
+                            className={`${numInput} w-14 text-right`}
+                            value={localMixDraft[key][cat]}
+                            onChange={(e) => setLocalMixCell(key, cat, e.target.value)}
+                          />
+                          <span className="w-3 shrink-0 text-xs text-muted">%</span>
+                        </label>
+                      ))}
+                    </div>
+                    {lEmpty && <p className="mt-2 text-xs text-red">{t.adminArch.sumWarning}</p>}
+                  </div>
                 </div>
 
-                <div className="mt-4 grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2">
-                  {ASSET_CLASSES.map((cls) => (
-                    <label key={cls} className="flex items-center gap-2.5">
-                      <span
-                        className="h-2.5 w-2.5 shrink-0 rounded-full"
-                        style={{ backgroundColor: ASSET_CLASS_COLORS[cls] }}
-                      />
-                      <span className="flex-1 text-sm text-text">{assetClassLabel(cls, lang)}</span>
-                      <input
-                        type="number"
-                        min={0}
-                        step={1}
-                        aria-label={`${localizedArchetype(key, lang).name} — ${assetClassLabel(cls, lang)}`}
-                        className={`${numInput} w-16 text-right`}
-                        value={mixDraft[key][cls]}
-                        onChange={(e) => setMixCell(key, cls, e.target.value)}
-                      />
-                      <span className="w-3 shrink-0 text-xs text-muted">%</span>
-                    </label>
-                  ))}
-                </div>
-
-                <div className="mt-4 flex items-center gap-3">
+                <div className="mt-5 border-t border-hairline pt-4">
                   <button
                     type="button"
-                    onClick={() => saveMix(key)}
-                    disabled={empty}
+                    onClick={() => {
+                      saveMix(key)
+                      saveLocalMix(key)
+                    }}
+                    disabled={gEmpty && lEmpty}
                     className="rounded-xl bg-teal px-5 py-2 text-sm font-semibold text-white shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     {t.adminArch.save}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => recompute(key)}
-                    className="rounded-xl px-4 py-2 text-sm font-medium text-muted transition-colors hover:text-text"
-                  >
-                    {t.adminArch.recompute}
-                  </button>
-                  {empty && <span className="text-xs text-red">{t.adminArch.sumWarning}</span>}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </section>
-
-      {/* ── Section 3: LOCAL model mix (Cadiem categories) ──────────────────── */}
-      <section className="mt-14">
-        <h2 className="font-mono text-xs uppercase tracking-[0.14em] text-muted">
-          {t.adminArch.localMixTitle}
-        </h2>
-        <p className="mt-2 max-w-2xl text-sm text-muted">{t.adminArch.localMixHint}</p>
-
-        <div className="mt-5 space-y-4">
-          {ARCHETYPE_ORDER.map((key) => {
-            const total = localMixTotal(key)
-            const empty = total <= 0
-            return (
-              <div key={key} className="rounded-2xl border border-border bg-surface p-5 shadow-soft">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-base font-semibold text-text">
-                    {localizedArchetype(key, lang).name}
-                  </h3>
-                  <span className={`font-mono text-xs tnum ${empty ? 'text-red' : 'text-muted'}`}>
-                    {t.adminArch.total}: {total}
-                  </span>
-                </div>
-
-                <div className="mt-4 grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2">
-                  {LOCAL_CATEGORIES.map((cat) => (
-                    <label key={cat} className="flex items-center gap-2.5">
-                      <span
-                        className="h-2.5 w-2.5 shrink-0 rounded-full"
-                        style={{ backgroundColor: LOCAL_CATEGORY_COLORS[cat] }}
-                      />
-                      <span className="flex-1 text-sm text-text">{categoryLabel(cat, 'local', lang)}</span>
-                      <input
-                        type="number"
-                        min={0}
-                        step={1}
-                        aria-label={`${localizedArchetype(key, lang).name} — ${categoryLabel(cat, 'local', lang)}`}
-                        className={`${numInput} w-16 text-right`}
-                        value={localMixDraft[key][cat]}
-                        onChange={(e) => setLocalMixCell(key, cat, e.target.value)}
-                      />
-                      <span className="w-3 shrink-0 text-xs text-muted">%</span>
-                    </label>
-                  ))}
-                </div>
-
-                <div className="mt-4 flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => saveLocalMix(key)}
-                    disabled={empty}
-                    className="rounded-xl bg-teal px-5 py-2 text-sm font-semibold text-white shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    {t.adminArch.save}
-                  </button>
-                  {empty && <span className="text-xs text-red">{t.adminArch.sumWarning}</span>}
                 </div>
               </div>
             )
