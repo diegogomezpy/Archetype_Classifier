@@ -97,7 +97,18 @@ async function fetchYahoo(symbol: string): Promise<MarketDataResult> {
   try {
     qs = await yahooFinance.quoteSummary(
       symbol,
-      { modules: ['price', 'summaryDetail', 'assetProfile', 'defaultKeyStatistics'] },
+      {
+        modules: [
+          'price',
+          'summaryDetail',
+          'assetProfile',
+          'defaultKeyStatistics',
+          // The research firm only sends us a ticker + rationale now, so the
+          // street consensus (target price, buy-recs) has to come from here.
+          'financialData',
+          'recommendationTrend',
+        ],
+      },
       YF_OPTS,
     )
   } catch (e) {
@@ -108,9 +119,17 @@ async function fetchYahoo(symbol: string): Promise<MarketDataResult> {
   const sd = qs.summaryDetail as Record<string, unknown> | undefined
   const ap = qs.assetProfile as Record<string, unknown> | undefined
   const ks = qs.defaultKeyStatistics as Record<string, unknown> | undefined
+  const fd = qs.financialData as Record<string, unknown> | undefined
+  const trend = (qs.recommendationTrend as { trend?: Array<Record<string, unknown>> } | undefined)
+    ?.trend?.[0]
   if (!p && !sd) return { ok: false, reason: 'not_found' }
 
   const spot = num(p?.regularMarketPrice)
+  // Consensus: mean analyst target, and the share of analysts saying buy.
+  const target = num(fd?.targetMeanPrice)
+  const buys = (num(trend?.strongBuy) ?? 0) + (num(trend?.buy) ?? 0)
+  const totalRecs =
+    buys + (num(trend?.hold) ?? 0) + (num(trend?.sell) ?? 0) + (num(trend?.strongSell) ?? 0)
   const isEtf = String(p?.quoteType ?? '').toUpperCase() === 'ETF'
   const chg1y = num(ks?.['52WeekChange'])
   const divY = num(sd?.dividendYield) ?? num(sd?.trailingAnnualDividendYield)
@@ -138,7 +157,15 @@ async function fetchYahoo(symbol: string): Promise<MarketDataResult> {
       marketCapAum: p?.marketCap ? '$' + compact(p.marketCap) : '',
       dividendYield: divY === null ? '' : pctPlain(divY * 100),
       peRatio: fixed(sd?.trailingPE, 1),
+      peForward: fixed(sd?.forwardPE, 1),
       beta: fixed(sd?.beta ?? ks?.beta, 2),
+      priceTarget: price(target),
+      // Recomputed against the live price every time this runs, so upside never
+      // goes stale between research updates.
+      potentialReturn:
+        target !== null && spot !== null && spot > 0 ? pctSigned((target / spot - 1) * 100) : '',
+      recBuyPct: totalRecs > 0 ? pctPlain((buys / totalRecs) * 100) : '',
+      analystCount: totalRecs > 0 ? String(totalRecs) : '',
       impliedVol3m: await atmImpliedVol(symbol, spot),
       asOf: asOf(),
     }),

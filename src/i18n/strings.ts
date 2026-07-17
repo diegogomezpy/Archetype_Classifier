@@ -211,6 +211,11 @@ const en = {
     importTitle: 'Import from file',
     importHint:
       'Pick a market + category, download the template (columns also accept Bloomberg field names), fill it, and upload the CSV. Blank σ/α/λ are auto-derived.',
+    importHintAuto:
+      'The template is just Ticker + Descripción — a ticker is all we need. Name, price, P/E, beta, market cap, sector, price target and analyst recommendations are fetched on import, and the potential return is recomputed against the live price. Anything you put in the file overrides what we fetch.',
+    importHintLocal:
+      'Upload the Cadiem boletín PDF and its bond, CDA, fund and equity tables are parsed straight in. Or fill the column template for one category by hand. σ/α/λ are auto-derived either way.',
+    importFetching: (done: number, total: number) => `Fetching market data ${done}/${total}…`,
     importDownload: 'Download template',
     importUpload: 'Upload CSV',
     importAdd: (n: number) => `Add ${n}`,
@@ -222,19 +227,8 @@ const en = {
     importBulletin: 'Upload boletín (PDF)',
     importBulletinHint:
       'Local only: upload the Cadiem bulletin PDF and it auto-parses the bond, CDA, fund and equity tables. Best-effort — review the preview before adding. σ/α/λ are auto-derived.',
-    bulletinTitle: 'Local menu — from the boletín',
-    bulletinHint:
-      'Upload the boletín PDF: its bond, CDA, fund and equity tables are parsed into instruments with σ/α/λ auto-derived. Review the preview, then add. Re-upload each new boletín to refresh the menu.',
     bulletinNothing:
       'No instruments found in that PDF. It may be a scan (no text layer) or a layout the parser does not recognise yet.',
-    bulletinDiscard: 'Discard',
-    rankingTitle: 'Equity ranking — from your research firm',
-    rankingHint:
-      'Upload their CSV: Ticker · % Rec Compra · Ret Potencial · Precio Objetivo · Descripción. Everything else (name, price, P/E, beta, market cap, sector) is fetched per ticker, and the potential return is recomputed off the live price rather than their stamped one.',
-    rankingUpload: 'Upload ranking (CSV)',
-    rankingFetching: (done: number, total: number) => `Fetching ${done}/${total}…`,
-    rankingFilled: (n: number, total: number) => `${n}/${total} with market data`,
-    rankingNoRows: 'No rows found. The file needs a Ticker column.',
     importParsing: 'Reading PDF…',
     importBulletinSections: (s: string) => `sections: ${s}`,
     importBulletinError: 'Could not read that PDF. Try the CSV template instead.',
@@ -587,6 +581,11 @@ const es: UIStrings = {
     importTitle: 'Importar desde archivo',
     importHint:
       'Elige mercado + categoría, descarga la plantilla (las columnas también aceptan nombres de campo de Bloomberg), complétala y sube el CSV. σ/α/λ en blanco se derivan automáticamente.',
+    importHintAuto:
+      'La plantilla es solo Ticker + Descripción — con el ticker alcanza. Nombre, precio, P/E, beta, capitalización, sector, precio objetivo y recomendaciones se buscan al importar, y el retorno potencial se recalcula contra el precio en vivo. Lo que pongas en el archivo pisa lo que buscamos.',
+    importHintLocal:
+      'Subí el PDF del boletín de Cadiem y sus tablas de bonos, CDA, fondos y renta variable se parsean directo. O completá a mano la plantilla de una categoría. σ/α/λ se derivan solos igual.',
+    importFetching: (done: number, total: number) => `Buscando datos de mercado ${done}/${total}…`,
     importDownload: 'Descargar plantilla',
     importUpload: 'Subir CSV',
     importAdd: (n: number) => `Agregar ${n}`,
@@ -598,19 +597,8 @@ const es: UIStrings = {
     importBulletin: 'Subir boletín (PDF)',
     importBulletinHint:
       'Solo local: subí el PDF del boletín de Cadiem y se parsean automáticamente las tablas de bonos, CDA, fondos y renta variable. Es una aproximación — revisá la vista previa antes de agregar. σ/α/λ se derivan solos.',
-    bulletinTitle: 'Menú local — desde el boletín',
-    bulletinHint:
-      'Subí el PDF del boletín: sus tablas de bonos, CDA, fondos y renta variable se parsean en instrumentos con σ/α/λ derivados. Revisá la vista previa y agregá. Volvé a subir cada boletín nuevo para actualizar el menú.',
     bulletinNothing:
       'No se encontraron instrumentos en ese PDF. Puede ser un escaneo (sin capa de texto) o un formato que el parser aún no reconoce.',
-    bulletinDiscard: 'Descartar',
-    rankingTitle: 'Ranking de acciones — de tu casa de análisis',
-    rankingHint:
-      'Subí su CSV: Ticker · % Rec Compra · Ret Potencial · Precio Objetivo · Descripción. Todo lo demás (nombre, precio, P/E, beta, capitalización, sector) se busca por ticker, y el retorno potencial se recalcula con el precio en vivo en vez del que ellos mandaron.',
-    rankingUpload: 'Subir ranking (CSV)',
-    rankingFetching: (done: number, total: number) => `Buscando ${done}/${total}…`,
-    rankingFilled: (n: number, total: number) => `${n}/${total} con datos de mercado`,
-    rankingNoRows: 'No se encontraron filas. El archivo necesita una columna Ticker.',
     importParsing: 'Leyendo PDF…',
     importBulletinSections: (s: string) => `secciones: ${s}`,
     importBulletinError: 'No se pudo leer ese PDF. Probá con la plantilla CSV.',

@@ -77,8 +77,27 @@ function coreColumns(): ImportColumn[] {
   ]
 }
 
+/**
+ * Classes where market data can fill everything from a ticker alone. For these
+ * the template collapses to what a human actually has to supply — the ticker and
+ * the research firm's rationale — and the import fetches the rest.
+ */
+export function isAutoFillable(region: Region, category: Category): boolean {
+  return region === 'global' && (category === 'Equities' || category === 'Crypto')
+}
+
+const AUTOFILL_COLUMNS: ImportColumn[] = [
+  { key: 'ticker', label: 'Ticker', aliases: ALIASES.ticker, required: true },
+  {
+    key: 'description',
+    label: 'Descripción',
+    aliases: ['description', 'rationale', 'thesis', 'racional', 'comentario'],
+  },
+]
+
 /** All import columns for a class: core identity/risk + that class's details. */
 export function importColumnsFor(region: Region, category: Category): ImportColumn[] {
+  if (isAutoFillable(region, category)) return AUTOFILL_COLUMNS
   const detail = fieldSpecsFor(region, category)
     .filter((fs) => fs.key !== 'asOf')
     .map<ImportColumn>((fs) => ({
@@ -138,6 +157,7 @@ export function parseInstruments(region: Region, category: Category, rows: strin
   const matched = [...new Set(map.values())].map((k) => labelFor.get(k) ?? k)
   const unmatched = headers.filter((h, i) => h.trim() !== '' && !map.has(i))
   const detailKeys = new Set(fieldSpecsFor(region, category).map((fs) => fs.key))
+  const autoFill = isAutoFillable(region, category)
 
   const seen = new Set<string>()
   const instruments: ManagedInstrument[] = []
@@ -149,7 +169,9 @@ export function parseInstruments(region: Region, category: Category, rows: strin
       const val = (cells[i] ?? '').trim()
       if (val) v[key] = val
     })
-    const name = (v.name ?? '').trim()
+    // Auto-fillable classes are keyed by ticker; the real name arrives with the
+    // market data, so fall back to the ticker until then.
+    const name = (v.name ?? '').trim() || (autoFill ? (v.ticker ?? '').trim().toUpperCase() : '')
     if (!name) {
       skipped++
       continue

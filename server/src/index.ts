@@ -253,6 +253,84 @@ app.post('/api/market-data', async (c) => {
   return c.json(await fetchInstrumentData(body))
 })
 
+// Fields the market-data feed owns. Anything NOT in here is either the research
+// firm's (priceTarget, recBuyPct, researchSource, their description) or the
+// admin's, and a refresh must never overwrite it.
+const MARKET_OWNED = [
+  'kind',
+  'sectorIndex',
+  'exchange',
+  'lastPrice',
+  'change1Y',
+  'range52w',
+  'avgVolume',
+  'marketCapAum',
+  'dividendYield',
+  'peRatio',
+  'expenseRatio',
+  'beta',
+  'impliedVol3m',
+  'asOf',
+] as const
+
+const numOr = (v: unknown): number | null => {
+  const n = parseFloat(String(v ?? '').replace(/[^0-9.\-]/g, ''))
+  return Number.isFinite(n) ? n : null
+}
+
+/**
+ * Re-pull market data for every global instrument that has a ticker, refresh the
+ * fields the feed owns, and recompute potentialReturn against the NEW price so
+ * the research firm's target stays meaningful between their updates.
+ * Driven by Cloud Scheduler once a day; safe to run by hand.
+ */
+app.post('/api/market-data/refresh', async (c) => {
+  const snap = await catalogCol.get()
+  const rows = snap.docs
+    .map((d) => docData(d) as Record<string, unknown>)
+    .filter((i) => i.region === 'global' && String(i.ticker ?? '').trim())
+
+  let updated = 0
+  let failed = 0
+  let skipped = 0
+
+  for (const inst of rows) {
+    const ticker = String(inst.ticker).trim()
+    try {
+      const res = await fetchInstrumentData({
+        ticker,
+        assetClass: String(inst.assetClass ?? ''),
+      })
+      if (!res.ok) {
+        failed++
+        continue
+      }
+      const details = { ...((inst.details as Record<string, string>) ?? {}) }
+      for (const k of MARKET_OWNED) if (res.fields[k]) details[k] = res.fields[k]
+      // Their description only stands while it's theirs; otherwise refresh ours.
+      if (!details.researchSource && res.fields.description) {
+        details.description = res.fields.description
+      }
+      // The whole point of the daily run: keep upside honest against the tape.
+      const target = numOr(details.priceTarget)
+      const spot = numOr(details.lastPrice)
+      if (target != null && spot != null && spot > 0) {
+        const pct = (target / spot - 1) * 100
+        details.potentialReturn = `${pct >= 0 ? '+' : '−'}${Math.abs(pct).toFixed(1)}%`
+      }
+      await catalogCol.doc(String(inst.id)).set({ ...inst, details }, { merge: true })
+      updated++
+    } catch {
+      failed++
+    }
+    // Market data rate-limits; pace the loop rather than burst it.
+    await new Promise((r) => setTimeout(r, 250))
+  }
+
+  console.log(`market-data refresh: ${updated} updated, ${failed} failed, ${skipped} skipped`)
+  return c.json({ ok: true, considered: rows.length, updated, failed })
+})
+
 // ── static frontend + SPA fallback ───────────────────────────────────────────
 let indexHtml = ''
 try {
