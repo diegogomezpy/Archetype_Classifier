@@ -285,6 +285,13 @@ const numOr = (v: unknown): number | null => {
  * Driven by Cloud Scheduler once a day; safe to run by hand.
  */
 app.post('/api/market-data/refresh', async (c) => {
+  // Public service, but this endpoint fans out 50+ fetches and writes Firestore,
+  // so gate it on a shared token when one is configured. No token set → open
+  // (local + manual runs). Cloud Scheduler sends the header.
+  const wanted = process.env.REFRESH_TOKEN
+  if (wanted && c.req.header('x-refresh-token') !== wanted) {
+    return c.json({ ok: false, error: 'unauthorized' }, 401)
+  }
   const snap = await catalogCol.get()
   const rows = snap.docs
     .map((d) => docData(d) as Record<string, unknown>)

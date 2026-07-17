@@ -61,8 +61,44 @@ const clean = (f: Record<string, string>): Record<string, string> => {
 
 // ── Yahoo: equities / ETFs ───────────────────────────────────────────────────
 
-// ATM implied vol at the expiry nearest ~90 days out, averaged over the ATM
-// call and put. Best-effort — returns '' if the chain/IV isn't available.
+// Yahoo's option chain is noisy: contracts with no live quote come back with a
+// near-zero impliedVolatility, and thin strikes throw out absurd ones (we've
+// seen a 125% call against a 45% put on the SAME strike and expiry). A single
+// ATM contract is therefore not trustworthy. Guard rails:
+//   • only contracts that actually trade (open interest or volume),
+//   • only implausible-free IVs (1%–300%),
+//   • median of the few strikes nearest the money, so one bad print can't win.
+const IV_MIN = 0.01
+const IV_MAX = 3
+const IV_STRIKES = 3 // per side, nearest the money
+
+type Contract = {
+  strike: number
+  impliedVolatility?: number
+  openInterest?: number
+  volume?: number
+}
+
+function usableIvs(arr: Contract[], px: number): number[] {
+  return arr
+    .filter((c) => (num(c.openInterest) ?? 0) > 0 || (num(c.volume) ?? 0) > 0)
+    .filter((c) => {
+      const iv = num(c.impliedVolatility)
+      return iv !== null && iv >= IV_MIN && iv <= IV_MAX
+    })
+    .sort((a, b) => Math.abs(a.strike - px) - Math.abs(b.strike - px))
+    .slice(0, IV_STRIKES)
+    .map((c) => c.impliedVolatility as number)
+}
+
+const median = (xs: number[]): number => {
+  const s = [...xs].sort((a, b) => a - b)
+  const m = Math.floor(s.length / 2)
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2
+}
+
+// ATM implied vol at the expiry nearest ~90 days out. Best-effort — returns ''
+// rather than a number we don't believe.
 async function atmImpliedVol(symbol: string, spot: number | null): Promise<string> {
   try {
     const head = await yahooFinance.options(symbol, {}, YF_OPTS)
@@ -76,17 +112,13 @@ async function atmImpliedVol(symbol: string, spot: number | null): Promise<strin
     const leg = chain.options?.[0]
     if (!leg) return ''
     const px = spot ?? num(chain.quote?.regularMarketPrice) ?? 0
-    const nearest = (arr: Array<{ strike: number; impliedVolatility?: number }>) =>
-      arr.length
-        ? arr.reduce((b, c) => (Math.abs(c.strike - px) < Math.abs(b.strike - px) ? c : b))
-        : null
-    const call = nearest(leg.calls ?? [])
-    const put = nearest(leg.puts ?? [])
-    const ivs = [call?.impliedVolatility, put?.impliedVolatility].filter(
-      (v): v is number => typeof v === 'number' && v > 0,
-    )
+    if (!px) return ''
+    const ivs = [
+      ...usableIvs((leg.calls ?? []) as Contract[], px),
+      ...usableIvs((leg.puts ?? []) as Contract[], px),
+    ]
     if (!ivs.length) return ''
-    return (100 * (ivs.reduce((a, b) => a + b, 0) / ivs.length)).toFixed(1) + '%'
+    return (100 * median(ivs)).toFixed(1) + '%'
   } catch {
     return ''
   }
