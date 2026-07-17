@@ -4,16 +4,24 @@ import { deriveDefaults, deriveRiskVector } from './riskDerivation'
 import type { ImportResult } from './importSchema'
 
 // ---------------------------------------------------------------------------
-// Cadiem bulletin parser
+// Cadiem boletín parser
 // ---------------------------------------------------------------------------
-// Reconstructs local instruments from the text lines of the Cadiem "Oportunidades
-// de Inversión" bulletin (see data/cadiemLocal.ts for the same tables transcribed
-// by hand). It's keyed on the bulletin's fixed structure: labelled sections
-// (bonds ₲ / bonds USD / CDA / mutual funds / investment funds / equities), then
-// one instrument per data row. Extraction is pattern-based (a credit-rating
-// token, a dd/mm/yyyy maturity, dot-grouped amounts) so column drift doesn't
-// break it — but it's best-effort, which is why the caller previews before
-// adding. σ/α/λ are derived from category + rating like every other import.
+// Reconstructs local instruments from the text lines of the Cadiem
+// "Oportunidades de Inversión" boletín. Written against the real file, whose
+// quirks drive every rule here:
+//
+//  • Currency lives on the SECTION header ("Renta Fija en Dólares"), while a
+//    bare "Bonos" sub-header follows it — so a header only changes the currency
+//    when it actually names one.
+//  • Multi-series issuers use CONTINUATION rows that repeat neither issuer nor
+//    rating ("9,90%  20.000.000  5,2  30/9/2031"). Those inherit the last
+//    issuer/rating. Equities do the same but lead with a share class ("J - I").
+//  • Long fund names WRAP onto the next line ("Fondo Mutuo Disponible en" /
+//    "Guaraníes"), so a short alphabetic line inside a fund section is a name
+//    continuation, not a row.
+//
+// σ/α/λ are derived from category + rating like every other import. It stays
+// best-effort by nature, which is why the caller previews before adding.
 
 const KIND: Record<LocalCategory, string> = {
   'Fixed income': 'Bono',
@@ -26,70 +34,38 @@ const KIND: Record<LocalCategory, string> = {
 const deaccent = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '')
 const norm = (s: string) => deaccent(s).toLowerCase()
 
-// Credit-rating token, e.g. AAAPy, AA-py, A+py, BBB Py, AAfpy, Af-py, AAf-py.
-const RATING = /[A-D]{1,3}[+-]?f?[+-]?\s?[Pp]y/
+// Credit-rating token, e.g. AAAPy, AA-py, A+py, BBB Py, AAfpy, Af-py, AAf- py.
+const RATING = /[A-D]{1,3}\s?[+-]?\s?f?\s?[+-]?\s?[Pp]y/
 const DATE = /\d{1,2}\/\d{1,2}\/\d{4}/g
 const AMOUNT = /\d{1,3}(?:\.\d{3})+(?:,\d+)?/g // 1.960.000.000 or 5.000,00
 const DECIMAL = /\d+,\d+/g // 10,85 or 2,8
 const COUPON = /(mensual|bimestral|trimestral|semestral|anual|al vencimiento)/i
+const PCT_RANGE = /\d+(?:[,.]\d+)?\s*%?\s*[-–]\s*\d+(?:[,.]\d+)?\s*%/ // "10% - 11%", "12-13%"
+const PCT = /\d+(?:[,.]\d+)?\s*%/
 
-type Section = { category: LocalCategory; currency?: 'PYG' | 'USD'; label: string }
+type Currency = 'PYG' | 'USD'
+type Section = { category: LocalCategory; label: string }
 
-// Is this line a section header? Returns the section it opens, else null.
-function detectSection(line: string): Section | null {
+/** A section header carries no data. Currency is only set when it names one. */
+function detectSection(line: string): { section: Section; currency?: Currency } | null {
+  if (/\d/.test(line)) return null
   const n = norm(line)
-  if (n.length > 60) return null // headers are short; skip prose/rows
-  if (/fondos? de inversion/.test(n)) return { category: 'Investment funds', label: 'Fondos de inversión' }
-  if (/fondos? mutuos?/.test(n)) return { category: 'Mutual funds', label: 'Fondos mutuos' }
-  if (/certificado de dep|\bcda\b/.test(n)) return { category: 'CDs', currency: 'PYG', label: 'CDA' }
-  if (/renta variable|\bacciones\b/.test(n)) return { category: 'Equities', currency: 'PYG', label: 'Renta variable' }
-  if (/\bbonos?\b|renta fija/.test(n)) {
-    if (/dolar|usd/.test(n)) return { category: 'Fixed income', currency: 'USD', label: 'Bonos USD' }
-    return { category: 'Fixed income', currency: 'PYG', label: 'Bonos ₲' }
-  }
+  if (n.length > 60) return null
+  const currency: Currency | undefined = /dolar/.test(n)
+    ? 'USD'
+    : /guarani/.test(n)
+      ? 'PYG'
+      : undefined
+  const at = (category: LocalCategory, label: string) => ({ section: { category, label }, currency })
+  if (/fondos? de inversion/.test(n)) return at('Investment funds', 'Fondos de inversión')
+  if (/fondos? mutuos?/.test(n)) return at('Mutual funds', 'Fondos mutuos')
+  if (/certificado de dep|\bcda\b/.test(n)) return at('CDs', 'CDA')
+  if (/renta variable|\bacciones\b/.test(n)) return at('Equities', 'Renta variable')
+  if (/renta fija|\bbonos?\b/.test(n)) return at('Fixed income', 'Bonos')
   return null
 }
 
-// A short currency sub-header inside a section (e.g. "En Dólares").
-function detectCurrency(line: string): 'PYG' | 'USD' | null {
-  const n = norm(line)
-  if (n.length > 24) return null
-  if (/dolar|usd|us\$/.test(n)) return 'USD'
-  if (/guarani|\bpyg\b|\bgs\b/.test(n)) return 'PYG'
-  return null
-}
-
-const curLabel = (c?: 'PYG' | 'USD') => (c === 'USD' ? 'USD ($)' : 'PYG (₲)')
-const money = (c: 'PYG' | 'USD' | undefined, v: string) => `${c === 'USD' ? '$' : '₲'} ${v}`
-
-function put(details: Record<string, string>, key: string, val?: string) {
-  if (val && val.trim()) details[key] = val.trim()
-}
-
-// Fund yields show as a %-range ("10% - 11%"), a single % ("9,23%"), or a bare
-// decimal ("6,83"). Return the first that matches, normalized with a % suffix.
-function fundYield(text: string): string | undefined {
-  const range = text.match(/\d+(?:,\d+)?\s*%\s*[-–]\s*\d+(?:,\d+)?\s*%/)
-  if (range) return range[0].replace(/\s+/g, ' ')
-  const pct = text.match(/\d+(?:,\d+)?\s*%/)
-  if (pct) return pct[0].replace(/\s+/g, '')
-  const dec = text.match(DECIMAL)
-  return dec ? `${dec[0]}%` : undefined
-}
-
-// Split a data row into { issuer (before rating), rest (after), rating }.
-function splitByRating(line: string): { issuer: string; rest: string; rating: string } | null {
-  const m = line.match(RATING)
-  if (!m || m.index == null) return null
-  return {
-    issuer: line.slice(0, m.index).trim().replace(/[·|]+$/, '').trim(),
-    rest: line.slice(m.index + m[0].length).trim(),
-    rating: m[0].replace(/\s+/g, ' ').trim(),
-  }
-}
-
-// A row must carry real content — a rating, a date, an amount, a decimal, or a
-// percent — to be an instrument (filters out column headers and page furniture).
+/** Does the line carry instrument data (vs. a column header or page furniture)? */
 function looksLikeRow(line: string): boolean {
   return (
     RATING.test(line) ||
@@ -100,151 +76,97 @@ function looksLikeRow(line: string): boolean {
   )
 }
 
-function parseDebtRow(
-  section: Section,
-  currency: 'PYG' | 'USD' | undefined,
-  line: string,
-): { name: string; details: Record<string, string>; rating?: string } | null {
-  const split = splitByRating(line)
-  const issuer = (split?.issuer || line).replace(/\s{2,}/g, ' ').trim()
-  if (!issuer) return null
-  const rest = split?.rest ?? line
-  const details: Record<string, string> = {}
-  put(details, 'issuer', issuer)
-  if (split?.rating) put(details, 'rating', split.rating)
+const curLabel = (c?: Currency) => (c === 'USD' ? 'USD ($)' : 'PYG (₲)')
+const money = (c: Currency | undefined, v: string) => `${c === 'USD' ? '$' : '₲'} ${v}`
 
-  const dates = rest.match(DATE)
-  if (dates?.length) put(details, 'maturity', dates[dates.length - 1])
-  const coupon = rest.match(COUPON)
-  if (coupon) put(details, 'couponFrequency', coupon[1][0].toUpperCase() + coupon[1].slice(1).toLowerCase())
+function put(details: Record<string, string>, key: string, val?: string) {
+  if (val && val.trim()) details[key] = val.trim()
+}
 
-  // Amount: the largest dot-grouped figure. Strip amounts before scanning
-  // decimals so the fractional tail of "5.000,00" isn't misread as a residual.
-  const amounts = rest.match(AMOUNT) || []
-  if (amounts.length) {
-    const biggest = amounts.slice().sort((a, b) => b.replace(/\D/g, '').length - a.replace(/\D/g, '').length)[0]
-    put(details, 'available', money(currency, biggest))
-  }
+/** Yield as printed: a %-range, a single %, else a bare decimal. */
+function readYield(text: string): string | undefined {
+  const range = text.match(PCT_RANGE)
+  if (range) return range[0].replace(/\s+/g, ' ')
+  const pct = text.match(PCT)
+  if (pct) return pct[0].replace(/\s+/g, '')
+  const dec = text.match(DECIMAL)
+  return dec ? `${dec[0]}%` : undefined
+}
+
+/** Strip amounts before scanning decimals, so "5.000,00" can't yield "000,00". */
+function scanDecimals(rest: string, amounts: string[]): { raw: string; n: number }[] {
   let scan = rest
   for (const a of amounts) scan = scan.replace(a, ' ')
-  // Yield: a small decimal (< 100). Residual: a small decimal (< 40) after it.
-  const decimals = (scan.match(DECIMAL) || []).map((d) => ({ raw: d, n: parseFloat(d.replace('.', '').replace(',', '.')) }))
-  const yld = decimals.find((d) => d.n < 100)
-  if (yld) put(details, 'estYield', `${yld.raw}%`)
-  const residual = decimals.filter((d) => d !== yld).find((d) => d.n < 40)
-  if (residual) put(details, 'residualYears', residual.raw)
-  put(details, 'currency', curLabel(currency))
-  return { name: issuer, details, rating: split?.rating }
+  return (scan.match(DECIMAL) || []).map((d) => ({
+    raw: d,
+    n: parseFloat(d.replace('.', '').replace(',', '.')),
+  }))
 }
 
-function parseFundRow(
-  section: Section,
-  currency: 'PYG' | 'USD' | undefined,
-  line: string,
-): { name: string; details: Record<string, string>; rating?: string } | null {
-  // Fund name = leading text up to the first rating / number column.
-  const split = splitByRating(line)
-  let name = split?.issuer || ''
-  const rest = split?.rest ?? line
-  if (!name) {
-    const cut = line.search(/\d/)
-    name = (cut > 0 ? line.slice(0, cut) : line).trim()
+type Row =
+  | { kind: 'new'; lead: string; rating?: string; rest: string }
+  | { kind: 'cont'; lead: string; rest: string }
+
+/**
+ * Split a data row into its leading identity and the rest.
+ *  - a rating token ⇒ a new instrument, issuer = text before it
+ *  - no rating, and (almost) nothing before the first figure ⇒ a continuation
+ *    of the previous instrument (a further series / share class)
+ *  - no rating but real leading text ⇒ a new instrument named by that text
+ *    (funds print "-" instead of a rating)
+ */
+function splitRow(line: string): Row {
+  const m = line.match(RATING)
+  if (m && m.index != null) {
+    return {
+      kind: 'new',
+      lead: line.slice(0, m.index).trim(),
+      rating: m[0].replace(/\s+/g, ' ').trim(),
+      rest: line.slice(m.index + m[0].length).trim(),
+    }
   }
-  name = name.replace(/\s{2,}/g, ' ').trim()
-  if (name.length < 3) return null
-  const details: Record<string, string> = {}
-  put(details, 'fundManager', 'Cadiem')
-  if (split?.rating) put(details, 'rating', split.rating)
-  put(details, 'estYield', fundYield(rest))
-  put(details, 'currency', curLabel(currency))
-  return { name, details, rating: split?.rating }
+  const firstFig = line.search(/\d/)
+  const lead = (firstFig > 0 ? line.slice(0, firstFig) : '').trim()
+  // "", "-", "G -", "J - I", "D" ⇒ continuation; a real name ⇒ new row.
+  if (lead.length <= 8) return { kind: 'cont', lead, rest: firstFig > 0 ? line.slice(firstFig) : line }
+  return { kind: 'new', lead, rest: firstFig > 0 ? line.slice(firstFig) : '' }
 }
 
-function parseEquityRow(
-  currency: 'PYG' | 'USD' | undefined,
-  line: string,
-): { name: string; details: Record<string, string>; rating?: string } | null {
-  const split = splitByRating(line)
-  const issuer = (split?.issuer || '').replace(/\s{2,}/g, ' ').trim()
-  if (!issuer) return null
-  const rest = split?.rest ?? ''
-  const details: Record<string, string> = {}
-  put(details, 'issuer', issuer)
-  if (split?.rating) put(details, 'rating', split.rating)
-  // Share type is the trailing descriptive phrase ("Acciones preferidas",
-  // "Acciones electrónicas (vtos. trimestrales)").
-  const typeMatch = rest.match(/acci[oó]n[a-záéíóúñ .()/-]*/i)
-  if (typeMatch) put(details, 'shareType', typeMatch[0].replace(/\s{2,}/g, ' ').trim())
-  const amounts = rest.match(AMOUNT) || []
-  if (amounts[0]) put(details, 'price', money(currency, amounts[0]))
-  let scan = rest
-  for (const a of amounts) scan = scan.replace(a, ' ')
-  const pct = scan.match(DECIMAL)
-  if (pct?.length) put(details, 'estYield', `${pct[0]}%`)
-  put(details, 'currency', curLabel(currency))
-  const name = details.shareType ? `${issuer} — ${details.shareType}` : issuer
-  return { name, details, rating: split?.rating }
+/** A short alphabetic line inside a fund section = a wrapped name, not a row. */
+function nameWrap(line: string): string | null {
+  if (line.length > 30 || line.startsWith('*') || line.includes('.')) return null
+  const lead = (line.search(/\d/) > 0 ? line.slice(0, line.search(/\d/)) : line).trim()
+  if (!lead || !/^[A-Za-zÁÉÍÓÚÑáéíóúñ][A-Za-zÁÉÍÓÚÑáéíóúñ '&-]*$/.test(lead)) return null
+  return lead
 }
 
-/** Parse the whole bulletin's text lines into local instruments. */
+/** Parse the whole boletín's text lines into local instruments. */
 export function parseBulletin(lines: string[]): ImportResult {
   const instruments: ManagedInstrument[] = []
   const sectionsSeen: string[] = []
   const seen = new Set<string>()
   let section: Section | null = null
-  let currency: 'PYG' | 'USD' | undefined
+  let currency: Currency | undefined
+  let issuer = ''
+  let rating: string | undefined
+  let last: ManagedInstrument | null = null // for name-wrap continuation
   let skipped = 0
   let seq = 0
 
-  for (const raw of lines) {
-    const line = raw.trim()
-    if (!line) continue
-
-    // Headers/sub-headers carry no data. Fund NAMES contain the section keywords
-    // ("Fondo Mutuo…"), so only a digit-free line can open a section — otherwise
-    // those rows would be swallowed as headers.
-    if (!/\d/.test(line)) {
-      const next = detectSection(line)
-      if (next) {
-        section = next
-        currency = next.currency
-        if (!sectionsSeen.includes(next.label)) sectionsSeen.push(next.label)
-        continue
-      }
-      const cur = detectCurrency(line)
-      if (cur) currency = cur
-      continue
-    }
-
-    if (!section) continue
-    if (!looksLikeRow(line)) continue
-
-    const parsed =
-      section.category === 'Equities'
-        ? parseEquityRow(currency, line)
-        : section.category === 'Mutual funds' || section.category === 'Investment funds'
-          ? parseFundRow(section, currency, line)
-          : parseDebtRow(section, currency, line)
-    if (!parsed || !parsed.name) {
-      skipped++
-      continue
-    }
-
-    const cat = section.category
-    const vec = deriveRiskVector('local', cat, parsed.rating ? { rating: parsed.rating } : {})
+  const push = (cat: LocalCategory, name: string, rtg: string | undefined, details: Record<string, string>) => {
+    const vec = deriveRiskVector('local', cat, rtg ? { rating: rtg } : {})
     const def = deriveDefaults('local', cat)
     seq += 1
     let id = `blt-${cat.toLowerCase().replace(/[^a-z]+/g, '')}-${String(seq).padStart(2, '0')}`
     while (seen.has(id)) id += 'x'
     seen.add(id)
-
-    instruments.push({
+    const inst: ManagedInstrument = {
       id,
-      name: parsed.name,
+      name,
       ticker: '',
       region: 'local',
       assetClass: cat,
-      kind: cat === 'Equities' ? parsed.details.shareType || KIND[cat] : KIND[cat],
+      kind: cat === 'Equities' ? details.shareType || KIND[cat] : KIND[cat],
       sigmaLoad: vec.sigmaLoad,
       alphaLoad: vec.alphaLoad,
       lambdaLoad: vec.lambdaLoad,
@@ -252,8 +174,124 @@ export function parseBulletin(lines: string[]): ImportResult {
       lockupMonths: def.lockupMonths,
       visible: true,
       emphasized: false,
-      details: parsed.details,
-    })
+      details,
+    }
+    instruments.push(inst)
+    return inst
+  }
+
+  for (const raw of lines) {
+    const line = raw.trim()
+    if (!line) continue
+
+    const head = detectSection(line)
+    if (head) {
+      section = head.section
+      if (head.currency) currency = head.currency
+      const label =
+        head.section.category === 'Fixed income' || head.section.category === 'Equities'
+          ? `${head.section.label} ${currency === 'USD' ? 'USD' : '₲'}`
+          : head.section.label
+      if (!sectionsSeen.includes(label)) sectionsSeen.push(label)
+      issuer = ''
+      rating = undefined
+      last = null
+      continue
+    }
+    if (!section) continue
+
+    const isFund = section.category === 'Mutual funds' || section.category === 'Investment funds'
+
+    if (!looksLikeRow(line)) {
+      // Fund names wrap onto their own line — glue them back on.
+      const prev = last
+      const wrap = isFund && prev ? nameWrap(line) : null
+      if (prev && wrap) prev.name = `${prev.name} ${wrap}`.replace(/\s+/g, ' ').trim()
+      continue
+    }
+
+    // Funds print "<name> <yield> <rating|-> <terms…>", so the name is the text
+    // before the first figure — not before the rating (the yield precedes it).
+    if (isFund) {
+      const firstFig = line.search(/\d/)
+      const name = (firstFig > 0 ? line.slice(0, firstFig) : line).trim()
+      const tail = firstFig > 0 ? line.slice(firstFig) : ''
+      if (!name) {
+        skipped++
+        continue
+      }
+      const m = line.match(RATING)
+      const rtg = m ? m[0].replace(/\s+/g, ' ').trim() : undefined
+      const details: Record<string, string> = {}
+      put(details, 'fundManager', 'Cadiem')
+      put(details, 'rating', rtg)
+      put(details, 'estYield', readYield(tail))
+      put(details, 'currency', curLabel(currency))
+      last = push(section.category, name, rtg, details)
+      continue
+    }
+
+    const row = splitRow(line)
+    if (row.kind === 'new') {
+      if (row.rating) {
+        issuer = row.lead || issuer
+        rating = row.rating
+      } else {
+        issuer = row.lead
+        rating = undefined
+      }
+    } else if (!issuer && !isFund) {
+      // A continuation with nothing to inherit — not an instrument.
+      skipped++
+      continue
+    }
+
+    const rest = row.rest
+    const details: Record<string, string> = {}
+    const amounts = rest.match(AMOUNT) || []
+    const decimals = scanDecimals(rest, amounts)
+
+    if (section.category === 'Equities') {
+      put(details, 'issuer', issuer)
+      put(details, 'rating', rating)
+      // Share class: on a continuation row it IS the lead ("G", "J - I"); on a
+      // rated row the lead is the issuer, so the class is the text before the
+      // first figure of the rest ("I - 70.000.000…" → "I", "- 11,50%…" → none).
+      const clsRaw = row.kind === 'cont' ? row.lead : (rest.match(/^[^\d]*/)?.[0] ?? '')
+      const cls = clsRaw.replace(/^[-–\s]+/, '').replace(/[-–\s]+$/, '').trim()
+      if (cls) put(details, 'shareClass', cls)
+      const typeMatch = rest.match(/acci[oó]n[a-záéíóúñ .()/-]*/i)
+      if (typeMatch) put(details, 'shareType', typeMatch[0].replace(/\s{2,}/g, ' ').trim())
+      // Columns: Disponibilidad · Precio · Valor de venta — price is the middle.
+      if (amounts.length >= 2) put(details, 'price', money(currency, amounts[1]))
+      if (amounts[0]) put(details, 'available', money(currency, amounts[0]))
+      if (amounts[2]) put(details, 'saleValue', money(currency, amounts[2]))
+      const y = decimals.find((d) => d.n < 100)
+      if (y) put(details, 'estYield', `${y.raw}%`)
+      put(details, 'currency', curLabel(currency))
+      const label = details.shareClass ? `${issuer} — ${details.shareClass}` : issuer
+      const name = details.price ? `${label} (${details.price})` : label
+      last = push('Equities', name, rating, details)
+      continue
+    }
+
+    // Debt: Fixed income + CDs.
+    put(details, 'issuer', issuer)
+    put(details, 'rating', rating)
+    const dates = rest.match(DATE)
+    if (dates?.length) put(details, 'maturity', dates[dates.length - 1])
+    const coupon = rest.match(COUPON)
+    if (coupon) put(details, 'couponFrequency', coupon[1][0].toUpperCase() + coupon[1].slice(1).toLowerCase())
+    if (amounts.length) {
+      const biggest = amounts.slice().sort((a, b) => b.replace(/\D/g, '').length - a.replace(/\D/g, '').length)[0]
+      if (biggest) put(details, 'available', money(currency, biggest))
+    }
+    const yld = decimals.find((d) => d.n < 100)
+    if (yld) put(details, 'estYield', `${yld.raw}%`)
+    const residual = decimals.filter((d) => d !== yld).find((d) => d.n < 40)
+    if (residual) put(details, 'residualYears', residual.raw)
+    put(details, 'currency', curLabel(currency))
+    last = push(section.category, issuer, rating, details)
   }
 
   return { instruments, skipped, matched: sectionsSeen, unmatched: [] }
