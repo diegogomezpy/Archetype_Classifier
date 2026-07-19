@@ -30,13 +30,23 @@ const ALIASES: Record<string, string[]> = {
   kind: ['type', 'security type', 'instrument type', 'sec type', 'type of security'],
   currency: ['crncy', 'ccy', 'curr'],
   // detail keys
-  issuer: ['issuer name', 'obligor'],
+  // Bond listing headers, as the research firm prints them (Spanish, abbreviated).
+  issuer: ['issuer name', 'obligor', 'emisor'],
+  sector: ['sector', 'industry', 'industria'],
+  country: ['country', 'pais', 'país', 'domicile'],
+  bid: ['bid', 'bid price', 'precio bid'],
+  ask: ['ask', 'ask price', 'offer', 'precio ask'],
+  ytmBid: ['ytm bid', 'yield bid', 'rendimiento bid'],
+  // A generic "YTM" is the ask/offer side — the yield a client buying actually gets.
+  ytmAsk: ['ytm ask', 'ytm', 'yield to maturity', 'yld ytm mid', 'rendimiento', 'yield ask'],
+  ytc: ['ytc', 'yield to call', 'rendimiento al call'],
+  nextCall: ['prox call', 'próx. call', 'prox. call', 'next call', 'call date', 'fecha call'],
   rating: ['rtg', 'credit rating', 'sp rating', 's&p rating', 'rtg sp', 'bb composite'],
   creditRating: ['rating', 'rtg', 'sp rating', 's&p rating', 'credit rating'],
   couponRate: ['coupon', 'cpn', 'coupon rate'],
   couponFrequency: ['coupon frequency', 'cpn freq', 'cpn frequency', 'payment frequency'],
-  maturity: ['maturity date', 'mty', 'mtty', 'final maturity', 'vencimiento'],
-  duration: ['modified duration', 'dur adj mid', 'mod duration'],
+  maturity: ['maturity date', 'mty', 'mtty', 'final maturity', 'vencimiento', 'venc'],
+  duration: ['modified duration', 'dur adj mid', 'mod duration', 'dur'],
   ytm: ['yield to maturity', 'yld ytm mid', 'yield'],
   estYield: ['yield', 'yld', 'estimated yield', 'rendimiento'],
   lastPrice: ['px last', 'price', 'last', 'last price'],
@@ -98,6 +108,8 @@ const AUTOFILL_COLUMNS: ImportColumn[] = [
 /** All import columns for a class: core identity/risk + that class's details. */
 export function importColumnsFor(region: Region, category: Category): ImportColumn[] {
   if (isAutoFillable(region, category)) return AUTOFILL_COLUMNS
+  // Bonds are OTC — they have an ISIN, never an exchange ticker.
+  const dropTicker = category === 'Fixed income' || category === 'CDs'
   const detail = fieldSpecsFor(region, category)
     .filter((fs) => fs.key !== 'asOf')
     .map<ImportColumn>((fs) => ({
@@ -108,7 +120,8 @@ export function importColumnsFor(region: Region, category: Category): ImportColu
   // 'currency' lives in core; drop a duplicate detail currency column if present.
   const seen = new Set(['currency'])
   const detailUnique = detail.filter((c) => !seen.has(c.key) && (seen.add(c.key), true))
-  return [...coreColumns(), ...detailUnique]
+  const core = dropTicker ? coreColumns().filter((c) => c.key !== 'ticker') : coreColumns()
+  return [...core, ...detailUnique]
 }
 
 /**
@@ -140,6 +153,20 @@ const numOr = (v?: string): number | null => {
 const truthy = (v: string | undefined, dflt: boolean): boolean =>
   v && v.trim() ? /^(y|yes|true|1|s[ií]|x|visible)$/i.test(v.trim()) : dflt
 
+/**
+ * A bond listing has no Name column — the issuer is the name. Compose the
+ * conventional bond label (issuer + coupon + maturity) so that several series
+ * from the same issuer stay distinguishable: a listing typically carries three
+ * NETFLIX lines that would otherwise all read "NETFLIX INC".
+ */
+function composeName(v: Record<string, string>): string {
+  const issuer = (v.issuer ?? '').trim()
+  if (!issuer) return ''
+  const coupon = (v.couponRate ?? '').trim().replace(/%\s*$/, '')
+  const maturity = (v.maturity ?? '').trim()
+  return [issuer, coupon && `${coupon}%`, maturity].filter(Boolean).join(' ')
+}
+
 export type ImportResult = {
   instruments: ManagedInstrument[]
   skipped: number // rows dropped (no name)
@@ -170,8 +197,12 @@ export function parseInstruments(region: Region, category: Category, rows: strin
       if (val) v[key] = val
     })
     // Auto-fillable classes are keyed by ticker; the real name arrives with the
-    // market data, so fall back to the ticker until then.
-    const name = (v.name ?? '').trim() || (autoFill ? (v.ticker ?? '').trim().toUpperCase() : '')
+    // market data, so fall back to the ticker until then. Bond listings carry no
+    // Name column at all — the issuer is the name (see composeName).
+    const name =
+      (v.name ?? '').trim() ||
+      (autoFill ? (v.ticker ?? '').trim().toUpperCase() : '') ||
+      composeName(v)
     if (!name) {
       skipped++
       continue

@@ -85,17 +85,24 @@ const DETAIL_GROUPS: { en: string; es: string; keys: string[] }[] = [
   {
     en: 'Classification',
     es: 'Clasificación',
-    keys: ['issuer', 'sectorIndex', 'exchange', 'underlying', 'exposure', 'currency'],
+    keys: [
+      'issuer', 'sector', 'sectorIndex', 'country', 'exchange', 'underlying', 'exposure', 'currency',
+    ],
   },
   {
     en: 'Terms',
     es: 'Condiciones',
     keys: [
       'couponRate', 'couponFrequency', 'couponYield', 'maturity', 'maturityMonths', 'duration',
-      'ytm', 'creditRating', 'issuerRating', 'minInvestment', 'barrier', 'autocallLevel',
+      'ytm', 'creditRating', 'issuerRating', 'minInvestment', 'nextCall', 'barrier', 'autocallLevel',
       'observationFrequency', 'capitalProtection', 'participationRate', 'cap', 'protectionLevel',
       'expenseRatio', 'distributionYield', 'worstCase',
     ],
+  },
+  {
+    en: 'Pricing',
+    es: 'Precios',
+    keys: ['bid', 'ask', 'ytmBid', 'ytmAsk', 'ytc'],
   },
   {
     en: 'Market data',

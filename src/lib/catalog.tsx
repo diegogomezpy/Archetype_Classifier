@@ -71,14 +71,25 @@ export const ASSET_FIELD_SPECS: Record<AssetClass, FieldSpec[]> = {
   ],
   'Fixed income': [
     DESCRIPTION,
+    // Mirrors the research firm's bond listing 1:1 (ISIN · EMISOR · SECTOR ·
+    // PAÍS · BID · ASK · YTM BID · YTM ASK · CPN · DUR · VENC. · RTG · YTC ·
+    // PRÓX. CALL) so their columns paste straight in. Nothing here is fetchable
+    // — no free market-data source covers corporate bonds.
     { key: 'issuer', en: 'Issuer', es: 'Emisor' },
-    { key: 'couponRate', en: 'Coupon rate (%)', es: 'Tasa cupón (%)' },
+    { key: 'sector', en: 'Sector', es: 'Sector' },
+    { key: 'country', en: 'Country', es: 'País' },
+    { key: 'creditRating', en: 'Credit rating', es: 'Calificación' },
+    { key: 'couponRate', en: 'Coupon (%)', es: 'Cupón (%)' },
     { key: 'couponFrequency', en: 'Coupon frequency', es: 'Frecuencia del cupón' },
-    { key: 'maturity', en: 'Maturity / avg. maturity', es: 'Vencimiento / vencimiento prom.' },
+    { key: 'maturity', en: 'Maturity', es: 'Vencimiento' },
     { key: 'duration', en: 'Duration (years)', es: 'Duración (años)' },
-    { key: 'ytm', en: 'Yield to maturity (%)', es: 'Rendimiento al vencimiento (%)' },
-    { key: 'creditRating', en: 'Credit rating', es: 'Calificación crediticia' },
-    { key: 'minInvestment', en: 'Minimum investment', es: 'Inversión mínima' },
+    { key: 'bid', en: 'Bid', es: 'Bid' },
+    { key: 'ask', en: 'Ask', es: 'Ask' },
+    { key: 'ytmBid', en: 'YTM bid (%)', es: 'YTM bid (%)' },
+    { key: 'ytmAsk', en: 'YTM ask (%)', es: 'YTM ask (%)' },
+    { key: 'ytc', en: 'Yield to call (%)', es: 'Rendimiento al call (%)' },
+    { key: 'nextCall', en: 'Next call date', es: 'Próx. call' },
+    { key: 'minInvestment', en: 'Minimum piece', es: 'Lámina mínima' },
     { key: 'currency', en: 'Currency', es: 'Moneda' },
     AS_OF,
   ],
