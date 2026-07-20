@@ -232,10 +232,11 @@ export function fieldSpecsFor(region: Region, category: Category): FieldSpec[] {
 // Yahoo for equities/ETFs, CoinGecko + Deribit for crypto. Classes absent here
 // have no market-data source at all — the Fetch button is hidden for them.
 export const FETCHABLE_FIELDS: Partial<Record<AssetClass, string[]>> = {
+  // Keep in sync with the fields fetchYahoo returns (server/src/marketData.ts).
   Equities: [
     'description', 'kind', 'sectorIndex', 'exchange', 'lastPrice', 'change1Y',
-    'range52w', 'avgVolume', 'marketCapAum', 'dividendYield', 'peRatio', 'beta',
-    'impliedVol3m', 'asOf',
+    'range52w', 'avgVolume', 'marketCapAum', 'dividendYield', 'peRatio', 'peForward', 'beta',
+    'impliedVol3m', 'priceTarget', 'potentialReturn', 'recBuyPct', 'analystCount', 'asOf',
   ],
   Crypto: ['lastPrice', 'change1Y', 'marketCap', 'avgVolume', 'impliedVol3m', 'asOf'],
 }
