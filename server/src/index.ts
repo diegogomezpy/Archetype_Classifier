@@ -315,7 +315,12 @@ app.post('/api/market-data/refresh', async (c) => {
       const details = { ...((inst.details as Record<string, string>) ?? {}) }
       for (const k of MARKET_OWNED) if (res.fields[k]) details[k] = res.fields[k]
       // Their description only stands while it's theirs; otherwise refresh ours.
-      if (!details.researchSource && res.fields.description) {
+      // Refresh the description from the feed when it isn't the research firm's
+      // own (no researchSource), OR when the stored one is an old truncation
+      // (ends in the '…' the previous cap appended) — that repairs the ones
+      // saved before the cap was removed, without touching a real rationale.
+      const staleDesc = (details.description ?? '').trimEnd().endsWith('…')
+      if (res.fields.description && (!details.researchSource || staleDesc)) {
         details.description = res.fields.description
       }
       // The whole point of the daily run: keep upside honest against the tape.

@@ -52,7 +52,6 @@ const fixed = (v: unknown, d = 2) => {
   return n === null ? '' : n.toFixed(d)
 }
 const asOf = () => new Date().toISOString().slice(0, 10)
-const truncate = (s: string, max = 320) => (s.length > max ? s.slice(0, max - 1).trimEnd() + '…' : s)
 const clean = (f: Record<string, string>): Record<string, string> => {
   const out: Record<string, string> = {}
   for (const [k, v] of Object.entries(f)) if (v && v.trim() !== '') out[k] = v
@@ -172,7 +171,7 @@ async function fetchYahoo(symbol: string): Promise<MarketDataResult> {
       // `name` isn't a detail field — importers lift it onto the instrument and
       // drop it from details (see components/ImportRanking.tsx).
       name: String(p?.longName || p?.shortName || ''),
-      description: ap?.longBusinessSummary ? truncate(String(ap.longBusinessSummary)) : '',
+      description: String(ap?.longBusinessSummary ?? '').trim(),
       kind: isEtf ? 'ETF' : 'Single stock',
       sectorIndex: String(ap?.sector || ap?.industry || ''),
       exchange: String(p?.exchangeName || p?.fullExchangeName || ''),
