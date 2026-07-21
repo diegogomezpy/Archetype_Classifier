@@ -10,6 +10,7 @@ import {
   configCol,
   docsBucket,
   documentsCol,
+  logosCol,
   newId,
   normalizeName,
   sessionsCol,
@@ -242,6 +243,66 @@ app.delete('/api/docs/:docId', async (c) => {
   const doc = await ref.get()
   if (doc.exists) {
     const meta = doc.data() as DocMeta
+    await docsBucket.file(meta.gcsPath).delete().catch(() => {})
+    await ref.delete()
+  }
+  return c.json({ ok: true })
+})
+
+// ── company logos ─────────────────────────────────────────────────────────────
+// One logo per local company, keyed by a normalized issuer slug the client
+// computes (logoKey). Bytes live in Cloud Storage; a tiny Firestore doc holds
+// the content type. The report just points an <img> at /api/logos/:key and
+// falls back to a monogram when it 404s, so no lookup table is needed.
+type LogoMeta = { key: string; gcsPath: string; contentType: string; updatedAt: string }
+const logoKeyOk = (k: string) => /^[a-z0-9]{1,64}$/.test(k)
+
+app.get('/api/logos', async (c) => {
+  const snap = await logosCol.get()
+  return c.json(snap.docs.map((d) => ({ key: d.id })))
+})
+
+app.post('/api/logos/:key', async (c) => {
+  const key = c.req.param('key')
+  if (!logoKeyOk(key)) return c.json({ error: 'bad key' }, 400)
+  const body = await c.req.parseBody()
+  const file = body['file']
+  if (!(file instanceof File)) return c.json({ error: 'no file' }, 400)
+  const gcsPath = `logos/${key}`
+  const buf = Buffer.from(await file.arrayBuffer())
+  await docsBucket.file(gcsPath).save(buf, {
+    contentType: file.type || 'image/png',
+    resumable: false,
+  })
+  const meta: LogoMeta = {
+    key,
+    gcsPath,
+    contentType: file.type || 'image/png',
+    updatedAt: new Date().toISOString(),
+  }
+  await logosCol.doc(key).set(meta)
+  return c.json({ key })
+})
+
+app.get('/api/logos/:key', async (c) => {
+  const doc = await logosCol.doc(c.req.param('key')).get()
+  if (!doc.exists) return c.json({ error: 'not found' }, 404)
+  const meta = doc.data() as LogoMeta
+  const [buf] = await docsBucket.file(meta.gcsPath).download()
+  return new Response(new Uint8Array(buf), {
+    headers: {
+      'Content-Type': meta.contentType || 'image/png',
+      // Short cache; a re-upload should show up quickly (admin also cache-busts).
+      'Cache-Control': 'public, max-age=60',
+    },
+  })
+})
+
+app.delete('/api/logos/:key', async (c) => {
+  const ref = logosCol.doc(c.req.param('key'))
+  const doc = await ref.get()
+  if (doc.exists) {
+    const meta = doc.data() as LogoMeta
     await docsBucket.file(meta.gcsPath).delete().catch(() => {})
     await ref.delete()
   }

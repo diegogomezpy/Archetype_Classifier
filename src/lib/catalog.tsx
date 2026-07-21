@@ -289,6 +289,27 @@ export const INSTRUMENT_KINDS = [
   'Fondo de inversión',
 ] as const
 
+// ── Local-company logos ──────────────────────────────────────────────────────
+// Parqet only covers US tickers, so Paraguayan issuers' logos are UPLOADED by
+// the admin and served from the per-company store at /api/logos/:key, keyed by
+// the issuer name normalized (accents + punctuation stripped, lowercased) so
+// "IBI SAECA", "IBI S.A.E.C.A" and "Import Center**" all map to one logo.
+/** Normalized issuer/company slug used as the logo key. */
+export const logoKey = (s: string): string =>
+  s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]/g, '')
+/**
+ * Logo URL for a local company/issuer — points at the per-company upload store.
+ * When nothing's been uploaded it 404s and CompanyLogo falls back to a monogram.
+ */
+export const localLogoUrl = (name?: string): string | undefined => {
+  const key = name ? logoKey(name) : ''
+  return key ? `/api/logos/${key}` : undefined
+}
+
 // ── Autofill coverage ────────────────────────────────────────────────────────
 // Which detail fields the "Fetch data" autofill can populate, per asset class.
 // This MUST track what the server actually returns (see server/src/marketData.ts):

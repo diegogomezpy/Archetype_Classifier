@@ -16,6 +16,8 @@ export const clientsCol = db.collection('clients')
 export const sessionsCol = db.collection('sessions')
 // Attached-document metadata (the file bytes live in Cloud Storage).
 export const documentsCol = db.collection('documents')
+// Company logos, keyed by a normalized issuer slug (file bytes in Cloud Storage).
+export const logosCol = db.collection('logos')
 
 // Cloud Storage bucket for instrument attachments (reports, term sheets, …).
 const storage = new Storage({ projectId })

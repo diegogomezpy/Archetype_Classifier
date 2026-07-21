@@ -23,6 +23,7 @@ import { useLang, useT } from '../i18n/i18n'
 import { categoryLabel, regionLabel } from '../i18n/content'
 import AppNav from '../components/AppNav'
 import AdminNav from '../components/AdminNav'
+import CompanyLogos from '../components/CompanyLogos'
 import ImportInstruments from '../components/ImportInstruments'
 import InstrumentDocs from '../components/InstrumentDocs'
 
@@ -698,6 +699,11 @@ export default function AdminPage() {
 
       {/* Bulk import from a spreadsheet */}
       <ImportInstruments />
+
+      {/* Per-company logos for local issuers (Parqet only covers US tickers) */}
+      <div className="mt-4">
+        <CompanyLogos />
+      </div>
 
       {/* New-instrument form */}
       {adding && (

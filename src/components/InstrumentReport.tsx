@@ -3,6 +3,7 @@ import {
   fieldSpecsFor,
   kindLabel,
   localizedDetail,
+  localLogoUrl,
   type ManagedInstrument,
 } from '../lib/catalog'
 import { useLang, useT } from '../i18n/i18n'
@@ -146,6 +147,9 @@ export default function InstrumentReport({ instrument: inst, region, onBack }: P
   const description = localizedDetail(D, 'description', lang)
   const sector = localizedDetail(D, 'sectorIndex', lang)
   const specs = fieldSpecsFor(region, inst.assetClass)
+  // Local companies aren't on Parqet — resolve their bundled logo by issuer.
+  const logoSrc =
+    region === 'local' ? localLogoUrl(g('issuer') || g('fundManager') || inst.name) : undefined
 
   // Fit band.
   const fit = inst.fit
@@ -258,7 +262,13 @@ export default function InstrumentReport({ instrument: inst, region, onBack }: P
       {/* ── Header ──────────────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 items-start gap-4">
-          <CompanyLogo ticker={inst.ticker} name={inst.name} isCrypto={isCrypto} size={64} />
+          <CompanyLogo
+            ticker={inst.ticker}
+            name={inst.name}
+            isCrypto={isCrypto}
+            src={logoSrc}
+            size={64}
+          />
           <div className="min-w-0">
             <h3 className="font-serif text-2xl font-semibold leading-tight text-text">{inst.name}</h3>
             <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-xs text-muted">
