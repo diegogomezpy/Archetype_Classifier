@@ -263,11 +263,14 @@ export function parseBulletin(lines: string[]): ImportResult {
       // Share class: on a continuation row it IS the lead ("G", "J - I"); on a
       // rated row the lead is the issuer, so the class is the text before the
       // first figure of the rest ("I - 70.000.000…" → "I", "- 11,50%…" → none).
-      // Share class is a short series token ("G", "J - I"); the old greedy
-      // "acci[oó]n…" grab bled column-header text into the type. Instead we
-      // classify ordinary vs preferred from the row and let that BE the type.
-      const preferred = /preferid/i.test(rest)
-      const kind = preferred ? 'Acción Preferida' : 'Acción Ordinaria'
+      // Ordinary vs preferred, read from the "Observaciones" column. It's a
+      // MERGED (rowspan) cell, so "Acciones Preferidas" only prints on the first
+      // row of a block and continuation rows come out blank; some preferred rows
+      // are also labelled only "Acciones Electrónicas…" (no "preferid"). BVA
+      // listed shares here are preferred, so we invert the default: PREFERRED
+      // unless the row explicitly says "ordinaria"/"común".
+      const ordinary = /ordinaria|com[uú]n/i.test(rest)
+      const kind = ordinary ? 'Acción Ordinaria' : 'Acción Preferida'
       const clsRaw = row.kind === 'cont' ? row.lead : (rest.match(/^[^\d]*/)?.[0] ?? '')
       let cls = clsRaw.replace(/^[-–\s]+/, '').replace(/[-–\s]+$/, '').trim()
       // A real share class is a short series token ("G", "J - I") — not the
@@ -275,7 +278,7 @@ export function parseBulletin(lines: string[]): ImportResult {
       // Electrónicas…"), which the greedy old code let leak into the name.
       if (cls.length > 8 || /acci[oó]n|electr[oó]nic|trimestr|vto/i.test(cls)) cls = ''
       if (cls) put(details, 'shareClass', cls)
-      put(details, 'shareType', preferred ? 'Preferida' : 'Ordinaria')
+      put(details, 'shareType', ordinary ? 'Ordinaria' : 'Preferida')
       // Columns: Disponibilidad · Precio · Valor de venta — price is the middle.
       if (amounts.length >= 2) put(details, 'price', money(currency, amounts[1]))
       if (amounts[0]) put(details, 'available', money(currency, amounts[0]))

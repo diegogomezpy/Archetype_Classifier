@@ -77,27 +77,43 @@ export const ASSET_FIELD_SPECS: Record<AssetClass, FieldSpec[]> = {
     AS_OF,
   ],
   'Fixed income': [
+    // Global fixed income holds BOTH liquid bond ETFs (ticker → Yahoo fills the
+    // ETF block) AND individual bonds (the firm fills the mirror block). It's a
+    // superset — each instrument shows only its filled fields.
+    RATIONALE,
     DESCRIPTION,
-    // Mirrors the research firm's bond listing 1:1 (ISIN · EMISOR · SECTOR ·
-    // PAÍS · BID · ASK · YTM BID · YTM ASK · CPN · DUR · VENC. · RTG · YTC ·
-    // PRÓX. CALL) so their columns paste straight in. Nothing here is fetchable
-    // — no free market-data source covers corporate bonds.
+    { key: 'kind', en: 'Type (ETF / bond)', es: 'Tipo (ETF / bono)' },
+    // ── ETF block (fetched from the ticker) ──
+    { key: 'sectorIndex', en: 'Index tracked (ETFs)', es: 'Índice replicado (ETFs)' },
+    { key: 'exchange', en: 'Exchange (ETFs)', es: 'Bolsa (ETFs)' },
+    { key: 'lastPrice', en: 'Last price (USD)', es: 'Último precio (USD)' },
+    { key: 'change1Y', en: '1-year change (%)', es: 'Variación 1 año (%)' },
+    { key: 'range52w', en: '52-week range (USD)', es: 'Rango 52 semanas (USD)' },
+    { key: 'dividendYield', en: 'Yield (%)', es: 'Rendimiento (%)' },
+    { key: 'expenseRatio', en: 'Expense ratio (%, ETFs)', es: 'Comisión de gestión (%, ETFs)' },
+    { key: 'avgVolume', en: 'Avg. daily volume', es: 'Volumen diario promedio' },
+    { key: 'marketCapAum', en: 'AUM', es: 'Patrimonio (AUM)' },
+    // ── Individual-bond mirror — Gletir's "Listado de Bonos" columns, 1:1 and in
+    // their order (ISIN · EMISOR · SECTOR · PAÍS · BID · ASK · YTM BID · YTM ASK ·
+    // CPN · DUR · VENC · RTG · YTC · PRÓX. CALL), plus SPREAD for floating-rate
+    // notes and the TIPS breakeven. None of it is on any free feed, so the firm
+    // fills all of it. (Coupon frequency / min piece / currency aren't in the
+    // listing — dropped so a Gletir paste maps 1:1.) ──
     { key: 'issuer', en: 'Issuer', es: 'Emisor' },
     { key: 'sector', en: 'Sector', es: 'Sector' },
     { key: 'country', en: 'Country', es: 'País' },
-    { key: 'creditRating', en: 'Credit rating', es: 'Calificación' },
-    { key: 'couponRate', en: 'Coupon (%)', es: 'Cupón (%)' },
-    { key: 'couponFrequency', en: 'Coupon frequency', es: 'Frecuencia del cupón' },
-    { key: 'maturity', en: 'Maturity', es: 'Vencimiento' },
-    { key: 'duration', en: 'Duration (years)', es: 'Duración (años)' },
     { key: 'bid', en: 'Bid', es: 'Bid' },
     { key: 'ask', en: 'Ask', es: 'Ask' },
     { key: 'ytmBid', en: 'YTM bid (%)', es: 'YTM bid (%)' },
     { key: 'ytmAsk', en: 'YTM ask (%)', es: 'YTM ask (%)' },
+    { key: 'couponRate', en: 'Coupon (%)', es: 'Cupón (%)' },
+    { key: 'duration', en: 'Duration (years)', es: 'Duración (años)' },
+    { key: 'maturity', en: 'Maturity', es: 'Vencimiento' },
+    { key: 'creditRating', en: 'Credit rating', es: 'Calificación' },
     { key: 'ytc', en: 'Yield to call (%)', es: 'Rendimiento al call (%)' },
     { key: 'nextCall', en: 'Next call date', es: 'Próx. call' },
-    { key: 'minInvestment', en: 'Minimum piece', es: 'Lámina mínima' },
-    { key: 'currency', en: 'Currency', es: 'Moneda' },
+    { key: 'spread', en: 'Floating spread (%)', es: 'Spread flotante (%)' },
+    { key: 'impliedInflation', en: 'Breakeven inflation (%)', es: 'Inflación implícita (%)' },
     AS_OF,
   ],
   'Income structures': [
@@ -324,6 +340,13 @@ export const FETCHABLE_FIELDS: Partial<Record<AssetClass, string[]>> = {
     'analystCount', 'asOf',
   ],
   Crypto: ['lastPrice', 'change1Y', 'marketCap', 'avgVolume', 'impliedVol3m', 'asOf'],
+  // Bond ETFs (a ticker) fetch from Yahoo just like equities — minus the
+  // earnings/analyst metrics that don't apply. Individual bonds carry no ticker,
+  // so nothing fetches and the firm's mirror fields stand.
+  'Fixed income': [
+    'description', 'kind', 'sectorIndex', 'exchange', 'lastPrice', 'change1Y',
+    'range52w', 'avgVolume', 'marketCapAum', 'dividendYield', 'asOf',
+  ],
 }
 
 // Autofill is a global-only capability — there's no market-data feed for the

@@ -110,11 +110,13 @@ export default function ImportInstruments() {
       </summary>
       <div className="border-t border-border/60 p-4">
         <p className="mb-4 max-w-2xl text-xs leading-relaxed text-muted">
-          {autoFill
-            ? t.admin.importHintAuto
-            : region === 'local'
-              ? t.admin.importHintLocal
-              : t.admin.importHint}
+          {region === 'global' && category === 'Fixed income'
+            ? t.admin.importHintFixedIncome
+            : autoFill
+              ? t.admin.importHintAuto
+              : region === 'local'
+                ? t.admin.importHintLocal
+                : t.admin.importHint}
         </p>
         <div className="flex flex-wrap items-end gap-3">
           <label className={labelCls}>

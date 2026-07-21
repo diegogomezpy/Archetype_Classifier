@@ -41,6 +41,8 @@ const ALIASES: Record<string, string[]> = {
   ytmAsk: ['ytm ask', 'ytm', 'yield to maturity', 'yld ytm mid', 'rendimiento', 'yield ask'],
   ytc: ['ytc', 'yield to call', 'rendimiento al call'],
   nextCall: ['prox call', 'próx. call', 'prox. call', 'next call', 'call date', 'fecha call'],
+  spread: ['spread', 'margen', 'spread flotante'],
+  impliedInflation: ['inf imp', 'inf. imp', 'inflacion implicita', 'inflación implícita', 'breakeven', 'breakeven inflation'],
   rating: ['rtg', 'credit rating', 'sp rating', 's&p rating', 'rtg sp', 'bb composite'],
   creditRating: ['rating', 'rtg', 'sp rating', 's&p rating', 'credit rating'],
   couponRate: ['coupon', 'cpn', 'coupon rate'],
@@ -93,8 +95,24 @@ function coreColumns(): ImportColumn[] {
  * the research firm's rationale — and the import fetches the rest.
  */
 export function isAutoFillable(region: Region, category: Category): boolean {
-  return region === 'global' && (category === 'Equities' || category === 'Crypto')
+  // Global fixed income is HYBRID: bond ETFs autofill from a ticker, individual
+  // bonds don't — but the class still needs the autofill pass to run (it fetches
+  // only the rows that carry a ticker), so it counts as auto-fillable here.
+  return (
+    region === 'global' &&
+    (category === 'Equities' || category === 'Crypto' || category === 'Fixed income')
+  )
 }
+
+// Global fixed-income ETF fields Yahoo fills RELIABLY — kept OUT of the import
+// template (the firm never types these; they arrive from the ticker). `yield`
+// (dividendYield) stays IN the template even though it's fetchable: Yahoo often
+// omits it for bond ETFs, and yield is the metric that matters, so the firm can
+// supply it as a fallback (a typed value overrides the fetch).
+const FI_FETCHED_KEYS = new Set([
+  'rationale', 'description', 'kind', 'sectorIndex', 'exchange', 'lastPrice',
+  'change1Y', 'range52w', 'avgVolume', 'marketCapAum', 'asOf',
+])
 
 const AUTOFILL_COLUMNS: ImportColumn[] = [
   { key: 'ticker', label: 'Ticker', aliases: ALIASES.ticker, required: true },
@@ -110,6 +128,21 @@ const AUTOFILL_COLUMNS: ImportColumn[] = [
 
 /** All import columns for a class: core identity/risk + that class's details. */
 export function importColumnsFor(region: Region, category: Category): ImportColumn[] {
+  // Global fixed income (hybrid): the firm fills Ticker for a bond ETF (Yahoo
+  // does the rest) OR ISIN + the mirror fields for an individual bond. So the
+  // template carries ticker + isin + rationale + the manual bond fields, but
+  // NOT the ETF fields Yahoo fetches.
+  if (region === 'global' && category === 'Fixed income') {
+    const bond = fieldSpecsFor(region, category)
+      .filter((fs) => !FI_FETCHED_KEYS.has(fs.key))
+      .map<ImportColumn>((fs) => ({ key: fs.key, label: fs.en, aliases: [fs.key, ...(ALIASES[fs.key] ?? [])] }))
+    return [
+      { key: 'ticker', label: 'Ticker', aliases: ALIASES.ticker },
+      { key: 'isin', label: 'ISIN', aliases: ALIASES.isin },
+      AUTOFILL_COLUMNS[1], // "Descripción" → rationale
+      ...bond,
+    ]
+  }
   if (isAutoFillable(region, category)) return AUTOFILL_COLUMNS
   // Bonds are OTC — they have an ISIN, never an exchange ticker.
   const dropTicker = category === 'Fixed income' || category === 'CDs'
