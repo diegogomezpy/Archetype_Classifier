@@ -257,6 +257,7 @@ app.post('/api/market-data', async (c) => {
 // firm's (priceTarget, recBuyPct, researchSource, their description) or the
 // admin's, and a refresh must never overwrite it.
 const MARKET_OWNED = [
+  'description',
   'kind',
   'sectorIndex',
   'exchange',
@@ -293,9 +294,17 @@ app.post('/api/market-data/refresh', async (c) => {
     return c.json({ ok: false, error: 'unauthorized' }, 401)
   }
   const snap = await catalogCol.get()
+  // Only the classes with a live market-data feed. A manually-filled bond or
+  // structure might carry a ticker too, and we must never touch its details.
+  const FETCHABLE = new Set(['Equities', 'Crypto'])
   const rows = snap.docs
     .map((d) => docData(d) as Record<string, unknown>)
-    .filter((i) => i.region === 'global' && String(i.ticker ?? '').trim())
+    .filter(
+      (i) =>
+        i.region === 'global' &&
+        FETCHABLE.has(String(i.assetClass ?? '')) &&
+        String(i.ticker ?? '').trim(),
+    )
 
   let updated = 0
   let failed = 0
@@ -313,16 +322,9 @@ app.post('/api/market-data/refresh', async (c) => {
         continue
       }
       const details = { ...((inst.details as Record<string, string>) ?? {}) }
+      // `description` is the fetched company summary and is market-owned; the
+      // firm's `rationale` is NOT in MARKET_OWNED, so it's never touched here.
       for (const k of MARKET_OWNED) if (res.fields[k]) details[k] = res.fields[k]
-      // Their description only stands while it's theirs; otherwise refresh ours.
-      // Refresh the description from the feed when it isn't the research firm's
-      // own (no researchSource), OR when the stored one is an old truncation
-      // (ends in the '…' the previous cap appended) — that repairs the ones
-      // saved before the cap was removed, without touching a real rationale.
-      const staleDesc = (details.description ?? '').trimEnd().endsWith('…')
-      if (res.fields.description && (!details.researchSource || staleDesc)) {
-        details.description = res.fields.description
-      }
       // The whole point of the daily run: keep upside honest against the tape.
       const target = numOr(details.priceTarget)
       const spot = numOr(details.lastPrice)

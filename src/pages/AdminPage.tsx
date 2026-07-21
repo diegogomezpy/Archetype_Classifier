@@ -76,7 +76,8 @@ const pick = (lang: 'en' | 'es', en: string, es: string) => (lang === 'es' ? es 
 // `name` are intentionally omitted — they're edited up top on the instrument
 // itself, not as details.
 const DETAIL_GROUPS: { en: string; es: string; keys: string[] }[] = [
-  { en: 'Rationale', es: 'Racional', keys: ['description', 'diversificationNote', 'volatilityNote'] },
+  { en: 'Rationale', es: 'Racional', keys: ['rationale', 'diversificationNote', 'volatilityNote'] },
+  { en: 'Overview', es: 'Resumen', keys: ['description'] },
   {
     en: 'Analyst consensus',
     es: 'Consenso de analistas',
@@ -128,7 +129,9 @@ function groupedSpecs(specs: FieldSpec[]): { en: string; es: string; specs: Fiel
   if (leftover.length) groups.push({ en: 'Other', es: 'Otros', specs: leftover })
   return groups.filter((g) => g.specs.length > 0)
 }
-const LONG_FIELDS = new Set(['description', 'worstCase', 'diversificationNote', 'volatilityNote'])
+const LONG_FIELDS = new Set([
+  'rationale', 'description', 'worstCase', 'diversificationNote', 'volatilityNote',
+])
 
 // ── Edit / create form ───────────────────────────────────────────────────────
 

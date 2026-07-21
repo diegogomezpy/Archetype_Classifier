@@ -43,10 +43,14 @@ export type ManagedInstrument = Instrument & {
 export type FieldSpec = { key: string; en: string; es: string }
 
 const DESCRIPTION: FieldSpec = { key: 'description', en: 'Description', es: 'Descripción' }
+// The research firm's own view — distinct from the fetched description, and
+// never overwritten by a market-data refresh.
+const RATIONALE: FieldSpec = { key: 'rationale', en: 'Investment rationale', es: 'Racional de inversión' }
 const AS_OF: FieldSpec = { key: 'asOf', en: 'Data as of', es: 'Datos al' }
 
 export const ASSET_FIELD_SPECS: Record<AssetClass, FieldSpec[]> = {
   Equities: [
+    RATIONALE,
     DESCRIPTION,
     { key: 'kind', en: 'Type (single stock / ETF)', es: 'Tipo (acción individual / ETF)' },
     { key: 'sectorIndex', en: 'Sector / index tracked', es: 'Sector / índice replicado' },
@@ -129,6 +133,7 @@ export const ASSET_FIELD_SPECS: Record<AssetClass, FieldSpec[]> = {
     AS_OF,
   ],
   Crypto: [
+    RATIONALE,
     DESCRIPTION,
     { key: 'lastPrice', en: 'Last price (USD)', es: 'Último precio (USD)' },
     { key: 'change1Y', en: '1-year change (%)', es: 'Variación 1 año (%)' },

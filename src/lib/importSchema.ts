@@ -98,10 +98,13 @@ export function isAutoFillable(region: Region, category: Category): boolean {
 
 const AUTOFILL_COLUMNS: ImportColumn[] = [
   { key: 'ticker', label: 'Ticker', aliases: ALIASES.ticker, required: true },
+  // The research firm's rationale — their own view. Their report column is
+  // literally "Descripción", so that header (and variants) maps here, but it
+  // lands in `rationale`, NOT the fetched company `description`.
   {
-    key: 'description',
+    key: 'rationale',
     label: 'Descripción',
-    aliases: ['description', 'rationale', 'thesis', 'racional', 'comentario'],
+    aliases: ['description', 'descripcion', 'rationale', 'racional', 'thesis', 'comentario'],
   },
 ]
 

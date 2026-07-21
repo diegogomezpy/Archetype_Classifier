@@ -23,9 +23,15 @@ export default function InstrumentList({ instruments }: Props) {
         const color = colorForCategory(inst.assetClass, region)
         const expanded = expandedId === inst.id
         const specs = fieldSpecsFor(region, inst.assetClass)
+        // The firm's rationale leads (why we recommend it); the fetched company
+        // description follows as background. Both are pulled out of the key/value grid.
+        const rationale = inst.details.rationale
         const description = inst.details.description
         const filled = specs.filter(
-          (s) => s.key !== 'description' && (inst.details[s.key] ?? '').trim() !== '',
+          (s) =>
+            s.key !== 'rationale' &&
+            s.key !== 'description' &&
+            (inst.details[s.key] ?? '').trim() !== '',
         )
         // Compact facts line (local instruments): distinguishes same-issuer bond
         // series and surfaces yield/rating/currency/maturity at a glance.
@@ -90,8 +96,13 @@ export default function InstrumentList({ instruments }: Props) {
             {/* Detail panel — admin-curated per-class fields */}
             {expanded && (
               <div className="mb-3 ml-9 rounded-xl border border-border bg-surface2/30 p-4">
+                {rationale && (
+                  <p className="text-sm font-medium leading-relaxed text-text">{rationale}</p>
+                )}
                 {description && (
-                  <p className="text-sm leading-relaxed text-text">{description}</p>
+                  <p className={`${rationale ? 'mt-2 ' : ''}text-sm leading-relaxed text-muted`}>
+                    {description}
+                  </p>
                 )}
                 {filled.length > 0 ? (
                   <dl className="mt-3 grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
