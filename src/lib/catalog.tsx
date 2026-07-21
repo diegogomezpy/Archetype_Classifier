@@ -68,6 +68,8 @@ export const ASSET_FIELD_SPECS: Record<AssetClass, FieldSpec[]> = {
     { key: 'priceTarget', en: 'Price target', es: 'Precio objetivo' },
     { key: 'potentialReturn', en: 'Potential return (%)', es: 'Retorno potencial (%)' },
     { key: 'recBuyPct', en: 'Buy recommendations (%)', es: 'Recomendaciones de compra (%)' },
+    { key: 'recHoldPct', en: 'Hold recommendations (%)', es: 'Recomendaciones de mantener (%)' },
+    { key: 'recSellPct', en: 'Sell recommendations (%)', es: 'Recomendaciones de venta (%)' },
     { key: 'analystCount', en: 'Analysts covering', es: 'Analistas que cubren' },
     { key: 'beta', en: 'Beta vs. market', es: 'Beta vs. mercado' },
     { key: 'impliedVol3m', en: 'ATM 3M implied vol (%)', es: 'Vol. implícita ATM 3M (%)' },
@@ -241,7 +243,8 @@ export const FETCHABLE_FIELDS: Partial<Record<AssetClass, string[]>> = {
   Equities: [
     'description', 'kind', 'sectorIndex', 'exchange', 'lastPrice', 'change1Y',
     'range52w', 'avgVolume', 'marketCapAum', 'dividendYield', 'peRatio', 'peForward', 'beta',
-    'impliedVol3m', 'priceTarget', 'potentialReturn', 'recBuyPct', 'analystCount', 'asOf',
+    'impliedVol3m', 'priceTarget', 'potentialReturn', 'recBuyPct', 'recHoldPct', 'recSellPct',
+    'analystCount', 'asOf',
   ],
   Crypto: ['lastPrice', 'change1Y', 'marketCap', 'avgVolume', 'impliedVol3m', 'asOf'],
 }

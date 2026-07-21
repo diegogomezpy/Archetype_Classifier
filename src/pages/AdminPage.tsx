@@ -81,7 +81,7 @@ const DETAIL_GROUPS: { en: string; es: string; keys: string[] }[] = [
   {
     en: 'Analyst consensus',
     es: 'Consenso de analistas',
-    keys: ['priceTarget', 'potentialReturn', 'recBuyPct', 'analystCount'],
+    keys: ['priceTarget', 'potentialReturn', 'recBuyPct', 'recHoldPct', 'recSellPct', 'analystCount'],
   },
   {
     en: 'Classification',

@@ -268,9 +268,15 @@ const MARKET_OWNED = [
   'marketCapAum',
   'dividendYield',
   'peRatio',
+  'peForward',
   'expenseRatio',
   'beta',
   'impliedVol3m',
+  'priceTarget',
+  'recBuyPct',
+  'recHoldPct',
+  'recSellPct',
+  'analystCount',
   'asOf',
 ] as const
 

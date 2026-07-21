@@ -159,8 +159,9 @@ async function fetchYahoo(symbol: string): Promise<MarketDataResult> {
   // Consensus: mean analyst target, and the share of analysts saying buy.
   const target = num(fd?.targetMeanPrice)
   const buys = (num(trend?.strongBuy) ?? 0) + (num(trend?.buy) ?? 0)
-  const totalRecs =
-    buys + (num(trend?.hold) ?? 0) + (num(trend?.sell) ?? 0) + (num(trend?.strongSell) ?? 0)
+  const holds = num(trend?.hold) ?? 0
+  const sells = (num(trend?.sell) ?? 0) + (num(trend?.strongSell) ?? 0)
+  const totalRecs = buys + holds + sells
   const isEtf = String(p?.quoteType ?? '').toUpperCase() === 'ETF'
   const chg1y = num(ks?.['52WeekChange'])
   const divY = num(sd?.dividendYield) ?? num(sd?.trailingAnnualDividendYield)
@@ -196,6 +197,8 @@ async function fetchYahoo(symbol: string): Promise<MarketDataResult> {
       potentialReturn:
         target !== null && spot !== null && spot > 0 ? pctSigned((target / spot - 1) * 100) : '',
       recBuyPct: totalRecs > 0 ? pctPlain((buys / totalRecs) * 100) : '',
+      recHoldPct: totalRecs > 0 ? pctPlain((holds / totalRecs) * 100) : '',
+      recSellPct: totalRecs > 0 ? pctPlain((sells / totalRecs) * 100) : '',
       analystCount: totalRecs > 0 ? String(totalRecs) : '',
       impliedVol3m: await atmImpliedVol(symbol, spot),
       asOf: asOf(),
