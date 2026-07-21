@@ -69,7 +69,7 @@ export const SEED_DETAILS: Record<string, Record<string, string>> = {
   },
   'nvda-nvidia-corp': {
     description: 'Designs GPUs and AI accelerator platforms powering data centers, AI training/inference, and gaming.',
-    kind: 'Single stock',
+    kind: 'Acción Ordinaria',
     sectorIndex: 'Semiconductors',
     exchange: 'Nasdaq',
     lastPrice: '196.30',
@@ -84,7 +84,7 @@ export const SEED_DETAILS: Record<string, Record<string, string>> = {
   },
   'wmt-walmart-inc': {
     description: 'The world’s largest retailer — groceries and general merchandise across stores and a fast-growing e-commerce arm.',
-    kind: 'Single stock',
+    kind: 'Acción Ordinaria',
     sectorIndex: 'Consumer staples / retail',
     exchange: 'NYSE',
     lastPrice: '112.60',
@@ -99,7 +99,7 @@ export const SEED_DETAILS: Record<string, Record<string, string>> = {
   },
   'meta-meta-platforms': {
     description: 'Operates Facebook, Instagram, WhatsApp and Messenger; revenue driven by digital advertising, investing heavily in AI.',
-    kind: 'Single stock',
+    kind: 'Acción Ordinaria',
     sectorIndex: 'Communication services / internet',
     exchange: 'Nasdaq',
     lastPrice: '812.40',

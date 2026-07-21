@@ -10,6 +10,8 @@ import {
 import {
   fetchableFields,
   fieldSpecsFor,
+  INSTRUMENT_KINDS,
+  kindLabel,
   localQuickFacts,
   supportsFetch,
   useCatalog,
@@ -235,12 +237,18 @@ function InstrumentForm({
         </div>
         <div>
           <label className={labelCls}>{t.admin.kind}</label>
-          <input
-            className={inputCls}
-            value={draft.kind ?? ''}
-            placeholder={t.admin.kindPlaceholder}
-            onChange={(e) => set('kind', e.target.value)}
-          />
+          <select className={inputCls} value={draft.kind ?? ''} onChange={(e) => set('kind', e.target.value)}>
+            <option value="">—</option>
+            {/* Preserve a legacy/off-list value so editing never silently drops it. */}
+            {draft.kind && !(INSTRUMENT_KINDS as readonly string[]).includes(draft.kind) && (
+              <option value={draft.kind}>{draft.kind}</option>
+            )}
+            {INSTRUMENT_KINDS.map((k) => (
+              <option key={k} value={k}>
+                {kindLabel(k, lang)}
+              </option>
+            ))}
+          </select>
         </div>
         <div>
           <label className={labelCls}>{t.admin.ticker}</label>
@@ -745,7 +753,7 @@ export default function AdminPage() {
                   )}
                   {inst.kind && (
                     <span className="shrink-0 rounded-md bg-surface2 px-1.5 py-0.5 text-[10px] font-medium text-muted">
-                      {inst.kind}
+                      {kindLabel(inst.kind, lang)}
                     </span>
                   )}
                   {(inst.region ?? 'global') === 'local' && (

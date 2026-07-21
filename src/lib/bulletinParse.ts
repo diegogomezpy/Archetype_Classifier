@@ -28,7 +28,7 @@ const KIND: Record<LocalCategory, string> = {
   CDs: 'CDA',
   'Mutual funds': 'Fondo mutuo',
   'Investment funds': 'Fondo de inversión',
-  Equities: 'Acción',
+  Equities: 'Acción Ordinaria',
 }
 
 const deaccent = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -153,7 +153,13 @@ export function parseBulletin(lines: string[]): ImportResult {
   let skipped = 0
   let seq = 0
 
-  const push = (cat: LocalCategory, name: string, rtg: string | undefined, details: Record<string, string>) => {
+  const push = (
+    cat: LocalCategory,
+    name: string,
+    rtg: string | undefined,
+    details: Record<string, string>,
+    kind?: string,
+  ) => {
     const vec = deriveRiskVector('local', cat, rtg ? { rating: rtg } : {})
     const def = deriveDefaults('local', cat)
     seq += 1
@@ -166,7 +172,7 @@ export function parseBulletin(lines: string[]): ImportResult {
       ticker: '',
       region: 'local',
       assetClass: cat,
-      kind: cat === 'Equities' ? details.shareType || KIND[cat] : KIND[cat],
+      kind: kind ?? KIND[cat],
       sigmaLoad: vec.sigmaLoad,
       alphaLoad: vec.alphaLoad,
       lambdaLoad: vec.lambdaLoad,
@@ -257,11 +263,19 @@ export function parseBulletin(lines: string[]): ImportResult {
       // Share class: on a continuation row it IS the lead ("G", "J - I"); on a
       // rated row the lead is the issuer, so the class is the text before the
       // first figure of the rest ("I - 70.000.000…" → "I", "- 11,50%…" → none).
+      // Share class is a short series token ("G", "J - I"); the old greedy
+      // "acci[oó]n…" grab bled column-header text into the type. Instead we
+      // classify ordinary vs preferred from the row and let that BE the type.
+      const preferred = /preferid/i.test(rest)
+      const kind = preferred ? 'Acción Preferida' : 'Acción Ordinaria'
       const clsRaw = row.kind === 'cont' ? row.lead : (rest.match(/^[^\d]*/)?.[0] ?? '')
-      const cls = clsRaw.replace(/^[-–\s]+/, '').replace(/[-–\s]+$/, '').trim()
+      let cls = clsRaw.replace(/^[-–\s]+/, '').replace(/[-–\s]+$/, '').trim()
+      // A real share class is a short series token ("G", "J - I") — not the
+      // share-type descriptor the PDF prints in this column ("Acciones
+      // Electrónicas…"), which the greedy old code let leak into the name.
+      if (cls.length > 8 || /acci[oó]n|electr[oó]nic|trimestr|vto/i.test(cls)) cls = ''
       if (cls) put(details, 'shareClass', cls)
-      const typeMatch = rest.match(/acci[oó]n[a-záéíóúñ .()/-]*/i)
-      if (typeMatch) put(details, 'shareType', typeMatch[0].replace(/\s{2,}/g, ' ').trim())
+      put(details, 'shareType', preferred ? 'Preferida' : 'Ordinaria')
       // Columns: Disponibilidad · Precio · Valor de venta — price is the middle.
       if (amounts.length >= 2) put(details, 'price', money(currency, amounts[1]))
       if (amounts[0]) put(details, 'available', money(currency, amounts[0]))
@@ -271,7 +285,7 @@ export function parseBulletin(lines: string[]): ImportResult {
       put(details, 'currency', curLabel(currency))
       const label = details.shareClass ? `${issuer} — ${details.shareClass}` : issuer
       const name = details.price ? `${label} (${details.price})` : label
-      last = push('Equities', name, rating, details)
+      last = push('Equities', name, rating, details, kind)
       continue
     }
 

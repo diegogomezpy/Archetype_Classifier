@@ -60,16 +60,24 @@ const clean = (f: Record<string, string>): Record<string, string> => {
 
 // ── Yahoo: equities / ETFs ───────────────────────────────────────────────────
 
-// Yahoo's option chain is noisy: contracts with no live quote come back with a
-// near-zero impliedVolatility, and thin strikes throw out absurd ones (we've
-// seen a 125% call against a 45% put on the SAME strike and expiry). A single
-// ATM contract is therefore not trustworthy. Guard rails:
-//   • only contracts that actually trade (open interest or volume),
-//   • only implausible-free IVs (1%–300%),
-//   • median of the few strikes nearest the money, so one bad print can't win.
-const IV_MIN = 0.01
-const IV_MAX = 3
-const IV_STRIKES = 3 // per side, nearest the money
+// Yahoo's option chain is unreliable in two ways:
+//   1. thin strikes throw out absurd single prints (we've seen a 125% call
+//      against a 45% put on the SAME strike and expiry), and
+//   2. for some names — and sometimes across the WHOLE feed — Yahoo serves
+//      broken near-zero IVs even with real open interest (observed: NVDA/GM/
+//      AAPL/MU ATM calls all printing 0–3% in a quantized 0.4→0.8→1.6→3.1%
+//      doubling artifact when the true IV is ~40%+).
+// So we can't trust a single contract, and we can't just floor per-contract
+// (that skips the broken near-zero ATM prints and grabs a further junk print).
+// Instead: take the strikes NEAREST the money (both sides), median them, and
+// judge the MEDIAN — if it lands implausibly low, the feed is broken and we
+// publish nothing rather than a number we don't believe.
+const IV_MAX = 3 // 300% — a single print above this is garbage, drop it
+const IV_STRIKES = 3 // nearest strikes per side
+const IV_MONEYNESS = 0.15 // a strike is "near the money" within ±15% of spot
+// No real equity/ETF has a 3-month ATM implied vol below ~10%; a near-money
+// median under this means the feed is broken → blank it.
+const IV_MIN_PLAUSIBLE = 0.1
 
 type Contract = {
   strike: number
@@ -78,12 +86,17 @@ type Contract = {
   volume?: number
 }
 
-function usableIvs(arr: Contract[], px: number): number[] {
+// IVs of the liquid strikes nearest the money. Raw (only 0 and >300% dropped) so
+// a broken near-zero ATM print still drags the median down and gets caught by the
+// plausibility check — rather than being silently skipped for a further junk print.
+function nearMoneyIvs(arr: Contract[], px: number): number[] {
+  if (!(px > 0)) return []
   return arr
     .filter((c) => (num(c.openInterest) ?? 0) > 0 || (num(c.volume) ?? 0) > 0)
+    .filter((c) => Math.abs(c.strike - px) <= IV_MONEYNESS * px)
     .filter((c) => {
       const iv = num(c.impliedVolatility)
-      return iv !== null && iv >= IV_MIN && iv <= IV_MAX
+      return iv !== null && iv > 0 && iv <= IV_MAX
     })
     .sort((a, b) => Math.abs(a.strike - px) - Math.abs(b.strike - px))
     .slice(0, IV_STRIKES)
@@ -113,11 +126,15 @@ async function atmImpliedVol(symbol: string, spot: number | null): Promise<strin
     const px = spot ?? num(chain.quote?.regularMarketPrice) ?? 0
     if (!px) return ''
     const ivs = [
-      ...usableIvs((leg.calls ?? []) as Contract[], px),
-      ...usableIvs((leg.puts ?? []) as Contract[], px),
+      ...nearMoneyIvs((leg.calls ?? []) as Contract[], px),
+      ...nearMoneyIvs((leg.puts ?? []) as Contract[], px),
     ]
     if (!ivs.length) return ''
-    return (100 * median(ivs)).toFixed(1) + '%'
+    const m = median(ivs)
+    // A whole chain of near-zero ATM IVs (Yahoo serves these even with real open
+    // interest) medians out implausibly low — don't publish what we don't believe.
+    if (m < IV_MIN_PLAUSIBLE) return ''
+    return (100 * m).toFixed(1) + '%'
   } catch {
     return ''
   }
@@ -173,7 +190,7 @@ async function fetchYahoo(symbol: string): Promise<MarketDataResult> {
       // drop it from details (see components/ImportRanking.tsx).
       name: String(p?.longName || p?.shortName || ''),
       description: String(ap?.longBusinessSummary ?? '').trim(),
-      kind: isEtf ? 'ETF' : 'Single stock',
+      kind: isEtf ? 'ETF' : 'Acción Ordinaria',
       sectorIndex: String(ap?.sector || ap?.industry || ''),
       exchange: String(p?.exchangeName || p?.fullExchangeName || ''),
       lastPrice: price(spot),

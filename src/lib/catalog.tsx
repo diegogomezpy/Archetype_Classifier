@@ -15,6 +15,7 @@ import {
   type Region,
 } from './instruments'
 import { SEED_DETAILS } from '../data/instrumentDetails'
+import type { Lang } from '../i18n/i18n'
 import { api } from './api'
 
 // ---------------------------------------------------------------------------
@@ -52,7 +53,7 @@ export const ASSET_FIELD_SPECS: Record<AssetClass, FieldSpec[]> = {
   Equities: [
     RATIONALE,
     DESCRIPTION,
-    { key: 'kind', en: 'Type (single stock / ETF)', es: 'Tipo (acción individual / ETF)' },
+    { key: 'kind', en: 'Type (single stock / ETF)', es: 'Tipo (acción ordinaria / ETF)' },
     { key: 'sectorIndex', en: 'Sector / index tracked', es: 'Sector / índice replicado' },
     { key: 'exchange', en: 'Exchange', es: 'Bolsa' },
     { key: 'lastPrice', en: 'Last price (USD)', es: 'Último precio (USD)' },
@@ -233,6 +234,61 @@ export function fieldSpecsFor(region: Region, category: Category): FieldSpec[] {
     : ASSET_FIELD_SPECS[category as AssetClass] ?? []
 }
 
+// ── Localized values ─────────────────────────────────────────────────────────
+// The market-data feed pulls free-text fields in English (company description,
+// sector). Their Spanish translations are cached at fetch time under `<key>Es`
+// (see server/src/translate.ts). Pick the right one for the active language,
+// falling back to the English text when no translation is cached yet.
+export const localizedDetail = (
+  details: Record<string, string>,
+  key: string,
+  lang: Lang,
+): string => {
+  const en = details[key] ?? ''
+  if (lang !== 'es') return en
+  const es = details[`${key}Es`]
+  return es && es.trim() ? es : en
+}
+
+// Display labels (EN + ES) for the canonical instrument `kind` values. Global
+// single stocks and local common shares share ONE canonical kind —
+// 'Acción Ordinaria' — so they merge into a single type. Legacy values
+// ('Single stock', 'Acción') alias to the same labels so pre-migration data
+// still renders correctly; anything unmapped passes through unchanged.
+const KIND_LABELS: Record<string, { en: string; es: string }> = {
+  'Acción Ordinaria': { en: 'Common stock', es: 'Acción Ordinaria' },
+  'Acción Preferida': { en: 'Preferred share', es: 'Acción Preferida' },
+  ETF: { en: 'ETF', es: 'ETF' },
+  Crypto: { en: 'Crypto', es: 'Cripto' },
+  Bono: { en: 'Bond', es: 'Bono' },
+  CDA: { en: 'CD', es: 'CDA' },
+  'Fondo mutuo': { en: 'Mutual fund', es: 'Fondo mutuo' },
+  'Fondo de inversión': { en: 'Investment fund', es: 'Fondo de inversión' },
+  // legacy aliases → merged type
+  'Single stock': { en: 'Common stock', es: 'Acción Ordinaria' },
+  Acción: { en: 'Common stock', es: 'Acción Ordinaria' },
+}
+export const kindLabel = (kind: string | undefined, lang: Lang): string => {
+  if (!kind) return ''
+  const m = KIND_LABELS[kind]
+  return m ? m[lang] : kind
+}
+
+// The canonical set of instrument "types" (kind), offered as a dropdown in the
+// admin form. Some legacy/imported instruments carry a free-typed kind that
+// isn't in here; the form still shows that value so editing never silently
+// changes it, and picking a clean type here fixes it.
+export const INSTRUMENT_KINDS = [
+  'Acción Ordinaria',
+  'Acción Preferida',
+  'ETF',
+  'Crypto',
+  'Bono',
+  'CDA',
+  'Fondo mutuo',
+  'Fondo de inversión',
+] as const
+
 // ── Autofill coverage ────────────────────────────────────────────────────────
 // Which detail fields the "Fetch data" autofill can populate, per asset class.
 // This MUST track what the server actually returns (see server/src/marketData.ts):
@@ -284,9 +340,10 @@ export function localQuickFacts(inst: ManagedInstrument, labels: QuickFactLabels
   if (isDebt) {
     if (d.rating) parts.push(d.rating)
   } else if (inst.assetClass === 'Equities') {
-    const s = (d.shareType ?? '').toLowerCase()
-    if (/común|comun/.test(s)) parts.push(labels.common)
-    else if (s) parts.push(labels.preferred)
+    // Ordinary vs preferred is carried by the kind now (Acción Ordinaria /
+    // Acción Preferida); fall back to the legacy shareType text.
+    const t = `${inst.kind ?? ''} ${d.shareType ?? ''}`.toLowerCase()
+    parts.push(/preferid/.test(t) ? labels.preferred : labels.common)
   }
   const cur = currencyGlyph(d.currency)
   if (cur) parts.push(cur)

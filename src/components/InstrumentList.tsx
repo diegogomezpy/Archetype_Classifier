@@ -1,40 +1,37 @@
 import { useState } from 'react'
 import { colorForCategory } from '../lib/instruments'
-import { fieldSpecsFor, localQuickFacts, type ManagedInstrument } from '../lib/catalog'
-import InstrumentDocs from './InstrumentDocs'
+import { kindLabel, localQuickFacts, type ManagedInstrument } from '../lib/catalog'
 import { useLang, useT } from '../i18n/i18n'
+import InstrumentReport from './InstrumentReport'
 
 type Props = {
   instruments: (ManagedInstrument & { fit: number })[]
 }
 
-// Ranked fit list with per-instrument drill-down: clicking a row expands the
-// asset's detail panel (admin-curated fields from ASSET_FIELD_SPECS, plus the
-// risk vector and liquidity terms). House picks carry a badge.
+// Ranked fit list: each row is a compact index entry (name, kind, fit bar,
+// ticker/score). Selecting one opens its full report (InstrumentReport) in
+// place of the list — a client-ready one-pager, not a cramped stat grid.
 export default function InstrumentList({ instruments }: Props) {
   const t = useT()
   const { lang } = useLang()
-  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const selected = selectedId ? instruments.find((i) => i.id === selectedId) : null
+
+  if (selected) {
+    return (
+      <InstrumentReport
+        instrument={selected}
+        region={selected.region ?? 'global'}
+        onBack={() => setSelectedId(null)}
+      />
+    )
+  }
 
   return (
-    <ul className="divide-y divide-border">
+    <ul className="max-h-[30rem] divide-y divide-border overflow-y-auto pr-1 print:max-h-none print:overflow-visible">
       {instruments.map((inst, i) => {
         const region = inst.region ?? 'global'
         const color = colorForCategory(inst.assetClass, region)
-        const expanded = expandedId === inst.id
-        const specs = fieldSpecsFor(region, inst.assetClass)
-        // The firm's rationale leads (why we recommend it); the fetched company
-        // description follows as background. Both are pulled out of the key/value grid.
-        const rationale = inst.details.rationale
-        const description = inst.details.description
-        const filled = specs.filter(
-          (s) =>
-            s.key !== 'rationale' &&
-            s.key !== 'description' &&
-            (inst.details[s.key] ?? '').trim() !== '',
-        )
-        // Compact facts line (local instruments): distinguishes same-issuer bond
-        // series and surfaces yield/rating/currency/maturity at a glance.
         const facts = localQuickFacts(inst, {
           common: t.admin.shareCommon,
           preferred: t.admin.sharePreferred,
@@ -44,8 +41,7 @@ export default function InstrumentList({ instruments }: Props) {
           <li key={inst.id}>
             <button
               type="button"
-              aria-expanded={expanded}
-              onClick={() => setExpandedId(expanded ? null : inst.id)}
+              onClick={() => setSelectedId(inst.id)}
               className="flex w-full items-center gap-4 py-3 text-left transition-colors hover:bg-surface2/40"
             >
               <span className="w-5 shrink-0 text-right font-mono text-sm text-muted tnum">
@@ -57,7 +53,7 @@ export default function InstrumentList({ instruments }: Props) {
                   <span className="truncate text-sm font-medium text-text">{inst.name}</span>
                   {inst.kind && (
                     <span className="shrink-0 rounded-md bg-surface2 px-1.5 py-0.5 text-[10px] font-medium text-muted">
-                      {inst.kind}
+                      {kindLabel(inst.kind, lang)}
                     </span>
                   )}
                   {inst.emphasized && (
@@ -78,75 +74,13 @@ export default function InstrumentList({ instruments }: Props) {
               </div>
 
               <div className="flex w-16 shrink-0 flex-col items-end">
-                {inst.ticker && (
-                  <span className="font-mono text-xs text-muted">{inst.ticker}</span>
-                )}
+                {inst.ticker && <span className="font-mono text-xs text-muted">{inst.ticker}</span>}
                 <span className="font-mono text-sm font-medium text-text tnum">{inst.fit}</span>
               </div>
-              <span
-                aria-hidden
-                className={`shrink-0 text-xs text-muted transition-transform duration-200 ${
-                  expanded ? 'rotate-90' : ''
-                }`}
-              >
+              <span aria-hidden className="shrink-0 text-xs text-muted">
                 ›
               </span>
             </button>
-
-            {/* Detail panel — admin-curated per-class fields */}
-            {expanded && (
-              <div className="mb-3 ml-9 rounded-xl border border-border bg-surface2/30 p-4">
-                {rationale && (
-                  <p className="text-sm font-medium leading-relaxed text-text">{rationale}</p>
-                )}
-                {description && (
-                  <p className={`${rationale ? 'mt-2 ' : ''}text-sm leading-relaxed text-muted`}>
-                    {description}
-                  </p>
-                )}
-                {filled.length > 0 ? (
-                  <dl className="mt-3 grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
-                    {filled.map((s) => (
-                      <div key={s.key} className="flex items-baseline justify-between gap-3">
-                        <dt className="text-xs text-muted">{lang === 'es' ? s.es : s.en}</dt>
-                        <dd className="text-right font-mono text-xs font-medium text-text tnum">
-                          {inst.details[s.key]}
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
-                ) : (
-                  !description && (
-                    <p className="text-xs italic text-muted">{t.instrumentDetail.noDetails}</p>
-                  )
-                )}
-                {/* Structural facts — always available */}
-                <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 border-t border-border/70 pt-3">
-                  <span className="text-xs text-muted">
-                    {t.instrumentDetail.riskVector}:{' '}
-                    <span className="font-mono text-text">
-                      σ {inst.sigmaLoad >= 0 ? '+' : ''}
-                      {inst.sigmaLoad.toFixed(2)} · α {inst.alphaLoad >= 0 ? '+' : ''}
-                      {inst.alphaLoad.toFixed(2)} · λ {inst.lambdaLoad >= 0 ? '+' : ''}
-                      {inst.lambdaLoad.toFixed(2)}
-                    </span>
-                  </span>
-                  <span className="text-xs text-muted">
-                    {t.instrumentDetail.liquidityTier}:{' '}
-                    <span className="font-mono text-text">{inst.liquidityTier}</span>
-                  </span>
-                  <span className="text-xs text-muted">
-                    {t.instrumentDetail.lockup}:{' '}
-                    <span className="font-mono text-text">
-                      {inst.lockupMonths > 0
-                        ? `${inst.lockupMonths} ${t.instrumentDetail.months}`
-                        : t.instrumentDetail.tradeable}
-                    </span>
-                  </span>
-                </div>
-                <InstrumentDocs instrumentId={inst.id} editable={false} />
-              </div>
-            )}
           </li>
         )
       })}

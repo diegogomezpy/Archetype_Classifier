@@ -15,6 +15,7 @@ import {
   sessionsCol,
 } from './db.js'
 import { fetchInstrumentData } from './marketData.js'
+import { withEsFields } from './translate.js'
 
 const app = new Hono()
 
@@ -250,7 +251,11 @@ app.delete('/api/docs/:docId', async (c) => {
 // ── market data ──────────────────────────────────────────────────────────────
 app.post('/api/market-data', async (c) => {
   const body = await c.req.json()
-  return c.json(await fetchInstrumentData(body))
+  const res = await fetchInstrumentData(body)
+  // Cache Spanish variants of the free-text fields (description, sector) so the
+  // language toggle is instant. No `prev` here — a one-off fetch always translates.
+  if (res.ok) res.fields = await withEsFields(res.fields)
+  return c.json(res)
 })
 
 // Fields the market-data feed owns. Anything NOT in here is either the research
@@ -258,8 +263,10 @@ app.post('/api/market-data', async (c) => {
 // admin's, and a refresh must never overwrite it.
 const MARKET_OWNED = [
   'description',
+  'descriptionEs', // cached Spanish of `description` (see translate.ts)
   'kind',
   'sectorIndex',
+  'sectorIndexEs', // cached Spanish of `sectorIndex`
   'exchange',
   'lastPrice',
   'change1Y',
@@ -328,9 +335,12 @@ app.post('/api/market-data/refresh', async (c) => {
         continue
       }
       const details = { ...((inst.details as Record<string, string>) ?? {}) }
+      // Add cached Spanish variants, reusing the stored translation when the
+      // English text is unchanged so we don't re-translate the same blurb daily.
+      const fields = await withEsFields(res.fields, details)
       // `description` is the fetched company summary and is market-owned; the
       // firm's `rationale` is NOT in MARKET_OWNED, so it's never touched here.
-      for (const k of MARKET_OWNED) if (res.fields[k]) details[k] = res.fields[k]
+      for (const k of MARKET_OWNED) if (fields[k]) details[k] = fields[k]
       // The whole point of the daily run: keep upside honest against the tape.
       const target = numOr(details.priceTarget)
       const spot = numOr(details.lastPrice)

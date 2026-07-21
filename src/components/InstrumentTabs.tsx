@@ -111,11 +111,9 @@ export default function InstrumentTabs({
         aria-labelledby={`tab-${activeClass}`}
       >
         {byClass[activeClass] && byClass[activeClass].length > 0 ? (
-          // Fixed-height scroll area so a long class list (e.g. all equities)
-          // doesn't balloon the page — scrolls internally instead.
-          <div className="max-h-96 overflow-y-auto pr-2">
-            <InstrumentList instruments={byClass[activeClass]} />
-          </div>
+          // InstrumentList caps its own list height (and drops the cap when a
+          // report is open, so the full one-pager gets room).
+          <InstrumentList instruments={byClass[activeClass]} />
         ) : (
           <p className="py-4 text-sm text-muted">{t.instruments.noneInClass}</p>
         )}
