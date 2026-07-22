@@ -117,7 +117,7 @@ const ARCHETYPES_ES: Record<ArchetypeKey, Archetype> = {
       'Notas estructuradas con potencial ilimitado',
       'Acciones individuales selectivas',
       'Opciones de largo plazo sobre acciones',
-      'Asignación satélite en cripto',
+      'Asignación satélite en notas de participación',
     ],
   },
   insurer: {
@@ -155,15 +155,14 @@ export function localizedArchetype(key: ArchetypeKey, lang: Lang): Archetype {
 const ASSET_CLASS_ES: Record<AssetClass, string> = {
   'Fixed income': 'Renta fija',
   Equities: 'Renta variable',
-  'Income structures': 'Estructuras de renta',
-  'Growth structures': 'Estructuras de crecimiento',
-  Alternatives: 'Alternativos',
-  Crypto: 'Cripto',
-  'Cash/MMF': 'Efectivo/FMM',
+  'Structured notes': 'Notas estructuradas',
 }
 
 export function assetClassLabel(cls: AssetClass, lang: Lang): string {
-  return lang === 'es' ? ASSET_CLASS_ES[cls] : cls
+  // Fall back to the identifier: data saved under a since-retired class would
+  // otherwise render as literally nothing in Spanish while English still shows
+  // the raw name — a defect invisible to an English-speaking reviewer.
+  return (lang === 'es' ? ASSET_CLASS_ES[cls] : cls) || cls
 }
 
 // Local (Cadiem) categories — English identifiers, Spanish display labels.

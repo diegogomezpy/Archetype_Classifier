@@ -6,7 +6,6 @@ import yahooFinance from 'yahoo-finance2'
 //   • Equities / ETFs → Yahoo Finance (yahoo-finance2): description, price,
 //     1-year change, 52-week range, volume, market cap, dividend yield, P/E,
 //     beta, and ATM ~3-month implied vol from the option chain.
-//   • Crypto → CoinGecko (price / mcap / volume) + Deribit DVOL (implied vol).
 //   • Bonds / structured products → no source; those fields stay manual.
 
 // ── Yahoo access from a datacenter IP (Cloud Run) ────────────────────────────
@@ -378,56 +377,6 @@ async function yahooSymbolForIsin(isin: string): Promise<string | null> {
   }
 }
 
-// ── Crypto: CoinGecko + Deribit ──────────────────────────────────────────────
-
-const COIN_IDS: Record<string, string> = {
-  BTC: 'bitcoin', ETH: 'ethereum', SOL: 'solana', BNB: 'binancecoin', XRP: 'ripple',
-  ADA: 'cardano', DOGE: 'dogecoin', AVAX: 'avalanche-2', LTC: 'litecoin', DOT: 'polkadot',
-  LINK: 'chainlink', MATIC: 'matic-network',
-}
-const DVOL_CCY: Record<string, string> = { BTC: 'BTC', ETH: 'ETH' }
-
-async function fetchDvol(ccy: string): Promise<string> {
-  try {
-    const end = Date.now()
-    const start = end - 3 * 24 * 60 * 60 * 1000
-    const url =
-      `https://www.deribit.com/api/v2/public/get_volatility_index_data` +
-      `?currency=${ccy}&start_timestamp=${start}&end_timestamp=${end}&resolution=3600`
-    const res = await fetch(url)
-    if (!res.ok) return ''
-    const body = (await res.json()) as { result?: { data?: number[][] } }
-    const rows = body.result?.data
-    const last = rows && rows.length ? rows[rows.length - 1] : null
-    return last ? fixed(last[4], 1) + '%' : ''
-  } catch {
-    return ''
-  }
-}
-
-async function fetchCrypto(symbol: string): Promise<MarketDataResult> {
-  const url =
-    `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${COIN_IDS[symbol]}` +
-    `&price_change_percentage=1y`
-  const res = await fetch(url)
-  if (!res.ok) return { ok: false, reason: 'network' }
-  const data = (await res.json()) as Array<Record<string, unknown>>
-  const d = data?.[0]
-  if (!d) return { ok: false, reason: 'not_found' }
-  const dvol = DVOL_CCY[symbol] ? await fetchDvol(DVOL_CCY[symbol]) : ''
-  return {
-    ok: true,
-    fields: clean({
-      lastPrice: price(d.current_price),
-      change1Y: pctSigned(d.price_change_percentage_1y_in_currency),
-      marketCap: '$' + compact(d.market_cap),
-      avgVolume: '$' + compact(d.total_volume),
-      impliedVol3m: dvol,
-      asOf: asOf(),
-    }),
-  }
-}
-
 // ── Router ───────────────────────────────────────────────────────────────────
 
 const NON_TICKERS = new Set(['OTC', 'LISTED', ''])
@@ -438,7 +387,6 @@ export async function fetchInstrumentData(query: MarketDataQuery): Promise<Marke
   const upper = ticker.toUpperCase()
   if (!ticker && !isin) return { ok: false, reason: 'not_found' }
   try {
-    if (COIN_IDS[upper]) return await fetchCrypto(upper)
     if (!NON_TICKERS.has(upper)) return await fetchYahoo(ticker)
     if (isin) {
       const sym = await yahooSymbolForIsin(isin)

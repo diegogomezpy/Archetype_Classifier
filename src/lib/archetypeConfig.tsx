@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from 'react'
 import { ARCHETYPES, type ArchetypeKey } from '../data/archetypes'
-import { type AssetClass, type LocalCategory } from './instruments'
+import { ASSET_CLASSES, type AssetClass, type LocalCategory } from './instruments'
 import {
   SHAPE_VECTORS,
   computeAllocation,
@@ -163,12 +163,56 @@ const ArchetypeConfigContext = createContext<ArchetypeConfigContextValue>({
   reset: () => {},
 })
 
+// Asset classes that were retired, mapped onto what replaced them. A stored mix
+// predates the current taxonomy, and a saved array REPLACES the seed wholesale
+// (see mergeWithSeed), so without this a dirty doc keeps serving weight in
+// classes the app no longer has: the donut paints them grey, the Spanish label
+// resolves to nothing, and the admin editor silently ignores them.
+const RETIRED_CLASSES: Record<string, AssetClass | null> = {
+  'Income structures': 'Structured notes',
+  'Growth structures': 'Structured notes',
+  Alternatives: null,
+  Crypto: null,
+  'Cash/MMF': null,
+}
+
+/**
+ * Bring a stored asset mix onto the current taxonomy: fold retired classes into
+ * their replacement (SUMMING when several map to one — income + growth both
+ * become Structured notes, and two slices of the same class would double-count
+ * the ring and duplicate React keys), drop the ones with no replacement, then
+ * renormalize to 100 so the donut closes.
+ */
+function sanitizeMix(slices: MixSlice[] | undefined): MixSlice[] {
+  if (!slices?.length) return []
+  const byClass = new Map<AssetClass, number>()
+  for (const s of slices) {
+    const mapped = s.assetClass in RETIRED_CLASSES ? RETIRED_CLASSES[s.assetClass] : s.assetClass
+    if (!mapped || !ASSET_CLASSES.includes(mapped)) continue
+    byClass.set(mapped, (byClass.get(mapped) ?? 0) + (s.pct || 0))
+  }
+  const total = [...byClass.values()].reduce((a, b) => a + b, 0)
+  if (total <= 0) return []
+  const out = [...byClass.entries()]
+    .map(([assetClass, pct]) => ({ assetClass, pct: Math.round((pct * 100) / total) }))
+    .sort((a, b) => b.pct - a.pct)
+  // Push any rounding drift onto the largest slice so the mix totals exactly 100.
+  const drift = 100 - out.reduce((a, s) => a + s.pct, 0)
+  if (drift !== 0 && out.length > 0) out[0].pct += drift
+  return out
+}
+
 function mergeWithSeed(partial: Partial<ArchetypeConfig> | null): ArchetypeConfig {
   const seed = seedConfig()
   if (!partial) return seed
+  const assetMix = { ...seed.assetMix, ...(partial.assetMix ?? {}) }
+  for (const key of ARCHETYPE_ORDER) {
+    const cleaned = sanitizeMix(assetMix[key])
+    assetMix[key] = cleaned.length > 0 ? cleaned : seed.assetMix[key]
+  }
   return {
     shapeVectors: { ...seed.shapeVectors, ...(partial.shapeVectors ?? {}) },
-    assetMix: { ...seed.assetMix, ...(partial.assetMix ?? {}) },
+    assetMix,
     localAssetMix: { ...seed.localAssetMix, ...(partial.localAssetMix ?? {}) },
   }
 }

@@ -408,7 +408,7 @@ app.post('/api/market-data/refresh', async (c) => {
     return c.json({ ok: false, error: 'unauthorized' }, 401)
   }
   const snap = await catalogCol.get()
-  // Only rows with a live market-data feed. Equities and Crypto always fetch;
+  // Only rows with a live market-data feed. Equities always fetch;
   // global Fixed income fetches ONLY for Bond ETFs — an individual bond (fixed-
   // rate / TIPS / floating) is manually filled and its mirror must never be
   // touched, so we gate on its subclass kind, not just the ticker (mirrors the
@@ -418,7 +418,7 @@ app.post('/api/market-data/refresh', async (c) => {
     if (i.region !== 'global' || !String(i.ticker ?? '').trim()) return false
     const cls = String(i.assetClass ?? '')
     if (cls === 'Fixed income') return FI_ETF_KINDS.has(String(i.kind ?? ''))
-    return cls === 'Equities' || cls === 'Crypto'
+    return cls === 'Equities'
   }
   const rows = snap.docs
     .map((d) => docData(d) as Record<string, unknown>)

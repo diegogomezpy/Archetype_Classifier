@@ -47,11 +47,8 @@ export const RISK_PARAMS: RiskParams = {
   global: {
     'Fixed income': { s: -0.33, a: -0.27, l: 0.28 },
     Equities: { s: 0.37, a: 0.17, l: -0.19 },
-    'Income structures': { s: -0.1, a: -0.64, l: -0.2 },
-    'Growth structures': { s: -0.05, a: 0.8, l: 0.2 },
-    Alternatives: { s: 0.14, a: -0.32, l: 0 },
-    Crypto: { s: 0.9, a: 0.8, l: -0.8 },
-    'Cash/MMF': { s: -0.8, a: 0, l: 0.7 },
+    // Midpoint of the old income (α −0.64) and growth (α +0.8) structures.
+    'Structured notes': { s: -0.08, a: 0.08, l: 0 },
   },
   equityBetaSensitivity: 0.4,
 }
@@ -110,6 +107,18 @@ export function deriveRiskVector(
     }
   }
   const base = params.global[category as AssetClass] ?? { s: 0, a: 0, l: 0 }
+  // Phoenix and Participation notes share a class but have OPPOSITE payoffs, so
+  // the near-neutral class vector alone would score them identically against a
+  // client. Split them by subclass; the admin can still override per instrument.
+  if (category === 'Structured notes') {
+    const k = (details.kind ?? '').toLowerCase()
+    const nv = /ph[eo]{2}nix|autocall/.test(k)
+      ? { s: -0.1, a: -0.64, l: -0.2 } // carry / negative skew
+      : /particip/.test(k)
+        ? { s: -0.05, a: 0.8, l: 0.2 } // convex / positive skew
+        : null
+    if (nv) return { sigmaLoad: clamp1(nv.s), alphaLoad: clamp1(nv.a), lambdaLoad: clamp1(nv.l) }
+  }
   let s = base.s
   if (category === 'Equities') {
     const beta = numOr(details.beta)
@@ -137,7 +146,7 @@ export function deriveDefaults(
         return { liquidityTier: 3, lockupMonths: 0 }
     }
   }
-  if (category === 'Income structures' || category === 'Growth structures') {
+  if (category === 'Structured notes') {
     return { liquidityTier: 4, lockupMonths: 12 }
   }
   return { liquidityTier: 1, lockupMonths: 0 }

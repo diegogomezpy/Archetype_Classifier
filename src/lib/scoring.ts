@@ -311,20 +311,20 @@ type ShapeVector = { sigma: number; alpha: number; lambda: number }
 export const ASSET_CLASS_LOADINGS: Record<AssetClass, ShapeVector> = {
   'Fixed income': { sigma: -0.333, alpha: -0.267, lambda: +0.283 },
   Equities: { sigma: +0.371, alpha: +0.171, lambda: -0.193 },
-  'Income structures': { sigma: -0.1, alpha: -0.64, lambda: -0.2 },
-  'Growth structures': { sigma: -0.05, alpha: +0.8, lambda: +0.2 },
-  Alternatives: { sigma: +0.14, alpha: -0.32, lambda: 0.0 },
-  Crypto: { sigma: +0.9, alpha: +0.8, lambda: -0.8 },
-  'Cash/MMF': { sigma: -0.8, alpha: 0.0, lambda: +0.7 },
+  // The merged structured-note class spans both payoffs — Phoenix (α −0.64) and
+  // Participation (α +0.80) — so the CLASS vector sits at their midpoint and is
+  // near-neutral on skew. The advisor picks the payoff that suits the client at
+  // the subclass level; the sleeve stays a satellite either way.
+  'Structured notes': { sigma: -0.075, alpha: +0.08, lambda: 0.0 },
 }
 
-// Per-archetype hard caps prevent degenerate outcomes
+// Per-archetype hard caps prevent degenerate outcomes. Where a class previously
+// had separate income/growth caps, the tighter of the two carries over.
 const ALLOC_CAPS: Record<string, Partial<Record<AssetClass, number>>> = {
-  banker: { Crypto: 0.0, 'Income structures': 0.12, 'Growth structures': 0.15 },
-  quant: { Crypto: 0.08 },
-  venture: { 'Income structures': 0.06, 'Cash/MMF': 0.05 },
-  insurer: { Crypto: 0.05, 'Growth structures': 0.06, 'Cash/MMF': 0.05 },
-  indexer: { Crypto: 0.0, 'Income structures': 0.06, 'Growth structures': 0.06 },
+  banker: { 'Structured notes': 0.12 },
+  venture: { 'Structured notes': 0.06 },
+  insurer: { 'Structured notes': 0.06 },
+  indexer: { 'Structured notes': 0.06 },
 }
 
 function vecDistance(a: ShapeVector, b: ShapeVector): number {
@@ -358,11 +358,11 @@ export function computeAllocation(
   // The Quant has no payoff-shape preference (σ=α=λ≈0), so the distance engine
   // would hand back a flat, characterless spread. A disciplined EV-maximizer is
   // better expressed as a concentrated, low-cost equity book with a small
-  // high-expected-return satellite — fix it at 90% equities / 10% crypto.
+  // convex satellite — fix it at 90% equities / 10% structured notes.
   if (archetype === 'quant') {
     return [
       { assetClass: 'Equities', pct: 90 },
-      { assetClass: 'Crypto', pct: 10 },
+      { assetClass: 'Structured notes', pct: 10 },
     ]
   }
 

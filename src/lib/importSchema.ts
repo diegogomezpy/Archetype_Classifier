@@ -99,10 +99,7 @@ export function isAutoFillable(region: Region, category: Category): boolean {
   // Global fixed income is HYBRID: bond ETFs autofill from a ticker, individual
   // bonds don't — but the class still needs the autofill pass to run (it fetches
   // only the rows that carry a ticker), so it counts as auto-fillable here.
-  return (
-    region === 'global' &&
-    (category === 'Equities' || category === 'Crypto' || category === 'Fixed income')
-  )
+  return region === 'global' && (category === 'Equities' || category === 'Fixed income')
 }
 
 // Global fixed-income ETF fields Yahoo fills RELIABLY — kept OUT of the import
@@ -167,8 +164,10 @@ export function importColumnsFor(region: Region, category: Category): ImportColu
       label: fs.en,
       aliases: [fs.key, ...(ALIASES[fs.key] ?? [])],
     }))
-  // 'currency' lives in core; drop a duplicate detail currency column if present.
-  const seen = new Set(['currency'])
+  // 'currency' and 'kind' live in core; drop duplicate detail columns for them
+  // (a class whose field union declares a `kind` spec would otherwise emit two
+  // Type columns that both map to the same key).
+  const seen = new Set(['currency', 'kind'])
   const detailUnique = detail.filter((c) => !seen.has(c.key) && (seen.add(c.key), true))
   const core = dropTicker ? coreColumns().filter((c) => c.key !== 'ticker') : coreColumns()
   return [...core, ...detailUnique]

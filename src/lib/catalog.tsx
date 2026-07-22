@@ -120,63 +120,30 @@ export const ASSET_FIELD_SPECS: Record<AssetClass, FieldSpec[]> = {
     { key: 'impliedInflation', en: 'Breakeven inflation (%)', es: 'Inflación implícita (%)' },
     AS_OF,
   ],
-  'Income structures': [
+  // One class for structured products, split by payoff into Phoenix (carry /
+  // negative skew: coupon, barrier, autocall) and Participation notes (convex /
+  // positive skew: participation rate, cap, protection level). This is the
+  // UNION; each subclass surfaces only its own half — see GLOBAL_SUBCLASSES.
+  'Structured notes': [
+    RATIONALE,
     DESCRIPTION,
+    { key: 'kind', en: 'Type (Phoenix / Participation)', es: 'Tipo (Phoenix / Participación)' },
     { key: 'underlying', en: 'Underlying(s)', es: 'Subyacente(s)' },
+    // Phoenix
     { key: 'couponYield', en: 'Coupon / premium (% p.a.)', es: 'Cupón / prima (% anual)' },
     { key: 'barrier', en: 'Protection barrier (% of initial)', es: 'Barrera de protección (% del inicial)' },
     { key: 'autocallLevel', en: 'Autocall level (%)', es: 'Nivel de autocall (%)' },
     { key: 'observationFrequency', en: 'Observation frequency', es: 'Frecuencia de observación' },
-    { key: 'maturityMonths', en: 'Maturity (months)', es: 'Plazo (meses)' },
-    { key: 'issuer', en: 'Issuer', es: 'Emisor' },
-    { key: 'issuerRating', en: 'Issuer credit rating', es: 'Calificación del emisor' },
     { key: 'capitalProtection', en: 'Capital protection', es: 'Protección del capital' },
-    { key: 'worstCase', en: 'Worst-case scenario', es: 'Peor escenario' },
-    AS_OF,
-  ],
-  'Growth structures': [
-    DESCRIPTION,
-    { key: 'underlying', en: 'Underlying(s)', es: 'Subyacente(s)' },
+    // Participation
     { key: 'participationRate', en: 'Participation rate (%)', es: 'Tasa de participación (%)' },
     { key: 'cap', en: 'Upside cap (% or uncapped)', es: 'Tope de ganancia (% o sin tope)' },
     { key: 'protectionLevel', en: 'Protection level (% of capital)', es: 'Nivel de protección (% del capital)' },
+    // Common terms
     { key: 'maturityMonths', en: 'Maturity (months)', es: 'Plazo (meses)' },
     { key: 'issuer', en: 'Issuer', es: 'Emisor' },
     { key: 'issuerRating', en: 'Issuer credit rating', es: 'Calificación del emisor' },
     { key: 'worstCase', en: 'Worst-case scenario', es: 'Peor escenario' },
-    AS_OF,
-  ],
-  Alternatives: [
-    DESCRIPTION,
-    { key: 'exposure', en: 'Underlying exposure', es: 'Exposición subyacente' },
-    { key: 'expenseRatio', en: 'Expense ratio (%)', es: 'Comisión de gestión (%)' },
-    { key: 'distributionYield', en: 'Distribution yield (%)', es: 'Rendimiento de distribución (%)' },
-    { key: 'avgVolume', en: 'Avg. daily volume', es: 'Volumen diario promedio' },
-    { key: 'diversificationNote', en: 'Diversification role', es: 'Rol de diversificación' },
-    AS_OF,
-  ],
-  Crypto: [
-    RATIONALE,
-    DESCRIPTION,
-    { key: 'kind', en: 'Type (coin / ETP)', es: 'Tipo (moneda / ETP)' },
-    { key: 'lastPrice', en: 'Last price (USD)', es: 'Último precio (USD)' },
-    { key: 'change1Y', en: '1-year change (%)', es: 'Variación 1 año (%)' },
-    { key: 'range52w', en: '52-week range (USD)', es: 'Rango 52 semanas (USD)' },
-    { key: 'marketCap', en: 'Market cap', es: 'Capitalización de mercado' },
-    { key: 'marketCapAum', en: 'AUM (ETP)', es: 'Patrimonio (ETP)' },
-    { key: 'expenseRatio', en: 'Expense ratio (%, ETP)', es: 'Comisión de gestión (%, ETP)' },
-    { key: 'avgVolume', en: 'Avg. daily volume', es: 'Volumen diario promedio' },
-    { key: 'custodyForm', en: 'Custody / wrapper', es: 'Custodia / vehículo' },
-    { key: 'impliedVol3m', en: 'ATM 3M implied vol (%)', es: 'Vol. implícita ATM 3M (%)' },
-    { key: 'volatilityNote', en: 'Volatility / drawdown note', es: 'Nota de volatilidad / caídas' },
-    AS_OF,
-  ],
-  'Cash/MMF': [
-    DESCRIPTION,
-    { key: 'currentYield', en: 'Current yield (%)', es: 'Rendimiento actual (%)' },
-    { key: 'avgMaturityDays', en: 'Avg. maturity (days)', es: 'Vencimiento promedio (días)' },
-    { key: 'minInvestment', en: 'Minimum investment', es: 'Inversión mínima' },
-    { key: 'expenseRatio', en: 'Expense ratio (%)', es: 'Comisión de gestión (%)' },
     AS_OF,
   ],
 }
@@ -293,7 +260,8 @@ const BOND_ETF_KEYS = ['sectorIndex', 'exchange', 'lastPrice', 'change1Y', 'rang
 const EQ_FETCH = ['description', 'kind', 'sectorIndex', 'exchange', 'lastPrice', 'change1Y', 'range52w', 'avgVolume', 'marketCapAum', 'dividendYield', 'peRatio', 'peForward', 'beta', 'impliedVol3m', 'priceTarget', 'potentialReturn', 'recBuyPct', 'recHoldPct', 'recSellPct', 'analystCount', 'asOf']
 const ETF_FETCH = ['description', 'kind', 'sectorIndex', 'exchange', 'lastPrice', 'change1Y', 'range52w', 'avgVolume', 'marketCapAum', 'dividendYield', 'expenseRatio', 'beta', 'asOf']
 const PREF_FETCH = ['description', 'kind', 'sectorIndex', 'exchange', 'lastPrice', 'change1Y', 'range52w', 'avgVolume', 'marketCapAum', 'dividendYield', 'beta', 'asOf']
-const COIN_FETCH = ['description', 'lastPrice', 'change1Y', 'marketCap', 'avgVolume', 'impliedVol3m', 'asOf']
+// Terms every structured note carries, whatever its payoff.
+const NOTE_COMMON = ['underlying', 'maturityMonths', 'issuer', 'issuerRating', 'worstCase']
 
 const GLOBAL_SUBCLASSES: Partial<Record<AssetClass, Subclass[]>> = {
   Equities: [
@@ -316,15 +284,10 @@ const GLOBAL_SUBCLASSES: Partial<Record<AssetClass, Subclass[]>> = {
     { id: 'TIPS', en: 'Inflation-linked (TIPS)', es: 'Indexado a inflación (TIPS)', keys: [...BOND_CORE, 'impliedInflation'], aliases: ['tips', 'inflation', 'inflacion', 'linker', 'indexado'] },
     { id: 'Floating-rate', en: 'Floating-rate note', es: 'Bono tasa variable', keys: [...BOND_CORE, 'referenceRate', 'spread'], aliases: ['float', 'floating', 'variable', 'flotante', 'frn'] },
   ],
-  Crypto: [
-    { id: 'Crypto', en: 'Coin / token', es: 'Moneda / token', keys: ['lastPrice', 'change1Y', 'marketCap', 'avgVolume', 'custodyForm', 'impliedVol3m', 'volatilityNote'], fetch: COIN_FETCH, aliases: ['coin', 'token', 'spot', 'cripto', 'crypto'] },
-    { id: 'Crypto ETP', en: 'Crypto ETP / trust', es: 'ETP / fondo cripto', keys: ['lastPrice', 'change1Y', 'range52w', 'marketCapAum', 'expenseRatio', 'avgVolume', 'custodyForm'], fetch: COIN_FETCH, aliases: ['etp', 'etf', 'trust', 'fund'] },
+  'Structured notes': [
+    { id: 'Phoenix', en: 'Phoenix', es: 'Phoenix', keys: [...NOTE_COMMON, 'couponYield', 'barrier', 'autocallLevel', 'observationFrequency', 'capitalProtection'], aliases: ['phoenix', 'pheonix', 'autocall', 'autocallable', 'income', 'reverse convertible'] },
+    { id: 'Participation note', en: 'Participation note', es: 'Nota de participación', keys: [...NOTE_COMMON, 'participationRate', 'cap', 'protectionLevel'], aliases: ['participation', 'participacion', 'growth', 'capital-protected', 'capital protected', 'tracker'] },
   ],
-  // Not yet split — one default subclass each, showing the whole class union.
-  'Income structures': [{ id: 'Income structure', en: 'Income structure', es: 'Estructura de renta', all: true }],
-  'Growth structures': [{ id: 'Growth structure', en: 'Growth structure', es: 'Estructura de crecimiento', all: true }],
-  Alternatives: [{ id: 'Alternative', en: 'Alternative', es: 'Alternativo', all: true }],
-  'Cash/MMF': [{ id: 'Cash / MMF', en: 'Cash / MMF', es: 'Efectivo / FMM', all: true }],
 }
 
 const LOCAL_SUBCLASSES: Partial<Record<LocalCategory, Subclass[]>> = {
@@ -495,7 +458,6 @@ export const FETCHABLE_FIELDS: Partial<Record<AssetClass, string[]>> = {
     'impliedVol3m', 'priceTarget', 'potentialReturn', 'recBuyPct', 'recHoldPct', 'recSellPct',
     'analystCount', 'asOf',
   ],
-  Crypto: ['lastPrice', 'change1Y', 'marketCap', 'avgVolume', 'impliedVol3m', 'asOf'],
   // Bond ETFs (a ticker) fetch from Yahoo just like equities — minus the
   // earnings/analyst metrics that don't apply. Individual bonds carry no ticker,
   // so nothing fetches and the firm's mirror fields stand.

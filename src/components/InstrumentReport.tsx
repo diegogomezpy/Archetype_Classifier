@@ -143,7 +143,6 @@ export default function InstrumentReport({ instrument: inst, region, onBack }: P
   const td = t.instrumentDetail
   const D = inst.details
   const g = (k: string) => (D[k] ?? '').trim()
-  const isCrypto = inst.assetClass === 'Crypto'
 
   // An individual bond has no ticker of its own, so it gets its logo and company
   // blurb from the ISSUER's listed equity (resolved + cached server-side).
@@ -298,13 +297,7 @@ export default function InstrumentReport({ instrument: inst, region, onBack }: P
       {/* ── Header ──────────────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 items-start gap-4">
-          <CompanyLogo
-            ticker={logoTicker}
-            name={logoName}
-            isCrypto={isCrypto}
-            src={logoSrc}
-            size={64}
-          />
+          <CompanyLogo ticker={logoTicker} name={logoName} src={logoSrc} size={64} />
           <div className="min-w-0">
             <h3 className="font-serif text-2xl font-semibold leading-tight text-text">{inst.name}</h3>
             <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-xs text-muted">

@@ -1,11 +1,9 @@
 export type AssetClass =
   | 'Fixed income'
   | 'Equities'
-  | 'Income structures' // carry/negative-skew structured products
-  | 'Growth structures' // convex/positive-skew structured products
-  | 'Alternatives'
-  | 'Crypto'
-  | 'Cash/MMF'
+  // Structured products, split by payoff into Phoenix (carry / negative skew)
+  // and Participation notes (convex / positive skew) — see GLOBAL_SUBCLASSES.
+  | 'Structured notes'
 
 // ---------------------------------------------------------------------------
 // Region: global (international markets) vs local (Paraguayan / Cadiem menu)
@@ -41,15 +39,7 @@ export interface Instrument {
   lockupMonths: number
 }
 
-export const ASSET_CLASSES: AssetClass[] = [
-  'Fixed income',
-  'Equities',
-  'Income structures',
-  'Growth structures',
-  'Alternatives',
-  'Crypto',
-  'Cash/MMF',
-]
+export const ASSET_CLASSES: AssetClass[] = ['Fixed income', 'Equities', 'Structured notes']
 
 export const LOCAL_CATEGORIES: LocalCategory[] = [
   'Fixed income',
@@ -62,11 +52,7 @@ export const LOCAL_CATEGORIES: LocalCategory[] = [
 export const ASSET_CLASS_COLORS: Record<AssetClass, string> = {
   'Fixed income': '#378ADD',
   Equities: '#00C9A7',
-  'Income structures': '#C9933A',
-  'Growth structures': '#9B59B6',
-  Alternatives: '#E67E22',
-  Crypto: '#E05C5C',
-  'Cash/MMF': '#8A8D99',
+  'Structured notes': '#9B59B6',
 }
 
 export const LOCAL_CATEGORY_COLORS: Record<LocalCategory, string> = {
@@ -122,27 +108,10 @@ export const INSTRUMENTS: Instrument[] = [
   { name: 'NVIDIA Corp', ticker: 'NVDA', assetClass: 'Equities', sigmaLoad: +0.9, alphaLoad: +0.8, lambdaLoad: -0.3, liquidityTier: 1, lockupMonths: 0 },
   { name: 'Walmart Inc', ticker: 'WMT', assetClass: 'Equities', sigmaLoad: -0.1, alphaLoad: 0.0, lambdaLoad: +0.2, liquidityTier: 1, lockupMonths: 0 },
 
-  // Income structures — carry / negative skew
-  { name: 'Phoenix autocallable (monthly obs.)', ticker: 'OTC', assetClass: 'Income structures', sigmaLoad: -0.1, alphaLoad: -0.8, lambdaLoad: -0.3, liquidityTier: 4, lockupMonths: 12 },
-  { name: 'Reverse convertible (barrier)', ticker: 'OTC', assetClass: 'Income structures', sigmaLoad: -0.1, alphaLoad: -0.8, lambdaLoad: -0.8, liquidityTier: 4, lockupMonths: 12 },
-  { name: 'Global X S&P 500 Covered Call ETF', ticker: 'XYLD', assetClass: 'Income structures', sigmaLoad: -0.1, alphaLoad: -0.8, lambdaLoad: +0.2, liquidityTier: 1, lockupMonths: 0 },
-
-  // Growth structures — convex / positive skew
-  { name: 'Capital-protected note + participation', ticker: 'OTC', assetClass: 'Growth structures', sigmaLoad: -0.8, alphaLoad: +0.8, lambdaLoad: +0.7, liquidityTier: 4, lockupMonths: 12 },
-  { name: 'Uncapped participation note', ticker: 'OTC', assetClass: 'Growth structures', sigmaLoad: +0.5, alphaLoad: +0.8, lambdaLoad: +0.2, liquidityTier: 4, lockupMonths: 12 },
-  { name: 'S&P 500 LEAP call options', ticker: 'Listed', assetClass: 'Growth structures', sigmaLoad: +0.9, alphaLoad: +0.8, lambdaLoad: -0.8, liquidityTier: 1, lockupMonths: 0 },
-
-  // Alternatives
-  { name: 'iShares Gold Trust', ticker: 'IAU', assetClass: 'Alternatives', sigmaLoad: -0.1, alphaLoad: 0.0, lambdaLoad: +0.2, liquidityTier: 1, lockupMonths: 0 },
-  { name: 'iShares Global REIT ETF', ticker: 'REET', assetClass: 'Alternatives', sigmaLoad: +0.5, alphaLoad: -0.8, lambdaLoad: -0.3, liquidityTier: 1, lockupMonths: 0 },
-  { name: 'iMGP DBi Managed Futures ETF', ticker: 'DBMF', assetClass: 'Alternatives', sigmaLoad: -0.1, alphaLoad: 0.0, lambdaLoad: +0.2, liquidityTier: 1, lockupMonths: 0 },
-
-  // Crypto
-  { name: 'Bitcoin (spot)', ticker: 'BTC', assetClass: 'Crypto', sigmaLoad: +0.9, alphaLoad: +0.8, lambdaLoad: -0.8, liquidityTier: 1, lockupMonths: 0 },
-  { name: 'Ethereum (spot)', ticker: 'ETH', assetClass: 'Crypto', sigmaLoad: +0.9, alphaLoad: +0.8, lambdaLoad: -0.8, liquidityTier: 1, lockupMonths: 0 },
-  { name: 'iShares Bitcoin Trust ETF', ticker: 'IBIT', assetClass: 'Crypto', sigmaLoad: +0.9, alphaLoad: +0.8, lambdaLoad: -0.8, liquidityTier: 1, lockupMonths: 0 },
-
-  // Cash / MMF
-  { name: 'SPDR Bloomberg 1-3 Month T-Bill ETF', ticker: 'BIL', assetClass: 'Cash/MMF', sigmaLoad: -0.8, alphaLoad: 0.0, lambdaLoad: +0.7, liquidityTier: 1, lockupMonths: 0 },
-  { name: 'iShares Short Treasury Bond ETF', ticker: 'SHV', assetClass: 'Cash/MMF', sigmaLoad: -0.8, alphaLoad: 0.0, lambdaLoad: +0.7, liquidityTier: 1, lockupMonths: 0 },
+  // Structured notes — Phoenix (carry / negative skew) and Participation
+  // notes (convex / positive skew).
+  { name: 'Phoenix autocallable (monthly obs.)', ticker: 'OTC', assetClass: 'Structured notes', kind: 'Phoenix', sigmaLoad: -0.1, alphaLoad: -0.8, lambdaLoad: -0.3, liquidityTier: 4, lockupMonths: 12 },
+  { name: 'Phoenix autocallable (barrier, memory coupon)', ticker: 'OTC', assetClass: 'Structured notes', kind: 'Phoenix', sigmaLoad: -0.1, alphaLoad: -0.8, lambdaLoad: -0.8, liquidityTier: 4, lockupMonths: 12 },
+  { name: 'Capital-protected note + participation', ticker: 'OTC', assetClass: 'Structured notes', kind: 'Participation note', sigmaLoad: -0.8, alphaLoad: +0.8, lambdaLoad: +0.7, liquidityTier: 4, lockupMonths: 12 },
+  { name: 'Uncapped participation note', ticker: 'OTC', assetClass: 'Structured notes', kind: 'Participation note', sigmaLoad: +0.5, alphaLoad: +0.8, lambdaLoad: +0.2, liquidityTier: 4, lockupMonths: 12 },
 ]

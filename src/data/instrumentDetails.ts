@@ -192,7 +192,7 @@ export const SEED_DETAILS: Record<string, Record<string, string>> = {
     asOf: '2026-07',
   },
 
-  // ── Income structures ─────────────────────────────────────────────────────
+  // ── Structured notes ───────────────────────────────────────────────────────
   'otc-phoenix-autocallable-monthly-obs': {
     description: 'Pays a conditional monthly coupon while the underlying stays above the barrier; autocalls at par when above the initial level on an observation date.',
     underlying: 'Worst-of: S&P 500 / EuroStoxx 50',
@@ -207,31 +207,6 @@ export const SEED_DETAILS: Record<string, Record<string, string>> = {
     worstCase: 'If the worst underlying ends below the barrier at maturity: 1:1 downside on that underlying.',
     asOf: '2026-07',
   },
-  'otc-reverse-convertible-barrier': {
-    description: 'High fixed coupon in exchange for taking downside risk below a barrier — a sold put in note form.',
-    underlying: 'Single large-cap equity',
-    couponYield: '11% p.a. (fixed)',
-    barrier: '70%',
-    observationFrequency: 'At maturity (European barrier)',
-    maturityMonths: '12',
-    issuer: 'International investment bank',
-    issuerRating: 'A',
-    capitalProtection: 'Conditional (barrier)',
-    worstCase: 'Underlying below barrier at maturity: shares delivered at strike — full equity downside, coupon kept.',
-    asOf: '2026-07',
-  },
-  'xyld-global-x-s-p-500-covered-call-etf': {
-    description: 'Holds the S&P 500 and sells monthly at-the-money calls — converts upside into distributed premium income.',
-    underlying: 'S&P 500 (fully covered calls)',
-    couponYield: '~9.8% distribution rate',
-    observationFrequency: 'Monthly (option roll)',
-    issuer: 'Global X (ETF)',
-    capitalProtection: 'None (full equity downside)',
-    worstCase: 'Equity drawdown with capped upside on recovery months.',
-    asOf: '2026-07',
-  },
-
-  // ── Growth structures ─────────────────────────────────────────────────────
   'otc-capital-protected-note-participation': {
     description: 'Returns at least 100% of capital at maturity plus participation in index upside — protection paid for with yield.',
     underlying: 'S&P 500',
@@ -254,96 +229,6 @@ export const SEED_DETAILS: Record<string, Record<string, string>> = {
     issuer: 'International investment bank',
     issuerRating: 'A',
     worstCase: 'Losses beyond the 10% buffer are 1:1 with the index.',
-    asOf: '2026-07',
-  },
-  'listed-s-p-500-leap-call-options': {
-    description: 'Long-dated exchange-listed S&P 500 call options — convex upside for a known, limited premium.',
-    underlying: 'S&P 500 (SPX LEAPS)',
-    participationRate: 'Convex (delta rises with the index)',
-    cap: 'Uncapped',
-    protectionLevel: 'Premium fully at risk',
-    maturityMonths: '24',
-    issuer: 'Exchange-listed (OCC-cleared)',
-    worstCase: 'Index below strike at expiry: 100% of the premium is lost.',
-    asOf: '2026-07',
-  },
-
-  // ── Alternatives ──────────────────────────────────────────────────────────
-  'iau-ishares-gold-trust': {
-    description: 'Physically backed gold trust — each share represents fractional ownership of vaulted bullion.',
-    exposure: 'Physical gold',
-    expenseRatio: '0.25%',
-    distributionYield: '0%',
-    avgVolume: '6.5M shares',
-    diversificationNote: 'Low correlation to equities and bonds; classic crisis and inflation hedge.',
-    asOf: '2026-07',
-  },
-  'reet-ishares-global-reit-etf': {
-    description: 'Global listed real-estate investment trusts — property income across the US, Europe, and Asia.',
-    exposure: 'Global REITs',
-    expenseRatio: '0.14%',
-    distributionYield: '4.1%',
-    avgVolume: '450K shares',
-    diversificationNote: 'Real-asset income stream; rate-sensitive but diversifies corporate earnings risk.',
-    asOf: '2026-07',
-  },
-  'dbmf-imgp-dbi-managed-futures-etf': {
-    description: 'Replicates the aggregate positioning of managed-futures hedge funds across rates, currencies, equities, and commodities.',
-    exposure: 'Managed-futures trend replication',
-    expenseRatio: '0.85%',
-    distributionYield: '5.2% (variable)',
-    avgVolume: '380K shares',
-    diversificationNote: 'Historically positive in prolonged drawdowns (crisis alpha); near-zero long-run equity correlation.',
-    asOf: '2026-07',
-  },
-
-  // ── Crypto ────────────────────────────────────────────────────────────────
-  'btc-bitcoin-spot': {
-    description: 'The largest cryptocurrency — decentralized, fixed 21M supply, increasingly held as a macro/scarcity asset.',
-    lastPrice: '118,500',
-    change1Y: '+24.0%',
-    marketCap: '$2.3T',
-    avgVolume: '$45B',
-    custodyForm: 'Spot (exchange or self-custody)',
-    volatilityNote: 'Historical drawdowns exceed 70%; size positions accordingly.',
-    asOf: '2026-07',
-  },
-  'eth-ethereum-spot': {
-    description: 'Leading smart-contract platform — settlement layer for stablecoins, tokenized assets, and DeFi.',
-    lastPrice: '4,350',
-    change1Y: '+18.5%',
-    marketCap: '$525B',
-    avgVolume: '$21B',
-    custodyForm: 'Spot (exchange or self-custody)',
-    volatilityNote: 'Drawdowns historically deeper than Bitcoin’s; higher beta within crypto.',
-    asOf: '2026-07',
-  },
-  'ibit-ishares-bitcoin-trust-etf': {
-    description: 'Spot Bitcoin ETF — Bitcoin price exposure in a brokerage account, custody handled by the fund.',
-    lastPrice: '67.20',
-    change1Y: '+23.6%',
-    marketCap: '$62B AUM',
-    avgVolume: '32M shares',
-    custodyForm: 'ETF (Coinbase Custody)',
-    volatilityNote: 'Tracks spot Bitcoin — same >70% historical drawdown profile.',
-    asOf: '2026-07',
-  },
-
-  // ── Cash/MMF ──────────────────────────────────────────────────────────────
-  'bil-spdr-bloomberg-1-3-month-t-bill-etf': {
-    description: '1–3 month US Treasury bills — cash-like yield with daily liquidity.',
-    currentYield: '4.2%',
-    avgMaturityDays: '~40',
-    minInvestment: '1 share (~$92)',
-    expenseRatio: '0.14%',
-    asOf: '2026-07',
-  },
-  'shv-ishares-short-treasury-bond-etf': {
-    description: 'US Treasuries maturing under one year — a step out from T-bills, still cash-adjacent.',
-    currentYield: '4.1%',
-    avgMaturityDays: '~150',
-    minInvestment: '1 share (~$110)',
-    expenseRatio: '0.15%',
     asOf: '2026-07',
   },
 }

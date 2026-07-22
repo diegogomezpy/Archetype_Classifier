@@ -269,7 +269,7 @@ const en = {
     importBulletinError: 'Could not read that PDF. Try the CSV template instead.',
     autofill: 'Fetch data',
     autofillFetching: 'Fetching…',
-    autofillHint: 'Ticker or ISIN → auto-fills the details. Equities pull from Yahoo Finance; crypto from CoinGecko + Deribit. Bond/structured data stays manual.',
+    autofillHint: 'Ticker or ISIN → auto-fills the details. Equities and ETFs pull from Yahoo Finance. Individual-bond and structured-note data stays manual.',
     autofillFilled: (n: number) => `Filled ${n} ${n === 1 ? 'field' : 'fields'} from market data.`,
     autofillNeedId: 'Enter a ticker or ISIN first.',
     autofillUnsupported: 'No market-data lookup for this instrument (no public ticker). Enter details manually.',
@@ -339,13 +339,13 @@ const en = {
       'The client’s test produces a vector on these same three axes. Fit = how closely an instrument’s vector points in the same direction as the client’s — so direction decides the match, not size. Everything is clamped to −1…+1.',
     sigmaName: 'σ — variance',
     sigmaHelp:
-      'How much the instrument swings. −1 = steady (cash, CDs), +1 = wild (crypto). Matched against the client’s variance tolerance.',
+      'How much the instrument swings. −1 = steady (T-Bills, CDs), +1 = wild (high-growth equities). Matched against the client’s variance tolerance.',
     alphaName: 'α — skew',
     alphaHelp:
-      'The shape of the payoff. +1 = positive skew: a small chance of a large gain (growth structures, crypto). −1 = negative skew: steady income with a rare large loss (income structures).',
+      'The shape of the payoff. +1 = positive skew: a small chance of a large gain (participation notes). −1 = negative skew: steady income with a rare large loss (Phoenix notes, high-yield bonds).',
     lambdaName: 'λ — loss aversion',
     lambdaHelp:
-      'Capital preservation. +1 = protects capital, suits a loss-averse client (cash, bonds). −1 = can draw down hard, suits a loss-tolerant client (crypto).',
+      'Capital preservation. +1 = protects capital, suits a loss-averse client (Treasuries, bonds). −1 = can draw down hard, suits a loss-tolerant client (high-growth equities).',
     globalTitle: 'Global — base by asset class',
     globalHelp:
       'Global instruments use their asset class’s vector directly — there is no rating step. Equities are the only exception: their σ is nudged by β below.',
@@ -674,7 +674,7 @@ const es: UIStrings = {
     importBulletinError: 'No se pudo leer ese PDF. Probá con la plantilla CSV.',
     autofill: 'Obtener datos',
     autofillFetching: 'Obteniendo…',
-    autofillHint: 'Ticker o ISIN → autocompleta los detalles. Acciones vía Yahoo Finance; cripto vía CoinGecko + Deribit. Los datos de bonos/estructurados quedan manuales.',
+    autofillHint: 'Ticker o ISIN → autocompleta los detalles. Acciones y ETFs vía Yahoo Finance. Los datos de bonos individuales y notas estructuradas quedan manuales.',
     autofillFilled: (n: number) => `Se completaron ${n} ${n === 1 ? 'campo' : 'campos'} desde datos de mercado.`,
     autofillNeedId: 'Ingresa primero un ticker o ISIN.',
     autofillUnsupported: 'No hay búsqueda de datos para este instrumento (sin ticker público). Ingresa los detalles manualmente.',
@@ -744,13 +744,13 @@ const es: UIStrings = {
       'El test del cliente produce un vector en estos mismos tres ejes. El calce = qué tan parecida es la dirección del vector del instrumento a la del cliente — decide la dirección, no el tamaño. Todo se limita a −1…+1.',
     sigmaName: 'σ — varianza',
     sigmaHelp:
-      'Cuánto oscila el instrumento. −1 = estable (efectivo, CDA), +1 = muy volátil (cripto). Se compara con la tolerancia a la varianza del cliente.',
+      'Cuánto oscila el instrumento. −1 = estable (letras del Tesoro, CDA), +1 = muy volátil (acciones de alto crecimiento). Se compara con la tolerancia a la varianza del cliente.',
     alphaName: 'α — asimetría',
     alphaHelp:
-      'La forma del pago. +1 = asimetría positiva: poca probabilidad de una ganancia grande (estructurados de crecimiento, cripto). −1 = asimetría negativa: renta estable con una pérdida grande poco frecuente (estructurados de renta).',
+      'La forma del pago. +1 = asimetría positiva: poca probabilidad de una ganancia grande (notas de participación). −1 = asimetría negativa: renta estable con una pérdida grande poco frecuente (notas Phoenix, bonos high yield).',
     lambdaName: 'λ — aversión a pérdidas',
     lambdaHelp:
-      'Preservación de capital. +1 = protege el capital, calza con un cliente averso a pérdidas (efectivo, bonos). −1 = puede caer fuerte, calza con un cliente tolerante a pérdidas (cripto).',
+      'Preservación de capital. +1 = protege el capital, calza con un cliente averso a pérdidas (Treasuries, bonos). −1 = puede caer fuerte, calza con un cliente tolerante a pérdidas (acciones de alto crecimiento).',
     globalTitle: 'Global — base por clase de activo',
     globalHelp:
       'Los instrumentos globales usan el vector de su clase de activo directamente — no hay paso de calificación. La renta variable es la única excepción: su σ se ajusta por β abajo.',

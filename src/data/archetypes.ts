@@ -52,7 +52,7 @@ export const ARCHETYPES: Record<ArchetypeKey, Archetype> = {
       'Structured notes with uncapped upside',
       'Selective single-name equity',
       'Long-dated equity options',
-      'Satellite crypto allocation',
+      'Satellite participation notes',
     ],
   },
   insurer: {
