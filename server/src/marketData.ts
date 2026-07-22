@@ -148,6 +148,10 @@ async function fetchYahoo(symbol: string): Promise<MarketDataResult> {
       {
         modules: [
           'price',
+          // `price.longName` is missing for some ETFs, leaving only the 32-char
+          // `shortName` ("iShares J.P. Morgan USD Emergin"). quoteType carries a
+          // second copy of both, so we can pick whichever is complete.
+          'quoteType',
           'summaryDetail',
           'assetProfile',
           'defaultKeyStatistics',
@@ -164,6 +168,7 @@ async function fetchYahoo(symbol: string): Promise<MarketDataResult> {
     return { ok: false, reason: 'not_found' }
   }
   const p = qs.price as Record<string, unknown> | undefined
+  const qt = qs.quoteType as Record<string, unknown> | undefined
   const sd = qs.summaryDetail as Record<string, unknown> | undefined
   const ap = qs.assetProfile as Record<string, unknown> | undefined
   const ks = qs.defaultKeyStatistics as Record<string, unknown> | undefined
@@ -171,6 +176,27 @@ async function fetchYahoo(symbol: string): Promise<MarketDataResult> {
   const trend = (qs.recommendationTrend as { trend?: Array<Record<string, unknown>> } | undefined)
     ?.trend?.[0]
   if (!p && !sd) return { ok: false, reason: 'not_found' }
+
+  // Yahoo caps `shortName` at 32 chars, and for several iShares bond ETFs it
+  // omits `longName` from quoteSummary entirely — which is how a name like
+  // "iShares J.P. Morgan USD Emergin" ends up stored. Prefer a longName; only
+  // when NONE is on offer (the exact broken case) pay for the v7 quote endpoint,
+  // which does carry the full name, before settling for the truncated short one.
+  const longest = (vals: unknown[]) =>
+    vals
+      .map((v) => String(v ?? '').trim())
+      .filter(Boolean)
+      .sort((a, b) => b.length - a.length)[0] ?? ''
+  let bestName = longest([qt?.longName, p?.longName])
+  if (!bestName) {
+    try {
+      const q = (await yahooFinance.quote(symbol, {}, YF_OPTS)) as Record<string, unknown>
+      bestName = longest([q?.longName, q?.displayName])
+    } catch {
+      /* fall through to the short name */
+    }
+  }
+  if (!bestName) bestName = longest([qt?.shortName, p?.shortName])
 
   const spot = num(p?.regularMarketPrice)
   // Consensus: mean analyst target, and the share of analysts saying buy.
@@ -215,7 +241,9 @@ async function fetchYahoo(symbol: string): Promise<MarketDataResult> {
     fields: clean({
       // `name` isn't a detail field — importers lift it onto the instrument and
       // drop it from details (see components/ImportRanking.tsx).
-      name: String(p?.longName || p?.shortName || ''),
+      // Take the most complete name on offer: any single source can be the
+      // 32-char truncated `shortName`, so prefer the longest candidate.
+      name: bestName,
       description: String(ap?.longBusinessSummary ?? '').trim(),
       kind: isEtf ? 'ETF' : 'Acción Ordinaria',
       // A fund tracks a category/index rather than sitting in a GICS sector.

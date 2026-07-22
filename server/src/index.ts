@@ -453,7 +453,15 @@ app.post('/api/market-data/refresh', async (c) => {
         const pct = (target / spot - 1) * 100
         details.potentialReturn = `${pct >= 0 ? '+' : '−'}${Math.abs(pct).toFixed(1)}%`
       }
-      await catalogCol.doc(String(inst.id)).set({ ...inst, details }, { merge: true })
+      // Repair a name that was stored truncated (Yahoo's 32-char shortName, e.g.
+      // "iShares J.P. Morgan USD Emergin"). Only when the stored name is a strict
+      // PREFIX of the freshly fetched one — so a hand-edited name is never
+      // clobbered, and only a genuine truncation gets completed.
+      const stored = String(inst.name ?? '').trim()
+      const fetched = String(res.fields.name ?? '').trim()
+      const name =
+        fetched && fetched.length > stored.length && fetched.startsWith(stored) ? fetched : stored
+      await catalogCol.doc(String(inst.id)).set({ ...inst, name, details }, { merge: true })
       updated++
     } catch {
       failed++
