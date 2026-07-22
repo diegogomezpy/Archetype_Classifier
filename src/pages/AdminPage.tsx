@@ -509,21 +509,18 @@ export default function AdminPage() {
   const [bulkOpen, setBulkOpen] = useState(false)
   const [confirmText, setConfirmText] = useState('')
 
-  // The subclasses on offer for the current market + class selection. With no
-  // class picked this is the union across the visible taxonomies, so the Type
-  // row is still useful before narrowing. Keyed by the ENGLISH label rather than
-  // the id: global 'Corporate bond' and local 'Bono corporativo' are separate
-  // ids that read identically, and two chips reading "Corporate bond" is just
-  // confusing — one chip selects both.
+  // The subclasses on offer for the chosen class. Only surfaced once a class is
+  // picked — the union across every class is a long, meaningless list. Keyed by
+  // the ENGLISH label rather than the id: global 'Corporate bond' and local
+  // 'Bono corporativo' are separate ids that read identically, and two chips
+  // reading "Corporate bond" is just confusing — one chip selects both.
   const filterKinds = useMemo<{ en: string; es: string }[]>(() => {
+    if (filter === 'all') return []
     const regions: Region[] = regionFilter === 'all' ? ['global', 'local'] : [regionFilter]
     const out = new Map<string, { en: string; es: string }>()
     for (const r of regions) {
-      const cats = filter === 'all' ? categoriesForRegion(r) : [filter]
-      for (const c of cats) {
-        if (!(categoriesForRegion(r) as string[]).includes(c as string)) continue
-        for (const s of subclassesFor(r, c as Category)) if (!out.has(s.en)) out.set(s.en, { en: s.en, es: s.es })
-      }
+      if (!(categoriesForRegion(r) as string[]).includes(filter as string)) continue
+      for (const s of subclassesFor(r, filter as Category)) if (!out.has(s.en)) out.set(s.en, { en: s.en, es: s.es })
     }
     return [...out.values()]
   }, [regionFilter, filter])
