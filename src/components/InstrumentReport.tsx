@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react'
 import { colorForCategory, type Region } from '../lib/instruments'
+import { issuerProfile, type IssuerProfile } from '../lib/issuer'
 import {
   fieldSpecsFor,
   kindLabel,
@@ -143,8 +145,28 @@ export default function InstrumentReport({ instrument: inst, region, onBack }: P
   const g = (k: string) => (D[k] ?? '').trim()
   const isCrypto = inst.assetClass === 'Crypto'
 
+  // An individual bond has no ticker of its own, so it gets its logo and company
+  // blurb from the ISSUER's listed equity (resolved + cached server-side).
+  const issuerName = g('issuer')
+  const [issuer, setIssuer] = useState<IssuerProfile | null>(null)
+  useEffect(() => {
+    if (inst.ticker || !issuerName || region !== 'global') {
+      setIssuer(null)
+      return
+    }
+    let alive = true
+    void issuerProfile(issuerName).then((p) => {
+      if (alive) setIssuer(p)
+    })
+    return () => {
+      alive = false
+    }
+  }, [inst.ticker, issuerName, region])
+  const issuerDescription =
+    (lang === 'es' ? issuer?.descriptionEs || issuer?.description : issuer?.description) ?? ''
+
   const rationale = g('rationale')
-  const description = localizedDetail(D, 'description', lang)
+  const description = localizedDetail(D, 'description', lang) || issuerDescription
   // ETFs carry the tracked index under sectorIndex; individual bonds carry their
   // industry under sector — show whichever the instrument has as the chip.
   const sector = localizedDetail(D, 'sectorIndex', lang) || localizedDetail(D, 'sector', lang)
@@ -157,6 +179,10 @@ export default function InstrumentReport({ instrument: inst, region, onBack }: P
   // Local companies aren't on Parqet — resolve their bundled logo by issuer.
   const logoSrc =
     region === 'local' ? localLogoUrl(g('issuer') || g('fundManager') || inst.name) : undefined
+  // Global bonds borrow the issuer's ticker (for the logo lookup) and its name
+  // (so the monogram fallback reads off the company, not the bond's long title).
+  const logoTicker = inst.ticker || issuer?.ticker || ''
+  const logoName = inst.ticker ? inst.name : issuerName || inst.name
 
   // Fit band.
   const fit = inst.fit
@@ -273,8 +299,8 @@ export default function InstrumentReport({ instrument: inst, region, onBack }: P
       <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 items-start gap-4">
           <CompanyLogo
-            ticker={inst.ticker}
-            name={inst.name}
+            ticker={logoTicker}
+            name={logoName}
             isCrypto={isCrypto}
             src={logoSrc}
             size={64}

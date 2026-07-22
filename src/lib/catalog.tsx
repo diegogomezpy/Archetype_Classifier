@@ -286,7 +286,7 @@ const BOND_ETF_KEYS = ['sectorIndex', 'exchange', 'lastPrice', 'change1Y', 'rang
 
 // What autofill can fill per equity/bond subclass (⊆ FETCHABLE_FIELDS below).
 const EQ_FETCH = ['description', 'kind', 'sectorIndex', 'exchange', 'lastPrice', 'change1Y', 'range52w', 'avgVolume', 'marketCapAum', 'dividendYield', 'peRatio', 'peForward', 'beta', 'impliedVol3m', 'priceTarget', 'potentialReturn', 'recBuyPct', 'recHoldPct', 'recSellPct', 'analystCount', 'asOf']
-const ETF_FETCH = ['description', 'kind', 'sectorIndex', 'exchange', 'lastPrice', 'change1Y', 'range52w', 'avgVolume', 'marketCapAum', 'dividendYield', 'beta', 'asOf']
+const ETF_FETCH = ['description', 'kind', 'sectorIndex', 'exchange', 'lastPrice', 'change1Y', 'range52w', 'avgVolume', 'marketCapAum', 'dividendYield', 'expenseRatio', 'beta', 'asOf']
 const PREF_FETCH = ['description', 'kind', 'sectorIndex', 'exchange', 'lastPrice', 'change1Y', 'range52w', 'avgVolume', 'marketCapAum', 'dividendYield', 'beta', 'asOf']
 const COIN_FETCH = ['description', 'lastPrice', 'change1Y', 'marketCap', 'avgVolume', 'impliedVol3m', 'asOf']
 

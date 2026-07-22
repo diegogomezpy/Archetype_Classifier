@@ -18,6 +18,9 @@ export const sessionsCol = db.collection('sessions')
 export const documentsCol = db.collection('documents')
 // Company logos, keyed by a normalized issuer slug (file bytes in Cloud Storage).
 export const logosCol = db.collection('logos')
+// Resolved bond-issuer profiles (ticker + business summary), keyed by a
+// normalized issuer slug. Cached so viewing a bond costs one Yahoo lookup ever.
+export const issuersCol = db.collection('issuers')
 
 // Cloud Storage bucket for instrument attachments (reports, term sheets, …).
 const storage = new Storage({ projectId })

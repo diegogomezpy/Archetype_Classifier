@@ -10,12 +10,13 @@ import {
   configCol,
   docsBucket,
   documentsCol,
+  issuersCol,
   logosCol,
   newId,
   normalizeName,
   sessionsCol,
 } from './db.js'
-import { fetchInstrumentData } from './marketData.js'
+import { fetchInstrumentData, fetchIssuerProfile } from './marketData.js'
 import { withEsFields } from './translate.js'
 
 const app = new Hono()
@@ -307,6 +308,45 @@ app.delete('/api/logos/:key', async (c) => {
     await ref.delete()
   }
   return c.json({ ok: true })
+})
+
+// ── bond issuers ─────────────────────────────────────────────────────────────
+// An individual bond carries no ticker, so its report has nothing to hang a logo
+// or company blurb on. Resolve the ISSUER to its listed equity once and cache it
+// — a sovereign or private issuer resolves to an empty record, which is cached
+// too so we never re-ask. The report reads this lazily, per bond viewed.
+const issuerKey = (s: string) =>
+  s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]/g, '')
+    .slice(0, 100)
+
+app.get('/api/issuer', async (c) => {
+  const name = (c.req.query('name') ?? '').trim()
+  const key = issuerKey(name)
+  if (!key) return c.json({ ticker: '', name: '', description: '', descriptionEs: '' })
+  const ref = issuersCol.doc(key)
+  // ?refresh=1 re-resolves and overwrites a cached record (a stale or badly
+  // matched issuer can be corrected without touching Firestore by hand).
+  const refresh = c.req.query('refresh') === '1'
+  if (!refresh) {
+    const snap = await ref.get()
+    if (snap.exists) return c.json(snap.data())
+  }
+  const prof = await fetchIssuerProfile(name)
+  // Translate the blurb once, at cache time, like the market-data path does.
+  const withEs = prof.description ? await withEsFields({ description: prof.description }) : {}
+  const rec = {
+    ticker: prof.ticker,
+    name: prof.name,
+    description: prof.description,
+    descriptionEs: withEs.descriptionEs ?? '',
+    cachedAt: new Date().toISOString(),
+  }
+  await ref.set(rec).catch(() => {})
+  return c.json(rec)
 })
 
 // ── market data ──────────────────────────────────────────────────────────────

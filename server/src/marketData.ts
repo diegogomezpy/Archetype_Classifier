@@ -180,8 +180,35 @@ async function fetchYahoo(symbol: string): Promise<MarketDataResult> {
   const sells = (num(trend?.sell) ?? 0) + (num(trend?.strongSell) ?? 0)
   const totalRecs = buys + holds + sells
   const isEtf = String(p?.quoteType ?? '').toUpperCase() === 'ETF'
-  const chg1y = num(ks?.['52WeekChange'])
-  const divY = num(sd?.dividendYield) ?? num(sd?.trailingAnnualDividendYield)
+
+  // A fund populates almost none of the company modules above — no assetProfile
+  // sector, no price.marketCap, often no 52WeekChange. Its equivalents (category,
+  // total assets, trailing returns, expense ratio) live in the fund modules, so
+  // pull those for ETFs only; equities never pay for the extra call.
+  let fp: Record<string, unknown> | undefined
+  let perf: Record<string, unknown> | undefined
+  if (isEtf) {
+    try {
+      const f = await yahooFinance.quoteSummary(
+        symbol,
+        { modules: ['fundProfile', 'fundPerformance'] as never },
+        YF_OPTS,
+      )
+      fp = f.fundProfile as Record<string, unknown> | undefined
+      perf = f.fundPerformance as Record<string, unknown> | undefined
+    } catch {
+      /* fund fields just stay empty */
+    }
+  }
+  const trailing = (perf?.trailingReturns as Record<string, unknown> | undefined) ?? undefined
+  const fees = (fp?.feesExpensesInvestment as Record<string, unknown> | undefined) ?? undefined
+
+  const chg1y = num(ks?.['52WeekChange']) ?? num(trailing?.oneYear)
+  // `yield` is the fund-side name for the distribution yield.
+  const divY =
+    num(sd?.dividendYield) ?? num(sd?.trailingAnnualDividendYield) ?? num(sd?.yield)
+  const aum = num(p?.marketCap) ?? num(sd?.totalAssets) ?? num(ks?.totalAssets)
+  const expense = num(fees?.annualReportExpenseRatio)
 
   return {
     ok: true,
@@ -191,7 +218,8 @@ async function fetchYahoo(symbol: string): Promise<MarketDataResult> {
       name: String(p?.longName || p?.shortName || ''),
       description: String(ap?.longBusinessSummary ?? '').trim(),
       kind: isEtf ? 'ETF' : 'Acción Ordinaria',
-      sectorIndex: String(ap?.sector || ap?.industry || ''),
+      // A fund tracks a category/index rather than sitting in a GICS sector.
+      sectorIndex: String(ap?.sector || ap?.industry || fp?.categoryName || ''),
       exchange: String(p?.exchangeName || p?.fullExchangeName || ''),
       lastPrice: price(spot),
       change1Y: chg1y === null ? '' : pctSigned(chg1y * 100),
@@ -203,11 +231,15 @@ async function fetchYahoo(symbol: string): Promise<MarketDataResult> {
         sd?.averageVolume || sd?.averageDailyVolume10Day
           ? compact(sd.averageVolume ?? sd.averageDailyVolume10Day) + ' shares'
           : '',
-      marketCapAum: p?.marketCap ? '$' + compact(p.marketCap) : '',
+      // Companies report a market cap; funds report total assets (AUM).
+      marketCapAum: aum === null ? '' : '$' + compact(aum),
       dividendYield: divY === null ? '' : pctPlain(divY * 100),
-      peRatio: fixed(sd?.trailingPE, 1),
-      peForward: fixed(sd?.forwardPE, 1),
-      beta: fixed(sd?.beta ?? ks?.beta, 2),
+      expenseRatio: expense === null ? '' : pctPlain(expense * 100),
+      // Earnings multiples are meaningless for a fund — Yahoo still returns a
+      // nonsense forwardPE for some bond ETFs, so drop them rather than show it.
+      peRatio: isEtf ? '' : fixed(sd?.trailingPE, 1),
+      peForward: isEtf ? '' : fixed(sd?.forwardPE, 1),
+      beta: fixed(sd?.beta ?? ks?.beta ?? ks?.beta3Year, 2),
       priceTarget: price(target),
       // Recomputed against the live price every time this runs, so upside never
       // goes stale between research updates.
@@ -221,6 +253,91 @@ async function fetchYahoo(symbol: string): Promise<MarketDataResult> {
       asOf: asOf(),
     }),
   }
+}
+
+// ── Bond issuers ─────────────────────────────────────────────────────────────
+// An individual bond has no ticker of its own, so its report has nothing to hang
+// a logo or a company blurb on. The issuer, though, is usually a listed company —
+// resolve its name to that equity and the bond can borrow both. Sovereigns and
+// private issuers simply don't resolve; the caller falls back to a monogram.
+
+// Sovereign/agency issuers have no equity to find — skip them rather than let a
+// fuzzy search land on some unrelated ticker.
+const SOVEREIGN_ISSUER =
+  /\brepublic|republica|treasury|\btsy\b|kingdom|united mexican states|sovereign|international bond/i
+
+// Legal forms and holding-company noise — dropping these turns "ALIBABA GROUP
+// HOLDING LTD" into "ALIBABA", which is what actually matches a listed equity.
+const LEGAL_NOISE =
+  /\b(inc|incorporated|corp|corporation|company|ltd|limited|llc|lp|plc|sa|sab|de|cv|bv|nv|gmbh|ag|ab|asa|oyj|spa|pte|pty|holdings?|group|the)\b\.?/gi
+// Bonds are very often issued by a financing vehicle rather than the operating
+// company ("VALE OVERSEAS LTD", "PETROBRAS GLOBAL FINANCE BV"). Strip those too
+// on a second pass so the search lands on the parent that has a logo + profile.
+const SPV_NOISE = /\b(overseas|global|finance|financial|financing|capital|funding|credit|services|intl|international)\b/gi
+
+/**
+ * Progressively broader search queries for an issuer, best first. We try the
+ * cleaned legal name, then the operating-company core, then just its first two
+ * words — the first one that resolves to a listed equity wins.
+ */
+function issuerQueries(raw: string): string[] {
+  const base = (raw ?? '')
+    .split('/')[0] // "BANCO DO BRASIL SA/CAYMAN" → "BANCO DO BRASIL SA"
+    .replace(/\(.*?\)/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!base || SOVEREIGN_ISSUER.test(base)) return []
+  const squash = (s: string) => s.replace(/[^A-Za-z0-9 &.-]/g, ' ').replace(/\s+/g, ' ').trim()
+  const noLegal = squash(base.replace(LEGAL_NOISE, ' '))
+  const core = squash(noLegal.replace(SPV_NOISE, ' '))
+  const firstTwo = core.split(' ').slice(0, 2).join(' ')
+  // De-duplicate while preserving order, and never search an empty string.
+  return [...new Set([noLegal || base, core, firstTwo].filter((s) => s.length > 1))]
+}
+
+export type IssuerProfile = { ticker: string; name: string; description: string }
+
+/** Attach the company's business summary to a resolved symbol. */
+async function withDescription(symbol: string, name: string): Promise<IssuerProfile> {
+  let description = ''
+  try {
+    const qs = await yahooFinance.quoteSummary(symbol, { modules: ['assetProfile'] }, YF_OPTS)
+    const ap = qs.assetProfile as Record<string, unknown> | undefined
+    description = String(ap?.longBusinessSummary ?? '').trim()
+  } catch {
+    /* the logo still works without a blurb */
+  }
+  return { ticker: symbol, name, description }
+}
+
+type SearchQuote = { symbol?: string; quoteType?: string; longname?: string; shortname?: string }
+
+/** Resolve a bond issuer's name to its listed equity + business summary. */
+export async function fetchIssuerProfile(rawName: string): Promise<IssuerProfile> {
+  const empty: IssuerProfile = { ticker: '', name: '', description: '' }
+  const label = (x: SearchQuote) => String(x.longname || x.shortname || '')
+  let fallback: { symbol: string; name: string } | null = null
+
+  for (const q of issuerQueries(rawName)) {
+    let quotes: SearchQuote[] = []
+    try {
+      const res = await yahooFinance.search(q, {}, YF_OPTS)
+      quotes = (res.quotes ?? []) as SearchQuote[]
+    } catch {
+      continue
+    }
+    const equities = quotes.filter(
+      (x) => !!x.symbol && String(x.quoteType ?? '').toUpperCase() === 'EQUITY',
+    )
+    if (equities.length === 0) continue
+    // A plain symbol (NFLX, BABA) is the primary listing; a suffixed one like
+    // "AHLA.DE" is a foreign secondary line with no profile and no logo. Take the
+    // first primary we find; otherwise remember a secondary and keep broadening.
+    const primary = equities.find((x) => !x.symbol!.includes('.'))
+    if (primary?.symbol) return withDescription(primary.symbol, label(primary))
+    if (!fallback) fallback = { symbol: equities[0].symbol!, name: label(equities[0]) }
+  }
+  return fallback ? withDescription(fallback.symbol, fallback.name) : empty
 }
 
 async function yahooSymbolForIsin(isin: string): Promise<string | null> {
