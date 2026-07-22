@@ -1,6 +1,6 @@
 import { useRef, useState, type ChangeEvent } from 'react'
 import { categoriesForRegion, type AssetClass, type Category, type Region } from '../lib/instruments'
-import { useCatalog, type ManagedInstrument } from '../lib/catalog'
+import { fetchableFields, useCatalog, type ManagedInstrument } from '../lib/catalog'
 import { downloadText, parseCsv } from '../lib/csv'
 import { isAutoFillable, parseInstruments, templateCsv, type ImportResult } from '../lib/importSchema'
 import { parseBulletin } from '../lib/bulletinParse'
@@ -17,6 +17,12 @@ const btnCls =
   'rounded-lg border border-border bg-surface px-3.5 py-2 text-sm font-medium text-muted transition-colors hover:text-teal disabled:cursor-not-allowed disabled:opacity-50'
 const labelCls = 'flex flex-col gap-1 text-xs font-medium text-muted'
 const num = (n: number) => (n >= 0 ? '+' : '') + n.toFixed(2)
+
+// A row autofills only if it names a ticker AND isn't tagged as a bond. So an
+// individual-bond listing (no ticker, or Type = Bono) never triggers a fetch —
+// only bond ETFs / equities / crypto do.
+const isFetchRow = (i: ManagedInstrument): boolean =>
+  !!i.ticker.trim() && !/bono|bond/i.test(i.kind ?? '')
 
 // The single loading surface. Three paths, picked by what you choose:
 //  • global + Equities/Crypto — the template is just Ticker + Descripción; a
@@ -63,15 +69,16 @@ export default function ImportInstruments() {
     reset()
     setPdfMode(false)
     const parsed = parseInstruments(region, category, parseCsv(text))
-    if (!autoFill || parsed.instruments.length === 0) {
+    // Only fetch if some row actually needs it (a ticker'd ETF/equity). A pure
+    // bond listing skips the market-data pass entirely.
+    if (!autoFill || !parsed.instruments.some(isFetchRow)) {
       setResult(parsed)
       return
     }
-    // Ticker is all we were given — go and get the rest.
-    setBusy(t.admin.importFetching(0, parsed.instruments.length))
-    const filled = await autofillAll(parsed.instruments, (d, n) =>
-      setBusy(t.admin.importFetching(d, n)),
-    )
+    const fetchCount = parsed.instruments.filter(isFetchRow).length
+    setBusy(t.admin.importFetching(0, fetchCount))
+    let done = 0
+    const filled = await autofillAll(parsed.instruments, () => setBusy(t.admin.importFetching(++done, fetchCount)))
     setBusy(null)
     setResult({ ...parsed, instruments: filled })
   }
@@ -112,11 +119,13 @@ export default function ImportInstruments() {
         <p className="mb-4 max-w-2xl text-xs leading-relaxed text-muted">
           {region === 'global' && category === 'Fixed income'
             ? t.admin.importHintFixedIncome
-            : autoFill
-              ? t.admin.importHintAuto
-              : region === 'local'
-                ? t.admin.importHintLocal
-                : t.admin.importHint}
+            : region === 'global' && category === 'Equities'
+              ? t.admin.importHintEquities
+              : autoFill
+                ? t.admin.importHintAuto
+                : region === 'local'
+                  ? t.admin.importHintLocal
+                  : t.admin.importHint}
         </p>
         <div className="flex flex-wrap items-end gap-3">
           <label className={labelCls}>
@@ -208,22 +217,27 @@ export default function ImportInstruments() {
 }
 
 /**
- * Fill each ticker-only row from market data. Anything the file supplied wins —
- * blank means "use theirs". Concurrency stays low: market data rate-limits.
+ * Fill each FETCHABLE row (ticker'd, not a bond) from market data. Bond rows
+ * pass through untouched. Anything the file supplied wins — blank means "use
+ * theirs". Only fields the class actually fetches are applied, so a bond ETF
+ * never picks up equity-only metrics. Concurrency stays low: data rate-limits.
  */
 async function autofillAll(
   items: ManagedInstrument[],
-  onProgress: (done: number, total: number) => void,
+  onFetched: () => void,
 ): Promise<ManagedInstrument[]> {
   const queue = items.map((inst, i) => ({ inst, i }))
   const out: ManagedInstrument[] = new Array(items.length)
-  let done = 0
 
   const worker = async () => {
     for (;;) {
       const job = queue.shift()
       if (!job) return
       const { inst, i } = job
+      if (!isFetchRow(inst)) {
+        out[i] = inst // individual bonds keep exactly what the file gave
+        continue
+      }
       let fields: Record<string, string> = {}
       try {
         const res = await fetchInstrumentData({
@@ -234,20 +248,21 @@ async function autofillAll(
       } catch {
         /* leave the row as the file gave it */
       }
-      const { name, ...rest } = fields
+      const allowed = fetchableFields(inst.assetClass, inst.region ?? 'global')
+      const rest: Record<string, string> = {}
+      for (const [k, v] of Object.entries(fields)) if (k !== 'name' && allowed.has(k)) rest[k] = v
       const details = { ...rest, ...inst.details } // the file overrides the feed
       const vec = details.beta
         ? deriveRiskVector(inst.region ?? 'global', inst.assetClass, { beta: details.beta })
         : null
       out[i] = {
         ...inst,
-        name: inst.details.name || name || inst.name,
+        name: inst.details.name || fields.name || inst.name,
         kind: inst.kind || details.kind,
         ...(vec ?? {}),
         details,
       }
-      done++
-      onProgress(done, items.length)
+      onFetched()
     }
   }
   await Promise.all([worker(), worker(), worker()])

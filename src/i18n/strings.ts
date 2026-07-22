@@ -244,10 +244,12 @@ const en = {
       'Pick a market + category, download the template (columns also accept Bloomberg field names), fill it, and upload the CSV. Blank σ/α/λ are auto-derived.',
     importHintAuto:
       'The template is just Ticker + Descripción — a ticker is all we need. Name, price, P/E, beta, market cap, sector, price target and analyst recommendations are fetched on import, and the potential return is recomputed against the live price. Anything you put in the file overrides what we fetch.',
+    importHintEquities:
+      'Set Type (Acción / ETF) — or leave it blank and Yahoo decides. Give the Ticker + Descripción; name, price, P/E, sector, market cap, price target and analyst recommendations are fetched, and potential return is recomputed live. Anything you type overrides what we fetch.',
     importHintLocal:
       'Upload the Cadiem boletín PDF and its bond, CDA, fund and equity tables are parsed straight in. Or fill the column template for one category by hand. σ/α/λ are auto-derived either way.',
     importHintFixedIncome:
-      'Two kinds in one template: for a bond ETF just give the Ticker (price, yield, AUM and the rest are fetched); for an individual bond leave Ticker blank and fill the mirror fields (ISIN, issuer, coupon, maturity, YTM, rating…). Descripción is your rationale. Anything you type overrides what we fetch.',
+      'Set Type per row: "ETF" → give a Ticker and price, yield, AUM and the rest are fetched; "Bono" → fill the mirror fields (ISIN, issuer, coupon, maturity, YTM, rating…). Only ETF rows are fetched — bonds are never touched. Descripción is your rationale, and anything you type overrides what we fetch.',
     importFetching: (done: number, total: number) => `Fetching market data ${done}/${total}…`,
     importDownload: 'Download template',
     importUpload: 'Upload CSV',
@@ -647,10 +649,12 @@ const es: UIStrings = {
       'Elige mercado + categoría, descarga la plantilla (las columnas también aceptan nombres de campo de Bloomberg), complétala y sube el CSV. σ/α/λ en blanco se derivan automáticamente.',
     importHintAuto:
       'La plantilla es solo Ticker + Descripción — con el ticker alcanza. Nombre, precio, P/E, beta, capitalización, sector, precio objetivo y recomendaciones se buscan al importar, y el retorno potencial se recalcula contra el precio en vivo. Lo que pongas en el archivo pisa lo que buscamos.',
+    importHintEquities:
+      'Indicá Type (Acción / ETF) — o dejalo vacío y Yahoo decide. Poné el Ticker + Descripción; nombre, precio, P/E, sector, capitalización, precio objetivo y recomendaciones se buscan, y el retorno potencial se recalcula en vivo. Lo que escribas pisa lo que buscamos.',
     importHintLocal:
       'Subí el PDF del boletín de Cadiem y sus tablas de bonos, CDA, fondos y renta variable se parsean directo. O completá a mano la plantilla de una categoría. σ/α/λ se derivan solos igual.',
     importHintFixedIncome:
-      'Dos tipos en una plantilla: para un ETF de bonos basta el Ticker (precio, rendimiento, AUM y lo demás se buscan); para un bono individual dejá el Ticker vacío y completá los campos del espejo (ISIN, emisor, cupón, vencimiento, YTM, calificación…). Descripción es tu racional. Lo que escribas pisa lo que buscamos.',
+      'Indicá Type por fila: "ETF" → poné un Ticker y precio, rendimiento, AUM y lo demás se buscan; "Bono" → completá los campos del espejo (ISIN, emisor, cupón, vencimiento, YTM, calificación…). Solo las filas ETF se buscan — los bonos nunca se tocan. Descripción es tu racional, y lo que escribas pisa lo que buscamos.',
     importFetching: (done: number, total: number) => `Buscando datos de mercado ${done}/${total}…`,
     importDownload: 'Descargar plantilla',
     importUpload: 'Subir CSV',

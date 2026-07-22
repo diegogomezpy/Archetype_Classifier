@@ -126,8 +126,26 @@ const AUTOFILL_COLUMNS: ImportColumn[] = [
   },
 ]
 
+// Normalize a free-typed Type tag to the canonical kind so "etf", "stock",
+// "acción", "bono" etc. all land on the taxonomy value the app expects.
+export function normKind(k?: string): string | undefined {
+  const s = (k ?? '').trim()
+  if (!s) return undefined
+  if (/etf/i.test(s)) return 'ETF'
+  if (/bono|bond/i.test(s)) return 'Bono'
+  if (/cripto|crypto/i.test(s)) return 'Crypto'
+  if (/preferid/i.test(s)) return 'Acción Preferida'
+  if (/acci|stock|com[uú]n|ordinaria|single/i.test(s)) return 'Acción Ordinaria'
+  return s
+}
+
 /** All import columns for a class: core identity/risk + that class's details. */
 export function importColumnsFor(region: Region, category: Category): ImportColumn[] {
+  // Global equities: like the ticker-only template, plus an explicit Type tag
+  // (stock / ETF) the firm can set — otherwise Yahoo's quoteType decides.
+  if (region === 'global' && category === 'Equities') {
+    return [{ key: 'kind', label: 'Type (Acción / ETF)', aliases: ALIASES.kind }, ...AUTOFILL_COLUMNS]
+  }
   // Global fixed income (hybrid): the firm fills Ticker for a bond ETF (Yahoo
   // does the rest) OR ISIN + the mirror fields for an individual bond. So the
   // template carries ticker + isin + rationale + the manual bond fields, but
@@ -137,8 +155,11 @@ export function importColumnsFor(region: Region, category: Category): ImportColu
       .filter((fs) => !FI_FETCHED_KEYS.has(fs.key))
       .map<ImportColumn>((fs) => ({ key: fs.key, label: fs.en, aliases: [fs.key, ...(ALIASES[fs.key] ?? [])] }))
     return [
-      { key: 'ticker', label: 'Ticker', aliases: ALIASES.ticker },
-      { key: 'isin', label: 'ISIN', aliases: ALIASES.isin },
+      // Type is the tag that decides autofill: "ETF" → fetch from the ticker;
+      // "Bono" (or blank) → don't fetch, the firm fills the mirror fields.
+      { key: 'kind', label: 'Type (ETF / Bono)', aliases: ALIASES.kind },
+      { key: 'ticker', label: 'Ticker (ETFs)', aliases: ALIASES.ticker },
+      { key: 'isin', label: 'ISIN (bonds)', aliases: ALIASES.isin },
       AUTOFILL_COLUMNS[1], // "Descripción" → rationale
       ...bond,
     ]
@@ -263,7 +284,7 @@ export function parseInstruments(region: Region, category: Category, rows: strin
       name,
       ticker: (v.ticker ?? '').trim(),
       isin: v.isin?.trim() || undefined,
-      kind: v.kind?.trim() || undefined,
+      kind: normKind(v.kind),
       region,
       assetClass: category,
       sigmaLoad: sigma ?? derived.sigmaLoad,
