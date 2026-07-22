@@ -180,12 +180,24 @@ export function importColumnsFor(region: Region, category: Category): ImportColu
  */
 export function matchHeaders(headers: string[], columns: ImportColumn[]): Map<number, string> {
   const lookup = new Map<string, string>()
+  // A looser index keyed on the label with its parenthetical dropped, so
+  // "Type (Bond ETF / Corporate / …)" still resolves to `kind` when the list of
+  // subclasses in the label changes. Without this, revising a template label
+  // silently unmaps the column and every row imports with no type.
+  const loose = new Map<string, string>()
+  const bare = (s: string) => s.replace(/\(.*?\)/g, ' ')
   for (const c of columns) {
     for (const name of [c.label, c.key, ...c.aliases]) lookup.set(norm(name), c.key)
+    const b = norm(bare(c.label))
+    if (b && !loose.has(b)) loose.set(b, c.key)
   }
   const out = new Map<number, string>()
   headers.forEach((h, i) => {
-    const key = lookup.get(norm(h))
+    const key =
+      lookup.get(norm(h)) ??
+      lookup.get(norm(bare(h))) ??
+      loose.get(norm(h)) ??
+      loose.get(norm(bare(h)))
     if (key) out.set(i, key)
   })
   return out

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   categoriesForRegion,
   colorForCategory,
@@ -13,6 +13,7 @@ import {
   kindLabel,
   localQuickFacts,
   subclassesFor,
+  subclassFor,
   supportsFetch,
   useCatalog,
   type FieldSpec,
@@ -501,23 +502,52 @@ export default function AdminPage() {
   const { instruments, upsert, remove, removeMany } = useCatalog()
   const [regionFilter, setRegionFilter] = useState<Region | 'all'>('all')
   const [filter, setFilter] = useState<Category | 'all'>('all')
+  const [kindFilter, setKindFilter] = useState<string | 'all'>('all')
   const [visFilter, setVisFilter] = useState<'all' | 'visible' | 'hidden'>('all')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
   const [bulkOpen, setBulkOpen] = useState(false)
   const [confirmText, setConfirmText] = useState('')
 
+  // The subclasses on offer for the current market + class selection. With no
+  // class picked this is the union across the visible taxonomies, so the Type
+  // row is still useful before narrowing. Keyed by the ENGLISH label rather than
+  // the id: global 'Corporate bond' and local 'Bono corporativo' are separate
+  // ids that read identically, and two chips reading "Corporate bond" is just
+  // confusing — one chip selects both.
+  const filterKinds = useMemo<{ en: string; es: string }[]>(() => {
+    const regions: Region[] = regionFilter === 'all' ? ['global', 'local'] : [regionFilter]
+    const out = new Map<string, { en: string; es: string }>()
+    for (const r of regions) {
+      const cats = filter === 'all' ? categoriesForRegion(r) : [filter]
+      for (const c of cats) {
+        if (!(categoriesForRegion(r) as string[]).includes(c as string)) continue
+        for (const s of subclassesFor(r, c as Category)) if (!out.has(s.en)) out.set(s.en, { en: s.en, es: s.es })
+      }
+    }
+    return [...out.values()]
+  }, [regionFilter, filter])
+
+  // Drop a Type filter that no longer belongs to the chosen market/class.
+  useEffect(() => {
+    if (kindFilter !== 'all' && !filterKinds.some((s) => s.en === kindFilter)) setKindFilter('all')
+  }, [filterKinds, kindFilter])
+
   const shown = useMemo(
     () =>
       instruments.filter((i) => {
         const region = i.region ?? 'global'
+        // Resolve through the registry so a legacy free-typed kind still matches
+        // the subclass it aliases to.
+        const kindEn = subclassFor(region, i.assetClass, i.kind)?.en ?? i.kind
         return (
           (regionFilter === 'all' || region === regionFilter) &&
           (filter === 'all' || i.assetClass === filter) &&
+          (kindFilter === 'all' || kindEn === kindFilter) &&
           (visFilter === 'all' || (visFilter === 'visible' ? i.visible : !i.visible))
         )
       }),
-    [instruments, regionFilter, filter, visFilter],
+    [instruments, regionFilter, filter, kindFilter, visFilter],
   )
 
   // Category chips reflect the selected market; 'all' shows the union (local-only
@@ -668,6 +698,26 @@ export default function AdminPage() {
             )
           })}
         </div>
+
+        {/* Subclass chips — narrow a class down to one instrument type. */}
+        {filterKinds.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
+            <span className={`${filterGroupLabel} mr-1`}>{t.admin.kind}</span>
+            <button type="button" onClick={() => setKindFilter('all')} className={chipCls(kindFilter === 'all')}>
+              {t.admin.filterAll}
+            </button>
+            {filterKinds.map((s) => (
+              <button
+                key={s.en}
+                type="button"
+                onClick={() => setKindFilter(s.en)}
+                className={chipCls(kindFilter === s.en)}
+              >
+                {pick(lang, s.en, s.es)}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Bulk-delete confirmation — must type the word to arm the button */}
