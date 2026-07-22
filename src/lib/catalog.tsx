@@ -281,7 +281,12 @@ const BASE_KEYS = ['rationale', 'description', 'kind', 'asOf']
 // Reusable key groups the subclasses compose from.
 const EQ_MARKET = ['sectorIndex', 'exchange', 'lastPrice', 'change1Y', 'range52w', 'avgVolume', 'marketCapAum', 'dividendYield']
 const EQ_ANALYST = ['priceTarget', 'potentialReturn', 'recBuyPct', 'recHoldPct', 'recSellPct', 'analystCount']
-const BOND_MIRROR = ['issuer', 'sector', 'country', 'bid', 'ask', 'ytmBid', 'ytmAsk', 'couponRate', 'duration', 'maturity', 'creditRating', 'ytc', 'nextCall']
+// Gletir's "Listado de Bonos" prints the same core columns for every bond, then
+// adds section-specific ones: rating + call schedule for corporates/sovereigns,
+// breakeven for TIPS, spread for floaters, and nothing extra for US government
+// paper (T-Bills, Strips and Treasuries carry no RTG/YTC/CALL at all).
+const BOND_CORE = ['issuer', 'sector', 'country', 'bid', 'ask', 'ytmBid', 'ytmAsk', 'couponRate', 'duration', 'maturity']
+const BOND_CALLABLE = [...BOND_CORE, 'creditRating', 'ytc', 'nextCall']
 const BOND_ETF_KEYS = ['sectorIndex', 'exchange', 'lastPrice', 'change1Y', 'range52w', 'dividendYield', 'expenseRatio', 'avgVolume', 'marketCapAum']
 
 // What autofill can fill per equity/bond subclass (⊆ FETCHABLE_FIELDS below).
@@ -296,11 +301,20 @@ const GLOBAL_SUBCLASSES: Partial<Record<AssetClass, Subclass[]>> = {
     { id: 'Acción Preferida', en: 'Preferred stock', es: 'Acción Preferida', keys: [...EQ_MARKET, 'beta'], fetch: PREF_FETCH, aliases: ['preferred', 'preferida', 'preferente', 'preferid'] },
     { id: 'ETF', en: 'Equity ETF', es: 'ETF de acciones', keys: [...EQ_MARKET, 'expenseRatio', 'beta'], fetch: ETF_FETCH, aliases: ['etf', 'fund', 'index'] },
   ],
+  // Mirrors Gletir's own sections. Credit quality (IG/HY) and market
+  // (Developed/Emerging) are NOT subclasses — they're attributes that stay in the
+  // rating, country and rationale, and Gletir prints identical columns for all
+  // four corporate sections.
   'Fixed income': [
     { id: 'Bond ETF', en: 'Bond ETF', es: 'ETF de bonos', keys: BOND_ETF_KEYS, fetch: ETF_FETCH, aliases: ['bond etf', 'etf', 'fund'] },
-    { id: 'Fixed-rate bond', en: 'Fixed-rate bond', es: 'Bono tasa fija', keys: BOND_MIRROR, fallback: true, aliases: ['bono', 'bond', 'fixed', 'fija', 'corporate', 'corporativo', 'sovereign', 'soberano', 'treasury', 'bill'] },
-    { id: 'TIPS', en: 'Inflation-linked (TIPS)', es: 'Indexado a inflación (TIPS)', keys: ['issuer', 'sector', 'country', 'bid', 'ask', 'ytmBid', 'ytmAsk', 'couponRate', 'duration', 'maturity', 'creditRating', 'impliedInflation'], aliases: ['tips', 'inflation', 'inflacion', 'inflación', 'linker', 'indexado'] },
-    { id: 'Floating-rate', en: 'Floating-rate note', es: 'Bono tasa variable', keys: ['issuer', 'sector', 'country', 'bid', 'ask', 'ytmBid', 'ytmAsk', 'referenceRate', 'spread', 'duration', 'maturity', 'creditRating'], aliases: ['float', 'floating', 'variable', 'flotante', 'frn'] },
+    { id: 'Corporate bond', en: 'Corporate bond', es: 'Bono corporativo', keys: BOND_CALLABLE, fallback: true, aliases: ['corporate', 'corporativo', 'corp', 'fixed-rate bond', 'fixed', 'fija', 'bono', 'bond'] },
+    { id: 'Sovereign bond', en: 'Sovereign bond', es: 'Bono soberano', keys: BOND_CALLABLE, aliases: ['sovereign', 'soberano'] },
+    { id: 'Treasury', en: 'Treasury', es: 'Tesoro (Treasury)', keys: BOND_CORE, aliases: ['treasury', 'tesoro'] },
+    // "treasury bill" must outrank Treasury's own "treasury" alias.
+    { id: 'T-Bill', en: 'T-Bill', es: 'Letra del Tesoro (T-Bill)', keys: BOND_CORE, aliases: ['treasury bill', 't-bill', 'tbill', 'bill', 'letra'] },
+    { id: 'Strip', en: 'Strip (zero-coupon)', es: 'Strip (cupón cero)', keys: BOND_CORE, aliases: ['strip', 'cupon cero', 'zero coupon', 'zero'] },
+    { id: 'TIPS', en: 'Inflation-linked (TIPS)', es: 'Indexado a inflación (TIPS)', keys: [...BOND_CORE, 'impliedInflation'], aliases: ['tips', 'inflation', 'inflacion', 'linker', 'indexado'] },
+    { id: 'Floating-rate', en: 'Floating-rate note', es: 'Bono tasa variable', keys: [...BOND_CORE, 'referenceRate', 'spread'], aliases: ['float', 'floating', 'variable', 'flotante', 'frn'] },
   ],
   Crypto: [
     { id: 'Crypto', en: 'Coin / token', es: 'Moneda / token', keys: ['lastPrice', 'change1Y', 'marketCap', 'avgVolume', 'custodyForm', 'impliedVol3m', 'volatilityNote'], fetch: COIN_FETCH, aliases: ['coin', 'token', 'spot', 'cripto', 'crypto'] },

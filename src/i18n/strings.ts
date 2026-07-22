@@ -249,7 +249,7 @@ const en = {
     importHintLocal:
       'Upload the Cadiem boletín PDF and its bond, CDA, fund and equity tables are parsed straight in. Or fill the column template for one category by hand. σ/α/λ are auto-derived either way.',
     importHintFixedIncome:
-      'Set Type per row: "Bond ETF" → give a Ticker and price, yield, AUM and the rest are fetched; an individual bond (Fixed-rate / TIPS / Floating-rate) → fill the mirror fields (ISIN, issuer, coupon, maturity, YTM, rating…). TIPS add breakeven inflation; Floating-rate add the reference rate + spread. Only Bond ETF rows are fetched — individual bonds are never touched. Descripción is your rationale, and anything you type overrides what we fetch.',
+      'Set Type per row: "Bond ETF" → give a Ticker and price, yield, AUM and the rest are fetched; an individual bond → fill the mirror fields (ISIN, issuer, coupon, maturity, YTM…). The bond types mirror the listing\'s own sections — Corporate and Sovereign carry a rating and call schedule; Treasury, T-Bill and Strip carry neither; TIPS adds breakeven inflation; Floating-rate adds the reference rate + spread. Only Bond ETF rows are fetched — individual bonds are never touched. Descripción is your rationale, and anything you type overrides what we fetch.',
     importFetching: (done: number, total: number) => `Fetching market data ${done}/${total}…`,
     importDownload: 'Download template',
     importUpload: 'Upload CSV',
@@ -654,7 +654,7 @@ const es: UIStrings = {
     importHintLocal:
       'Subí el PDF del boletín de Cadiem y sus tablas de bonos, CDA, fondos y renta variable se parsean directo. O completá a mano la plantilla de una categoría. σ/α/λ se derivan solos igual.',
     importHintFixedIncome:
-      'Indicá Type por fila: "Bond ETF" → poné un Ticker y precio, rendimiento, AUM y lo demás se buscan; un bono individual (Fixed-rate / TIPS / Floating-rate) → completá los campos del espejo (ISIN, emisor, cupón, vencimiento, YTM, calificación…). TIPS suma la inflación implícita; Floating-rate suma la tasa de referencia + spread. Solo las filas Bond ETF se buscan — los bonos individuales nunca se tocan. Descripción es tu racional, y lo que escribas pisa lo que buscamos.',
+      'Indicá Type por fila: "Bond ETF" → poné un Ticker y precio, rendimiento, AUM y lo demás se buscan; un bono individual → completá los campos del espejo (ISIN, emisor, cupón, vencimiento, YTM…). Los tipos de bono reflejan las secciones del propio listado — Corporate y Sovereign llevan calificación y call; Treasury, T-Bill y Strip no llevan ninguna; TIPS suma la inflación implícita; Floating-rate suma la tasa de referencia + spread. Solo las filas Bond ETF se buscan — los bonos individuales nunca se tocan. Descripción es tu racional, y lo que escribas pisa lo que buscamos.',
     importFetching: (done: number, total: number) => `Buscando datos de mercado ${done}/${total}…`,
     importDownload: 'Descargar plantilla',
     importUpload: 'Subir CSV',

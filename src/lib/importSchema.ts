@@ -146,7 +146,11 @@ export function importColumnsFor(region: Region, category: Category): ImportColu
       // Type is the tag that decides both the subclass and autofill: "Bond ETF"
       // → fetch from the ticker; the individual-bond types (Fixed-rate / TIPS /
       // Floating-rate) → don't fetch, the firm fills the mirror fields.
-      { key: 'kind', label: 'Type (Bond ETF / Fixed-rate / TIPS / Floating-rate)', aliases: ALIASES.kind },
+      {
+        key: 'kind',
+        label: 'Type (Bond ETF / Corporate / Sovereign / Treasury / T-Bill / Strip / TIPS / Floating-rate)',
+        aliases: ALIASES.kind,
+      },
       { key: 'ticker', label: 'Ticker (ETFs)', aliases: ALIASES.ticker },
       { key: 'isin', label: 'ISIN (bonds)', aliases: ALIASES.isin },
       AUTOFILL_COLUMNS[1], // "Descripción" → rationale
