@@ -10,9 +10,9 @@ import {
 import {
   fetchableFields,
   fieldSpecsFor,
-  INSTRUMENT_KINDS,
   kindLabel,
   localQuickFacts,
+  subclassesFor,
   supportsFetch,
   useCatalog,
   type FieldSpec,
@@ -98,7 +98,8 @@ const DETAIL_GROUPS: { en: string; es: string; keys: string[] }[] = [
     es: 'Condiciones',
     keys: [
       'couponRate', 'couponFrequency', 'couponYield', 'maturity', 'maturityMonths', 'duration',
-      'ytm', 'creditRating', 'issuerRating', 'minInvestment', 'nextCall', 'barrier', 'autocallLevel',
+      'ytm', 'creditRating', 'issuerRating', 'minInvestment', 'nextCall', 'referenceRate', 'spread',
+      'impliedInflation', 'barrier', 'autocallLevel',
       'observationFrequency', 'capitalProtection', 'participationRate', 'cap', 'protectionLevel',
       'expenseRatio', 'distributionYield', 'worstCase',
     ],
@@ -161,7 +162,7 @@ function InstrumentForm({
   // Switching region moves the instrument into the other taxonomy — reset the
   // category to that region's first one so it's always valid.
   const setRegion = (r: Region) =>
-    setDraft((d) => ({ ...d, region: r, assetClass: categoriesForRegion(r)[0] }))
+    setDraft((d) => ({ ...d, region: r, assetClass: categoriesForRegion(r)[0], kind: undefined }))
 
   // Autofill the detail sheet from live market data (ticker/ISIN). The backend
   // fetches from Yahoo Finance (equities) or CoinGecko + Deribit (crypto).
@@ -176,14 +177,21 @@ function InstrumentForm({
     })
     setFetching(false)
     if (res.ok) {
-      const n = Object.keys(res.fields).length
       // name + kind belong on the instrument, not in the detail sheet.
       const { name: fName, kind: fKind, ...detailFields } = res.fields
+      // Keep only the fields this subclass actually surfaces (server returns the
+      // whole class set) — else a fetched Preferred / ETF / Crypto-ETP would
+      // stash hidden fields that leak into the report.
+      const resolvedKind = draft.kind?.trim() || fKind
+      const allowed = fetchableFields(draft.assetClass, region, resolvedKind)
+      const rest: Record<string, string> = {}
+      for (const [k, v] of Object.entries(detailFields)) if (allowed.has(k)) rest[k] = v
+      const n = Object.keys(rest).length
       setDraft((d) => ({
         ...d,
         name: d.name.trim() || fName || d.name,
         kind: d.kind?.trim() || fKind || d.kind,
-        details: { ...d.details, ...detailFields },
+        details: { ...d.details, ...rest },
       }))
       setFetchMsg(n > 0 ? t.admin.autofillFilled(n) : t.admin.autofillNotFound(sym))
     } else {
@@ -203,8 +211,12 @@ function InstrumentForm({
     return Number.isFinite(n) ? n : fallback
   }
 
-  const specs = fieldSpecsFor(region, draft.assetClass)
-  const fetchSet = fetchableFields(draft.assetClass, region)
+  // Fields, fetchability, and the Type dropdown are all narrowed to the chosen
+  // subclass — pick "Floating-rate note" and the reference-rate/spread fields
+  // appear; pick "Fixed-rate bond" and they don't.
+  const specs = fieldSpecsFor(region, draft.assetClass, draft.kind)
+  const fetchSet = fetchableFields(draft.assetClass, region, draft.kind)
+  const subclasses = subclassesFor(region, draft.assetClass)
 
   const save = () => {
     if (!draft.name.trim()) return
@@ -241,12 +253,12 @@ function InstrumentForm({
           <select className={inputCls} value={draft.kind ?? ''} onChange={(e) => set('kind', e.target.value)}>
             <option value="">—</option>
             {/* Preserve a legacy/off-list value so editing never silently drops it. */}
-            {draft.kind && !(INSTRUMENT_KINDS as readonly string[]).includes(draft.kind) && (
-              <option value={draft.kind}>{draft.kind}</option>
+            {draft.kind && !subclasses.some((s) => s.id === draft.kind) && (
+              <option value={draft.kind}>{kindLabel(draft.kind, lang, region, draft.assetClass)}</option>
             )}
-            {INSTRUMENT_KINDS.map((k) => (
-              <option key={k} value={k}>
-                {kindLabel(k, lang)}
+            {subclasses.map((s) => (
+              <option key={s.id} value={s.id}>
+                {pick(lang, s.en, s.es)}
               </option>
             ))}
           </select>
@@ -287,7 +299,7 @@ function InstrumentForm({
           <select
             className={inputCls}
             value={draft.assetClass}
-            onChange={(e) => set('assetClass', e.target.value as Category)}
+            onChange={(e) => setDraft((d) => ({ ...d, assetClass: e.target.value as Category, kind: undefined }))}
           >
             {categoriesForRegion(region).map((c) => (
               <option key={c} value={c}>
@@ -296,8 +308,8 @@ function InstrumentForm({
             ))}
           </select>
         </div>
-        {/* Autofill from a market-data source — only for classes that have one. */}
-        {supportsFetch(draft.assetClass, region) && (
+        {/* Autofill from a market-data source — only for fetchable subclasses. */}
+        {supportsFetch(draft.assetClass, region, draft.kind) && (
           <div className="flex items-center gap-3 sm:col-span-2">
             <button
               type="button"
@@ -759,7 +771,7 @@ export default function AdminPage() {
                   )}
                   {inst.kind && (
                     <span className="shrink-0 rounded-md bg-surface2 px-1.5 py-0.5 text-[10px] font-medium text-muted">
-                      {kindLabel(inst.kind, lang)}
+                      {kindLabel(inst.kind, lang, inst.region ?? 'global', inst.assetClass)}
                     </span>
                   )}
                   {(inst.region ?? 'global') === 'local' && (

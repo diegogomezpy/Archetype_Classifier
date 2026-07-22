@@ -53,7 +53,7 @@ export default function InstrumentList({ instruments }: Props) {
                   <span className="truncate text-sm font-medium text-text">{inst.name}</span>
                   {inst.kind && (
                     <span className="shrink-0 rounded-md bg-surface2 px-1.5 py-0.5 text-[10px] font-medium text-muted">
-                      {kindLabel(inst.kind, lang)}
+                      {kindLabel(inst.kind, lang, inst.region ?? 'global', inst.assetClass)}
                     </span>
                   )}
                   {inst.emphasized && (

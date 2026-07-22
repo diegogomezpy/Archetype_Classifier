@@ -368,17 +368,21 @@ app.post('/api/market-data/refresh', async (c) => {
     return c.json({ ok: false, error: 'unauthorized' }, 401)
   }
   const snap = await catalogCol.get()
-  // Only the classes with a live market-data feed. A manually-filled bond or
-  // structure might carry a ticker too, and we must never touch its details.
-  const FETCHABLE = new Set(['Equities', 'Crypto'])
+  // Only rows with a live market-data feed. Equities and Crypto always fetch;
+  // global Fixed income fetches ONLY for Bond ETFs — an individual bond (fixed-
+  // rate / TIPS / floating) is manually filled and its mirror must never be
+  // touched, so we gate on its subclass kind, not just the ticker (mirrors the
+  // client's per-subclass fetch gate in src/lib/catalog.tsx).
+  const FI_ETF_KINDS = new Set(['Bond ETF', 'ETF'])
+  const isFetchable = (i: Record<string, unknown>): boolean => {
+    if (i.region !== 'global' || !String(i.ticker ?? '').trim()) return false
+    const cls = String(i.assetClass ?? '')
+    if (cls === 'Fixed income') return FI_ETF_KINDS.has(String(i.kind ?? ''))
+    return cls === 'Equities' || cls === 'Crypto'
+  }
   const rows = snap.docs
     .map((d) => docData(d) as Record<string, unknown>)
-    .filter(
-      (i) =>
-        i.region === 'global' &&
-        FETCHABLE.has(String(i.assetClass ?? '')) &&
-        String(i.ticker ?? '').trim(),
-    )
+    .filter(isFetchable)
 
   let updated = 0
   let failed = 0

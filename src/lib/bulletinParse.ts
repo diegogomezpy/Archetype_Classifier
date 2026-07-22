@@ -24,7 +24,9 @@ import type { ImportResult } from './importSchema'
 // best-effort by nature, which is why the caller previews before adding.
 
 const KIND: Record<LocalCategory, string> = {
-  'Fixed income': 'Bono',
+  // Local bonds default to the corporate subclass — the common case in the
+  // Cadiem boletín; a rare sovereign is fixed by the admin after preview.
+  'Fixed income': 'Bono corporativo',
   CDs: 'CDA',
   'Mutual funds': 'Fondo mutuo',
   'Investment funds': 'Fondo de inversión',

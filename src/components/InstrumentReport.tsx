@@ -145,8 +145,15 @@ export default function InstrumentReport({ instrument: inst, region, onBack }: P
 
   const rationale = g('rationale')
   const description = localizedDetail(D, 'description', lang)
-  const sector = localizedDetail(D, 'sectorIndex', lang)
-  const specs = fieldSpecsFor(region, inst.assetClass)
+  // ETFs carry the tracked index under sectorIndex; individual bonds carry their
+  // industry under sector — show whichever the instrument has as the chip.
+  const sector = localizedDetail(D, 'sectorIndex', lang) || localizedDetail(D, 'sector', lang)
+  const specs = fieldSpecsFor(region, inst.assetClass, inst.kind)
+  // The keys this subclass actually surfaces. The headline tiles and the
+  // range/consensus graphics read details directly, so gate them by this too —
+  // otherwise a field the subclass hides (e.g. a floating-rate note's coupon,
+  // or a preferred share's analyst targets) would still leak into the report.
+  const shownKeys = new Set(specs.map((s) => s.key))
   // Local companies aren't on Parqet — resolve their bundled logo by issuer.
   const logoSrc =
     region === 'local' ? localLogoUrl(g('issuer') || g('fundManager') || inst.name) : undefined
@@ -168,6 +175,7 @@ export default function InstrumentReport({ instrument: inst, region, onBack }: P
     'description',
     'kind',
     'sectorIndex',
+    'sector',
     'exchange',
     'asOf',
     'name',
@@ -209,21 +217,23 @@ export default function InstrumentReport({ instrument: inst, region, onBack }: P
     const s = specs.find((x) => x.key === key)
     return s ? (lang === 'es' ? s.es : s.en) : key
   }
-  const tiles = cand.filter(Boolean).slice(0, 4) as Tile[]
+  const tiles = (cand.filter(Boolean) as Tile[])
+    .filter((tl) => tl.consumes.some((k) => shownKeys.has(k)))
+    .slice(0, 4)
   tiles.forEach((tl) => tl.consumes.forEach((k) => consumed.add(k)))
 
   // ── 52-week range graphic ────────────────────────────────────────────────
   const range = parseRange(g('range52w'))
   const nowPx = toNum(g('lastPrice'))
   const targetPx = toNum(g('priceTarget'))
-  const showRange = !!range && nowPx != null
+  const showRange = !!range && nowPx != null && shownKeys.has('range52w')
   if (showRange) consumed.add('range52w')
 
   // ── analyst consensus graphic ────────────────────────────────────────────
   const buy = toNum(g('recBuyPct'))
   const hold = toNum(g('recHoldPct'))
   const sell = toNum(g('recSellPct'))
-  const showConsensus = buy != null
+  const showConsensus = buy != null && shownKeys.has('recBuyPct')
   if (showConsensus) ['recBuyPct', 'recHoldPct', 'recSellPct', 'analystCount'].forEach((k) => consumed.add(k))
 
   // ── remaining fundamentals ────────────────────────────────────────────────
@@ -272,7 +282,11 @@ export default function InstrumentReport({ instrument: inst, region, onBack }: P
           <div className="min-w-0">
             <h3 className="font-serif text-2xl font-semibold leading-tight text-text">{inst.name}</h3>
             <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-xs text-muted">
-              {inst.ticker && <span className="text-text">{inst.ticker}</span>}
+              {inst.ticker ? (
+                <span className="text-text">{inst.ticker}</span>
+              ) : (
+                inst.isin && <span className="text-text">{inst.isin}</span>
+              )}
               {g('exchange') && (
                 <>
                   <span aria-hidden>·</span>
@@ -283,7 +297,7 @@ export default function InstrumentReport({ instrument: inst, region, onBack }: P
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
               {inst.kind && (
                 <span className="rounded-md bg-surface2 px-2 py-0.5 text-[11px] font-medium text-muted">
-                  {kindLabel(inst.kind, lang)}
+                  {kindLabel(inst.kind, lang, region, inst.assetClass)}
                 </span>
               )}
               {sector && (

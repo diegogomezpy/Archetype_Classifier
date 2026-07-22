@@ -112,6 +112,10 @@ export const ASSET_FIELD_SPECS: Record<AssetClass, FieldSpec[]> = {
     { key: 'creditRating', en: 'Credit rating', es: 'Calificación' },
     { key: 'ytc', en: 'Yield to call (%)', es: 'Rendimiento al call (%)' },
     { key: 'nextCall', en: 'Next call date', es: 'Próx. call' },
+    // Floating-rate notes only: the reference index the coupon floats over, and
+    // the spread added to it. TIPS only: the breakeven inflation. Gated by the
+    // subclass so they never show on a plain fixed-rate bond.
+    { key: 'referenceRate', en: 'Reference rate', es: 'Tasa de referencia' },
     { key: 'spread', en: 'Floating spread (%)', es: 'Spread flotante (%)' },
     { key: 'impliedInflation', en: 'Breakeven inflation (%)', es: 'Inflación implícita (%)' },
     AS_OF,
@@ -154,9 +158,13 @@ export const ASSET_FIELD_SPECS: Record<AssetClass, FieldSpec[]> = {
   Crypto: [
     RATIONALE,
     DESCRIPTION,
+    { key: 'kind', en: 'Type (coin / ETP)', es: 'Tipo (moneda / ETP)' },
     { key: 'lastPrice', en: 'Last price (USD)', es: 'Último precio (USD)' },
     { key: 'change1Y', en: '1-year change (%)', es: 'Variación 1 año (%)' },
+    { key: 'range52w', en: '52-week range (USD)', es: 'Rango 52 semanas (USD)' },
     { key: 'marketCap', en: 'Market cap', es: 'Capitalización de mercado' },
+    { key: 'marketCapAum', en: 'AUM (ETP)', es: 'Patrimonio (ETP)' },
+    { key: 'expenseRatio', en: 'Expense ratio (%, ETP)', es: 'Comisión de gestión (%, ETP)' },
     { key: 'avgVolume', en: 'Avg. daily volume', es: 'Volumen diario promedio' },
     { key: 'custodyForm', en: 'Custody / wrapper', es: 'Custodia / vehículo' },
     { key: 'impliedVol3m', en: 'ATM 3M implied vol (%)', es: 'Vol. implícita ATM 3M (%)' },
@@ -243,11 +251,148 @@ export const LOCAL_FIELD_SPECS: Record<LocalCategory, FieldSpec[]> = {
   ],
 }
 
-/** The detail-field schema for an instrument, by region + category. */
-export function fieldSpecsFor(region: Region, category: Category): FieldSpec[] {
+// ── Subclasses (class → subclass taxonomy) ──────────────────────────────────
+// Every class splits into subclasses — the instrument's `kind`. The subclass
+// decides which of the class's fields (the union above) are shown/imported and
+// whether market data can autofill it: a floating-rate note shows its reference
+// rate and spread, a TIPS shows breakeven inflation, and a plain fixed-rate
+// bond shows neither. `keys` are the detail keys the subclass surfaces (on top
+// of the always-on base); `all` means the whole class union (a not-yet-split
+// class). `fetch` lists the keys autofill can fill — absent ⇒ manual only.
+// `aliases` are keywords an imported free-typed Type tag is matched against.
+export type Subclass = {
+  id: string // canonical value stored on ManagedInstrument.kind
+  en: string
+  es: string
+  keys?: string[]
+  all?: boolean
+  fetch?: string[]
+  aliases?: string[]
+  // A generic catch-all subclass (e.g. plain fixed-rate bond) that should only
+  // win an import Type match when no more-specific subclass matched — so
+  // "Bono flotante" resolves to Floating-rate, not the generic bond.
+  fallback?: boolean
+}
+
+// Always shown, whatever the subclass (rationale/description open, asOf closes;
+// kind is handled specially by the form and import).
+const BASE_KEYS = ['rationale', 'description', 'kind', 'asOf']
+
+// Reusable key groups the subclasses compose from.
+const EQ_MARKET = ['sectorIndex', 'exchange', 'lastPrice', 'change1Y', 'range52w', 'avgVolume', 'marketCapAum', 'dividendYield']
+const EQ_ANALYST = ['priceTarget', 'potentialReturn', 'recBuyPct', 'recHoldPct', 'recSellPct', 'analystCount']
+const BOND_MIRROR = ['issuer', 'sector', 'country', 'bid', 'ask', 'ytmBid', 'ytmAsk', 'couponRate', 'duration', 'maturity', 'creditRating', 'ytc', 'nextCall']
+const BOND_ETF_KEYS = ['sectorIndex', 'exchange', 'lastPrice', 'change1Y', 'range52w', 'dividendYield', 'expenseRatio', 'avgVolume', 'marketCapAum']
+
+// What autofill can fill per equity/bond subclass (⊆ FETCHABLE_FIELDS below).
+const EQ_FETCH = ['description', 'kind', 'sectorIndex', 'exchange', 'lastPrice', 'change1Y', 'range52w', 'avgVolume', 'marketCapAum', 'dividendYield', 'peRatio', 'peForward', 'beta', 'impliedVol3m', 'priceTarget', 'potentialReturn', 'recBuyPct', 'recHoldPct', 'recSellPct', 'analystCount', 'asOf']
+const ETF_FETCH = ['description', 'kind', 'sectorIndex', 'exchange', 'lastPrice', 'change1Y', 'range52w', 'avgVolume', 'marketCapAum', 'dividendYield', 'beta', 'asOf']
+const PREF_FETCH = ['description', 'kind', 'sectorIndex', 'exchange', 'lastPrice', 'change1Y', 'range52w', 'avgVolume', 'marketCapAum', 'dividendYield', 'beta', 'asOf']
+const COIN_FETCH = ['description', 'lastPrice', 'change1Y', 'marketCap', 'avgVolume', 'impliedVol3m', 'asOf']
+
+const GLOBAL_SUBCLASSES: Partial<Record<AssetClass, Subclass[]>> = {
+  Equities: [
+    { id: 'Acción Ordinaria', en: 'Common stock', es: 'Acción Ordinaria', keys: [...EQ_MARKET, 'peRatio', 'peForward', 'beta', 'impliedVol3m', ...EQ_ANALYST], fetch: EQ_FETCH, aliases: ['common', 'ordinaria', 'single stock', 'single', 'stock', 'accion', 'acción'] },
+    { id: 'Acción Preferida', en: 'Preferred stock', es: 'Acción Preferida', keys: [...EQ_MARKET, 'beta'], fetch: PREF_FETCH, aliases: ['preferred', 'preferida', 'preferente', 'preferid'] },
+    { id: 'ETF', en: 'Equity ETF', es: 'ETF de acciones', keys: [...EQ_MARKET, 'expenseRatio', 'beta'], fetch: ETF_FETCH, aliases: ['etf', 'fund', 'index'] },
+  ],
+  'Fixed income': [
+    { id: 'Bond ETF', en: 'Bond ETF', es: 'ETF de bonos', keys: BOND_ETF_KEYS, fetch: ETF_FETCH, aliases: ['bond etf', 'etf', 'fund'] },
+    { id: 'Fixed-rate bond', en: 'Fixed-rate bond', es: 'Bono tasa fija', keys: BOND_MIRROR, fallback: true, aliases: ['bono', 'bond', 'fixed', 'fija', 'corporate', 'corporativo', 'sovereign', 'soberano', 'treasury', 'bill'] },
+    { id: 'TIPS', en: 'Inflation-linked (TIPS)', es: 'Indexado a inflación (TIPS)', keys: ['issuer', 'sector', 'country', 'bid', 'ask', 'ytmBid', 'ytmAsk', 'couponRate', 'duration', 'maturity', 'creditRating', 'impliedInflation'], aliases: ['tips', 'inflation', 'inflacion', 'inflación', 'linker', 'indexado'] },
+    { id: 'Floating-rate', en: 'Floating-rate note', es: 'Bono tasa variable', keys: ['issuer', 'sector', 'country', 'bid', 'ask', 'ytmBid', 'ytmAsk', 'referenceRate', 'spread', 'duration', 'maturity', 'creditRating'], aliases: ['float', 'floating', 'variable', 'flotante', 'frn'] },
+  ],
+  Crypto: [
+    { id: 'Crypto', en: 'Coin / token', es: 'Moneda / token', keys: ['lastPrice', 'change1Y', 'marketCap', 'avgVolume', 'custodyForm', 'impliedVol3m', 'volatilityNote'], fetch: COIN_FETCH, aliases: ['coin', 'token', 'spot', 'cripto', 'crypto'] },
+    { id: 'Crypto ETP', en: 'Crypto ETP / trust', es: 'ETP / fondo cripto', keys: ['lastPrice', 'change1Y', 'range52w', 'marketCapAum', 'expenseRatio', 'avgVolume', 'custodyForm'], fetch: COIN_FETCH, aliases: ['etp', 'etf', 'trust', 'fund'] },
+  ],
+  // Not yet split — one default subclass each, showing the whole class union.
+  'Income structures': [{ id: 'Income structure', en: 'Income structure', es: 'Estructura de renta', all: true }],
+  'Growth structures': [{ id: 'Growth structure', en: 'Growth structure', es: 'Estructura de crecimiento', all: true }],
+  Alternatives: [{ id: 'Alternative', en: 'Alternative', es: 'Alternativo', all: true }],
+  'Cash/MMF': [{ id: 'Cash / MMF', en: 'Cash / MMF', es: 'Efectivo / FMM', all: true }],
+}
+
+const LOCAL_SUBCLASSES: Partial<Record<LocalCategory, Subclass[]>> = {
+  Equities: [
+    { id: 'Acción Ordinaria', en: 'Common stock', es: 'Acción Ordinaria', keys: ['issuer', 'rating', 'shareClass', 'estYield', 'price', 'available', 'currency'], aliases: ['common', 'ordinaria'] },
+    { id: 'Acción Preferida', en: 'Preferred stock', es: 'Acción Preferida', keys: ['issuer', 'rating', 'shareClass', 'estYield', 'price', 'available', 'currency'], aliases: ['preferred', 'preferida', 'preferente', 'prefer'] },
+  ],
+  'Fixed income': [
+    { id: 'Bono corporativo', en: 'Corporate bond', es: 'Bono corporativo', all: true, aliases: ['corporativo', 'corporate', 'corp'] },
+    { id: 'Bono soberano', en: 'Sovereign bond', es: 'Bono soberano', all: true, aliases: ['soberano', 'sovereign'] },
+  ],
+  CDs: [{ id: 'CDA', en: 'Certificate of deposit', es: 'CDA', all: true }],
+  'Mutual funds': [{ id: 'Fondo mutuo', en: 'Mutual fund', es: 'Fondo mutuo', all: true }],
+  'Investment funds': [{ id: 'Fondo de inversión', en: 'Investment fund', es: 'Fondo de inversión', all: true }],
+}
+
+/** The subclasses offered for a region + class (the admin form's Type dropdown). */
+export function subclassesFor(region: Region, category: Category): Subclass[] {
   return region === 'local'
-    ? LOCAL_FIELD_SPECS[category as LocalCategory] ?? []
-    : ASSET_FIELD_SPECS[category as AssetClass] ?? []
+    ? LOCAL_SUBCLASSES[category as LocalCategory] ?? []
+    : GLOBAL_SUBCLASSES[category as AssetClass] ?? []
+}
+
+const normSub = (s: string) =>
+  s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
+
+/** Resolve an instrument's `kind` to its subclass (id, then label, then alias). */
+export function subclassFor(region: Region, category: Category, kind?: string): Subclass | undefined {
+  if (!kind) return undefined
+  const subs = subclassesFor(region, category)
+  const k = normSub(kind)
+  return (
+    subs.find((s) => normSub(s.id) === k) ??
+    subs.find((s) => normSub(s.en) === k || normSub(s.es) === k) ??
+    subs.find((s) => (s.aliases ?? []).some((a) => normSub(a) === k))
+  )
+}
+
+/**
+ * Resolve a free-typed import Type tag to a subclass id. After an exact match,
+ * it picks the MOST-SPECIFIC alias hit — a non-fallback subclass always beats a
+ * `fallback` one, and among the same tier the longest matching alias wins — so
+ * "Bono flotante" → Floating-rate (not the generic Fixed-rate bond) and
+ * "Acción Preferente" → Preferred (not Common). Undefined when nothing matches.
+ */
+export function resolveSubclassId(region: Region, category: Category, raw?: string): string | undefined {
+  const exact = subclassFor(region, category, raw)
+  if (exact) return exact.id
+  if (!raw) return undefined
+  const k = normSub(raw)
+  let best: { id: string; specific: boolean; len: number } | null = null
+  for (const s of subclassesFor(region, category)) {
+    for (const a of s.aliases ?? []) {
+      const na = normSub(a)
+      if (!na || !k.includes(na)) continue
+      const cand = { id: s.id, specific: !s.fallback, len: na.length }
+      if (
+        !best ||
+        (cand.specific && !best.specific) ||
+        (cand.specific === best.specific && cand.len > best.len)
+      )
+        best = cand
+    }
+  }
+  return best?.id
+}
+
+/**
+ * The detail-field schema for an instrument, by region + class, narrowed to the
+ * subclass when `kind` resolves to one. Without a kind (or a not-yet-split
+ * class) it returns the full class union — which is also what an import template
+ * uses, since one file can mix subclasses.
+ */
+export function fieldSpecsFor(region: Region, category: Category, kind?: string): FieldSpec[] {
+  const union =
+    region === 'local'
+      ? LOCAL_FIELD_SPECS[category as LocalCategory] ?? []
+      : ASSET_FIELD_SPECS[category as AssetClass] ?? []
+  const sub = subclassFor(region, category, kind)
+  if (!sub || sub.all) return union
+  const show = new Set([...BASE_KEYS, ...(sub.keys ?? [])])
+  return union.filter((f) => show.has(f.key))
 }
 
 // ── Localized values ─────────────────────────────────────────────────────────
@@ -266,44 +411,41 @@ export const localizedDetail = (
   return es && es.trim() ? es : en
 }
 
-// Display labels (EN + ES) for the canonical instrument `kind` values. Global
-// single stocks and local common shares share ONE canonical kind —
-// 'Acción Ordinaria' — so they merge into a single type. Legacy values
-// ('Single stock', 'Acción') alias to the same labels so pre-migration data
-// still renders correctly; anything unmapped passes through unchanged.
-const KIND_LABELS: Record<string, { en: string; es: string }> = {
-  'Acción Ordinaria': { en: 'Common stock', es: 'Acción Ordinaria' },
-  'Acción Preferida': { en: 'Preferred share', es: 'Acción Preferida' },
-  ETF: { en: 'ETF', es: 'ETF' },
-  Crypto: { en: 'Crypto', es: 'Cripto' },
-  Bono: { en: 'Bond', es: 'Bono' },
-  CDA: { en: 'CD', es: 'CDA' },
-  'Fondo mutuo': { en: 'Mutual fund', es: 'Fondo mutuo' },
-  'Fondo de inversión': { en: 'Investment fund', es: 'Fondo de inversión' },
-  // legacy aliases → merged type
-  'Single stock': { en: 'Common stock', es: 'Acción Ordinaria' },
-  Acción: { en: 'Common stock', es: 'Acción Ordinaria' },
-}
-export const kindLabel = (kind: string | undefined, lang: Lang): string => {
+// Display labels (EN + ES) for the canonical `kind` values, built from the
+// subclass registry so labels never drift from the taxonomy. Legacy free-typed
+// values ('Single stock', 'Acción', 'Bono') alias to the merged type so
+// pre-refactor data still renders; anything unmapped passes through unchanged.
+const KIND_LABELS: Record<string, { en: string; es: string }> = (() => {
+  const m: Record<string, { en: string; es: string }> = {}
+  for (const subs of [...Object.values(GLOBAL_SUBCLASSES), ...Object.values(LOCAL_SUBCLASSES)]) {
+    for (const s of subs ?? []) m[s.id] = { en: s.en, es: s.es }
+  }
+  // legacy → current
+  m['Single stock'] = { en: 'Common stock', es: 'Acción Ordinaria' }
+  m['Acción'] = { en: 'Common stock', es: 'Acción Ordinaria' }
+  m['Bono'] = { en: 'Bond', es: 'Bono' }
+  return m
+})()
+
+/**
+ * A human label for an instrument's `kind`. When region + class are supplied the
+ * subclass registry resolves it precisely (so a fixed-income 'ETF' reads "Bond
+ * ETF", not the equity one); otherwise it falls back to the flat label table.
+ */
+export const kindLabel = (
+  kind: string | undefined,
+  lang: Lang,
+  region?: Region,
+  category?: Category,
+): string => {
   if (!kind) return ''
+  if (region && category) {
+    const sub = subclassFor(region, category, kind)
+    if (sub) return lang === 'es' ? sub.es : sub.en
+  }
   const m = KIND_LABELS[kind]
   return m ? m[lang] : kind
 }
-
-// The canonical set of instrument "types" (kind), offered as a dropdown in the
-// admin form. Some legacy/imported instruments carry a free-typed kind that
-// isn't in here; the form still shows that value so editing never silently
-// changes it, and picking a clean type here fixes it.
-export const INSTRUMENT_KINDS = [
-  'Acción Ordinaria',
-  'Acción Preferida',
-  'ETF',
-  'Crypto',
-  'Bono',
-  'CDA',
-  'Fondo mutuo',
-  'Fondo de inversión',
-] as const
 
 // ── Local-company logos ──────────────────────────────────────────────────────
 // Parqet only covers US tickers, so Paraguayan issuers' logos are UPLOADED by
@@ -350,14 +492,23 @@ export const FETCHABLE_FIELDS: Partial<Record<AssetClass, string[]>> = {
 }
 
 // Autofill is a global-only capability — there's no market-data feed for the
-// local Cadiem instruments, so both helpers take the region and return "none"
-// for local regardless of the category name (local 'Equities' isn't fetchable).
-/** True if this instrument's class has a market-data autofill source. */
-export const supportsFetch = (category: Category, region: Region = 'global'): boolean =>
-  region === 'global' && (FETCHABLE_FIELDS[category as AssetClass]?.length ?? 0) > 0
-/** The set of detail keys Fetch can fill for this class (empty if none). */
-export const fetchableFields = (category: Category, region: Region = 'global'): Set<string> =>
-  new Set(region === 'global' ? FETCHABLE_FIELDS[category as AssetClass] ?? [] : [])
+// local Cadiem instruments, so both helpers return "none" for local. When a
+// subclass is known, fetchability is per-subclass (a Bond ETF fetches, a
+// fixed-rate bond doesn't); without a kind they fall back to the class default.
+/** The set of detail keys Fetch can fill for this instrument (empty if none). */
+export const fetchableFields = (
+  category: Category,
+  region: Region = 'global',
+  kind?: string,
+): Set<string> => {
+  if (region !== 'global') return new Set()
+  const sub = subclassFor('global', category, kind)
+  if (sub) return new Set(sub.fetch ?? [])
+  return new Set(FETCHABLE_FIELDS[category as AssetClass] ?? [])
+}
+/** True if this instrument has a market-data autofill source. */
+export const supportsFetch = (category: Category, region: Region = 'global', kind?: string): boolean =>
+  fetchableFields(category, region, kind).size > 0
 
 // ── Quick facts ──────────────────────────────────────────────────────────────
 // A compact, category-appropriate summary line for a LOCAL instrument, used in

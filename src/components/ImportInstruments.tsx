@@ -18,11 +18,12 @@ const btnCls =
 const labelCls = 'flex flex-col gap-1 text-xs font-medium text-muted'
 const num = (n: number) => (n >= 0 ? '+' : '') + n.toFixed(2)
 
-// A row autofills only if it names a ticker AND isn't tagged as a bond. So an
-// individual-bond listing (no ticker, or Type = Bono) never triggers a fetch —
-// only bond ETFs / equities / crypto do.
+// A row autofills only if it names a ticker AND its subclass has a market-data
+// source. So an individual-bond listing (no ticker, or a Fixed-rate/TIPS/
+// Floating subclass with an empty fetch set) never triggers a fetch — only bond
+// ETFs / equities / crypto do.
 const isFetchRow = (i: ManagedInstrument): boolean =>
-  !!i.ticker.trim() && !/bono|bond/i.test(i.kind ?? '')
+  !!i.ticker.trim() && fetchableFields(i.assetClass, i.region ?? 'global', i.kind).size > 0
 
 // The single loading surface. Three paths, picked by what you choose:
 //  • global + Equities/Crypto — the template is just Ticker + Descripción; a
@@ -248,7 +249,7 @@ async function autofillAll(
       } catch {
         /* leave the row as the file gave it */
       }
-      const allowed = fetchableFields(inst.assetClass, inst.region ?? 'global')
+      const allowed = fetchableFields(inst.assetClass, inst.region ?? 'global', inst.kind)
       const rest: Record<string, string> = {}
       for (const [k, v] of Object.entries(fields)) if (k !== 'name' && allowed.has(k)) rest[k] = v
       const details = { ...rest, ...inst.details } // the file overrides the feed

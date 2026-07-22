@@ -245,11 +245,11 @@ const en = {
     importHintAuto:
       'The template is just Ticker + Descripción — a ticker is all we need. Name, price, P/E, beta, market cap, sector, price target and analyst recommendations are fetched on import, and the potential return is recomputed against the live price. Anything you put in the file overrides what we fetch.',
     importHintEquities:
-      'Set Type (Acción / ETF) — or leave it blank and Yahoo decides. Give the Ticker + Descripción; name, price, P/E, sector, market cap, price target and analyst recommendations are fetched, and potential return is recomputed live. Anything you type overrides what we fetch.',
+      'Set Type (Common / Preferred / ETF) — or leave it blank and Yahoo decides. Give the Ticker + Descripción; name, price, P/E, sector, market cap, price target and analyst recommendations are fetched, and potential return is recomputed live. Anything you type overrides what we fetch.',
     importHintLocal:
       'Upload the Cadiem boletín PDF and its bond, CDA, fund and equity tables are parsed straight in. Or fill the column template for one category by hand. σ/α/λ are auto-derived either way.',
     importHintFixedIncome:
-      'Set Type per row: "ETF" → give a Ticker and price, yield, AUM and the rest are fetched; "Bono" → fill the mirror fields (ISIN, issuer, coupon, maturity, YTM, rating…). Only ETF rows are fetched — bonds are never touched. Descripción is your rationale, and anything you type overrides what we fetch.',
+      'Set Type per row: "Bond ETF" → give a Ticker and price, yield, AUM and the rest are fetched; an individual bond (Fixed-rate / TIPS / Floating-rate) → fill the mirror fields (ISIN, issuer, coupon, maturity, YTM, rating…). TIPS add breakeven inflation; Floating-rate add the reference rate + spread. Only Bond ETF rows are fetched — individual bonds are never touched. Descripción is your rationale, and anything you type overrides what we fetch.',
     importFetching: (done: number, total: number) => `Fetching market data ${done}/${total}…`,
     importDownload: 'Download template',
     importUpload: 'Upload CSV',
@@ -650,11 +650,11 @@ const es: UIStrings = {
     importHintAuto:
       'La plantilla es solo Ticker + Descripción — con el ticker alcanza. Nombre, precio, P/E, beta, capitalización, sector, precio objetivo y recomendaciones se buscan al importar, y el retorno potencial se recalcula contra el precio en vivo. Lo que pongas en el archivo pisa lo que buscamos.',
     importHintEquities:
-      'Indicá Type (Acción / ETF) — o dejalo vacío y Yahoo decide. Poné el Ticker + Descripción; nombre, precio, P/E, sector, capitalización, precio objetivo y recomendaciones se buscan, y el retorno potencial se recalcula en vivo. Lo que escribas pisa lo que buscamos.',
+      'Indicá Type (Común / Preferida / ETF) — o dejalo vacío y Yahoo decide. Poné el Ticker + Descripción; nombre, precio, P/E, sector, capitalización, precio objetivo y recomendaciones se buscan, y el retorno potencial se recalcula en vivo. Lo que escribas pisa lo que buscamos.',
     importHintLocal:
       'Subí el PDF del boletín de Cadiem y sus tablas de bonos, CDA, fondos y renta variable se parsean directo. O completá a mano la plantilla de una categoría. σ/α/λ se derivan solos igual.',
     importHintFixedIncome:
-      'Indicá Type por fila: "ETF" → poné un Ticker y precio, rendimiento, AUM y lo demás se buscan; "Bono" → completá los campos del espejo (ISIN, emisor, cupón, vencimiento, YTM, calificación…). Solo las filas ETF se buscan — los bonos nunca se tocan. Descripción es tu racional, y lo que escribas pisa lo que buscamos.',
+      'Indicá Type por fila: "Bond ETF" → poné un Ticker y precio, rendimiento, AUM y lo demás se buscan; un bono individual (Fixed-rate / TIPS / Floating-rate) → completá los campos del espejo (ISIN, emisor, cupón, vencimiento, YTM, calificación…). TIPS suma la inflación implícita; Floating-rate suma la tasa de referencia + spread. Solo las filas Bond ETF se buscan — los bonos individuales nunca se tocan. Descripción es tu racional, y lo que escribas pisa lo que buscamos.',
     importFetching: (done: number, total: number) => `Buscando datos de mercado ${done}/${total}…`,
     importDownload: 'Descargar plantilla',
     importUpload: 'Subir CSV',

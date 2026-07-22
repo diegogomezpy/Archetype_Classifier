@@ -1,6 +1,7 @@
-import { fieldSpecsFor, type ManagedInstrument } from './catalog'
+import { fieldSpecsFor, resolveSubclassId, type ManagedInstrument } from './catalog'
 import type { Category, Region } from './instruments'
 import { deriveDefaults, deriveRiskVector } from './riskDerivation'
+import { expandCountry, expandSector, stripEllipsis } from './bloombergDict'
 import { toCsv } from './csv'
 
 // ---------------------------------------------------------------------------
@@ -126,25 +127,12 @@ const AUTOFILL_COLUMNS: ImportColumn[] = [
   },
 ]
 
-// Normalize a free-typed Type tag to the canonical kind so "etf", "stock",
-// "acción", "bono" etc. all land on the taxonomy value the app expects.
-export function normKind(k?: string): string | undefined {
-  const s = (k ?? '').trim()
-  if (!s) return undefined
-  if (/etf/i.test(s)) return 'ETF'
-  if (/bono|bond/i.test(s)) return 'Bono'
-  if (/cripto|crypto/i.test(s)) return 'Crypto'
-  if (/preferid/i.test(s)) return 'Acción Preferida'
-  if (/acci|stock|com[uú]n|ordinaria|single/i.test(s)) return 'Acción Ordinaria'
-  return s
-}
-
 /** All import columns for a class: core identity/risk + that class's details. */
 export function importColumnsFor(region: Region, category: Category): ImportColumn[] {
   // Global equities: like the ticker-only template, plus an explicit Type tag
   // (stock / ETF) the firm can set — otherwise Yahoo's quoteType decides.
   if (region === 'global' && category === 'Equities') {
-    return [{ key: 'kind', label: 'Type (Acción / ETF)', aliases: ALIASES.kind }, ...AUTOFILL_COLUMNS]
+    return [{ key: 'kind', label: 'Type (Common / Preferred / ETF)', aliases: ALIASES.kind }, ...AUTOFILL_COLUMNS]
   }
   // Global fixed income (hybrid): the firm fills Ticker for a bond ETF (Yahoo
   // does the rest) OR ISIN + the mirror fields for an individual bond. So the
@@ -155,9 +143,10 @@ export function importColumnsFor(region: Region, category: Category): ImportColu
       .filter((fs) => !FI_FETCHED_KEYS.has(fs.key))
       .map<ImportColumn>((fs) => ({ key: fs.key, label: fs.en, aliases: [fs.key, ...(ALIASES[fs.key] ?? [])] }))
     return [
-      // Type is the tag that decides autofill: "ETF" → fetch from the ticker;
-      // "Bono" (or blank) → don't fetch, the firm fills the mirror fields.
-      { key: 'kind', label: 'Type (ETF / Bono)', aliases: ALIASES.kind },
+      // Type is the tag that decides both the subclass and autofill: "Bond ETF"
+      // → fetch from the ticker; the individual-bond types (Fixed-rate / TIPS /
+      // Floating-rate) → don't fetch, the firm fills the mirror fields.
+      { key: 'kind', label: 'Type (Bond ETF / Fixed-rate / TIPS / Floating-rate)', aliases: ALIASES.kind },
       { key: 'ticker', label: 'Ticker (ETFs)', aliases: ALIASES.ticker },
       { key: 'isin', label: 'ISIN (bonds)', aliases: ALIASES.isin },
       AUTOFILL_COLUMNS[1], // "Descripción" → rationale
@@ -253,6 +242,14 @@ export function parseInstruments(region: Region, category: Category, rows: strin
       const val = (cells[i] ?? '').trim()
       if (val) v[key] = val
     })
+    // Clean Bloomberg display artifacts as they land: truncated issuer/name lose
+    // the trailing "…"; clipped sectors expand to full names; 2-letter country
+    // codes expand to country names. Idempotent, so a pre-cleaned file is fine.
+    if (v.issuer) v.issuer = stripEllipsis(v.issuer)
+    if (v.name) v.name = stripEllipsis(v.name)
+    if (v.sector) v.sector = expandSector(v.sector)
+    if (v.sectorIndex) v.sectorIndex = expandSector(v.sectorIndex)
+    if (v.country) v.country = expandCountry(v.country)
     // Auto-fillable classes are keyed by ticker; the real name arrives with the
     // market data, so fall back to the ticker until then. Bond listings carry no
     // Name column at all — the issuer is the name (see composeName).
@@ -284,7 +281,10 @@ export function parseInstruments(region: Region, category: Category, rows: strin
       name,
       ticker: (v.ticker ?? '').trim(),
       isin: v.isin?.trim() || undefined,
-      kind: normKind(v.kind),
+      // Resolve the Type tag to a canonical subclass id; if it matches no
+      // subclass, keep the raw text verbatim (better than guessing a canonical
+      // id that could collide with another class's label).
+      kind: resolveSubclassId(region, category, v.kind) ?? (v.kind?.trim() || undefined),
       region,
       assetClass: category,
       sigmaLoad: sigma ?? derived.sigmaLoad,
