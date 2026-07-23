@@ -80,7 +80,7 @@ const pick = (lang: 'en' | 'es', en: string, es: string) => (lang === 'es' ? es 
 // `name` are intentionally omitted — they're edited up top on the instrument
 // itself, not as details.
 const DETAIL_GROUPS: { en: string; es: string; keys: string[] }[] = [
-  { en: 'Rationale', es: 'Racional', keys: ['rationale', 'diversificationNote', 'volatilityNote'] },
+  { en: 'Rationale', es: 'Tesis', keys: ['rationale', 'diversificationNote', 'volatilityNote'] },
   { en: 'Overview', es: 'Resumen', keys: ['description'] },
   {
     en: 'Analyst consensus',

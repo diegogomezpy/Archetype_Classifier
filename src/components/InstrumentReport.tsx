@@ -213,7 +213,7 @@ export default function InstrumentReport({ instrument: inst, region, onBack }: P
     !!g('lastPrice') && {
       label: td.price,
       value: `$${g('lastPrice')}`,
-      sub: g('change1Y') ? `${g('change1Y')} · 1Y` : undefined,
+      sub: g('change1Y') ? `${g('change1Y')} · ${lang === 'es' ? '1A' : '1Y'}` : undefined,
       subClass: signClass(g('change1Y')),
       consumes: ['lastPrice', 'change1Y'],
     },

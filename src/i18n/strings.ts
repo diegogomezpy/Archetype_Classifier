@@ -568,7 +568,7 @@ const es: UIStrings = {
     uploading: 'Subiendo…',
     none: 'Sin documentos adjuntos.',
     remove: 'Quitar',
-    hint: (mb: number) => `Cualquier archivo hasta ${mb} MB.`,
+    hint: (mb: number) => `Cualquier archivo de hasta ${mb} MB.`,
     tooBig: (mb: number) => `Archivo demasiado grande (máx ${mb} MB).`,
     uploadFailed: 'Falló la subida — intentá de nuevo.',
   },
@@ -580,7 +580,7 @@ const es: UIStrings = {
     dimEv: 'Disciplina de valor esperado',
     confidenceTitle: 'Confianza',
     confidenceSuffix: (name: string) => `de confianza — ${name}`,
-    blendLine: (name: string) => `Mixto — secundario ${name} al`,
+    blendLine: (name: string) => `Mixto — ${name} secundario al`,
     lowSignalBrief: (dims: string) => `Señal baja · ${dims}`,
     talkingPoints: 'Puntos de conversación',
   },
@@ -611,7 +611,7 @@ const es: UIStrings = {
   },
   admin: {
     title: 'Catálogo de instrumentos',
-    subtitle: 'Instrumentos ofrecibles a los clientes.',
+    subtitle: 'Instrumentos que se pueden ofrecer a los clientes.',
     count: (shown: number, total: number) => `${shown} de ${total} instrumentos`,
     filterAll: 'Todos',
     add: 'Agregar instrumento',
@@ -628,7 +628,7 @@ const es: UIStrings = {
     newTitle: 'Nuevo instrumento',
     baseSection: 'Identidad y vector de riesgo',
     detailsSection: 'Detalles del activo (se muestran en el panel del asesor)',
-    detailsHint: 'Completa lo que aplique — todos los campos son opcionales y editables luego.',
+    detailsHint: 'Completá lo que aplique — todos los campos son opcionales y editables luego.',
     name: 'Nombre',
     ticker: 'Ticker',
     isin: 'ISIN',
@@ -644,13 +644,13 @@ const es: UIStrings = {
     assetClass: 'Categoría',
     importTitle: 'Importar desde archivo',
     importHint:
-      'Elige mercado + categoría, descarga la plantilla (las columnas también aceptan nombres de campo de Bloomberg), complétala y sube el CSV. σ/α/λ en blanco se derivan automáticamente.',
+      'Elegí mercado + categoría, descargá la plantilla (las columnas también aceptan nombres de campo de Bloomberg), complétala y sube el CSV. σ/α/λ en blanco se derivan automáticamente.',
     importHintAuto:
       'La plantilla es solo Ticker + Descripción — con el ticker alcanza. Nombre, precio, P/E, beta, capitalización, sector, precio objetivo y recomendaciones se buscan al importar, y el retorno potencial se recalcula contra el precio en vivo. Lo que pongas en el archivo pisa lo que buscamos.',
     importHintEquities:
       'Indicá Type (Común / Preferida / ETF) — o dejalo vacío y Yahoo decide. Poné el Ticker + Descripción; nombre, precio, P/E, sector, capitalización, precio objetivo y recomendaciones se buscan, y el retorno potencial se recalcula en vivo. Lo que escribas pisa lo que buscamos.',
     importHintLocal:
-      'Subí el PDF del boletín de Cadiem y sus tablas de bonos, CDA, fondos y renta variable se parsean directo. O completá a mano la plantilla de una categoría. σ/α/λ se derivan solos igual.',
+      'Subí el PDF del boletín de Cadiem y sus tablas de bonos, CDA, fondos y renta variable se leen directo. O completá a mano la plantilla de una categoría. σ/α/λ se derivan solos igual.',
     importHintFixedIncome:
       'Indicá Type por fila: "Bond ETF" → poné un Ticker y precio, rendimiento, AUM y lo demás se buscan; un bono individual → completá los campos del espejo (ISIN, emisor, cupón, vencimiento, YTM…). Los tipos de bono reflejan las secciones del propio listado — Corporate y Sovereign llevan calificación y call; Treasury, T-Bill y Strip no llevan ninguna; TIPS suma la inflación implícita; Floating-rate suma la tasa de referencia + spread. Solo las filas Bond ETF se buscan — los bonos individuales nunca se tocan. Descripción es tu racional, y lo que escribas pisa lo que buscamos.',
     importFetching: (done: number, total: number) => `Buscando datos de mercado ${done}/${total}…`,
@@ -666,7 +666,7 @@ const es: UIStrings = {
     importBulletinHint:
       'Solo local: subí el PDF del boletín de Cadiem y se parsean automáticamente las tablas de bonos, CDA, fondos y renta variable. Es una aproximación — revisá la vista previa antes de agregar. σ/α/λ se derivan solos.',
     bulletinNothing:
-      'No se encontraron instrumentos en ese PDF. Puede ser un escaneo (sin capa de texto) o un formato que el parser aún no reconoce.',
+      'No se encontraron instrumentos en ese PDF. Puede ser un escaneo (sin capa de texto) o un formato que el lector aún no reconoce.',
     importParsing: 'Leyendo PDF…',
     importBulletinSections: (s: string) => `secciones: ${s}`,
     importBulletinError: 'No se pudo leer ese PDF. Probá con la plantilla CSV.',
@@ -674,16 +674,16 @@ const es: UIStrings = {
     autofillFetching: 'Obteniendo…',
     autofillHint: 'Ticker o ISIN → autocompleta los detalles. Acciones y ETFs vía Yahoo Finance. Los datos de bonos individuales y notas estructuradas quedan manuales.',
     autofillFilled: (n: number) => `Se completaron ${n} ${n === 1 ? 'campo' : 'campos'} desde datos de mercado.`,
-    autofillNeedId: 'Ingresa primero un ticker o ISIN.',
-    autofillUnsupported: 'No hay búsqueda de datos para este instrumento (sin ticker público). Ingresa los detalles manualmente.',
+    autofillNeedId: 'Ingresá primero un ticker o ISIN.',
+    autofillUnsupported: 'No hay búsqueda de datos para este instrumento (sin ticker público). Ingresá los detalles manualmente.',
     autofillNotFound: (sym: string) => `No se encontraron datos de mercado para «${sym}».`,
-    autofillNetwork: 'Falló la obtención — revisa la conexión e intenta de nuevo.',
+    autofillNetwork: 'Falló la obtención — revisá la conexión e intentá de nuevo.',
     sigma: 'σ — carga de varianza (−1 a 1)',
     alpha: 'α — carga de asimetría (−1 a 1)',
     lambda: 'λ — carga de tolerancia a pérdidas (−1 a 1)',
     liquidityTier: 'Nivel de liquidez (1 intradía … 4 bloqueado/OTC)',
     lockupMonths: 'Plazo de bloqueo (meses)',
-    visibleLabel: 'Visible para asesores (ofrecible)',
+    visibleLabel: 'Visible para asesores (se puede ofrecer)',
     emphasizedLabel: 'Destacar como selección de la casa',
     save: 'Guardar',
     cancel: 'Cancelar',
@@ -698,7 +698,7 @@ const es: UIStrings = {
     bulkTitle: '¿Eliminar estos instrumentos?',
     bulkBody: (n: number) =>
       `Esto elimina permanentemente ${n} instrumento${n === 1 ? '' : 's'} mostrado${n === 1 ? '' : 's'}. No se puede deshacer.`,
-    bulkPrompt: (word: string) => `Escribe «${word}» para confirmar`,
+    bulkPrompt: (word: string) => `Escribí «${word}» para confirmar`,
     bulkWord: 'eliminar',
     bulkConfirm: (n: number) => `Eliminar ${n}`,
     // Cobertura de autocompletado
@@ -715,7 +715,7 @@ const es: UIStrings = {
     title: 'Arquetipos',
     subtitle: 'Vectores de clasificación y portafolios modelo.',
     vectorsTitle: 'Vectores de riesgo por arquetipo',
-    vectorsHint: 'La firma de forma con la que la clasificación compara.',
+    vectorsHint: 'El patrón de forma con el que compara la clasificación.',
     notVectorNote: 'El Cuantitativo y el Indexador no tienen vector — solo una mezcla modelo abajo.',
     sigma: 'σ varianza',
     alpha: 'α asimetría',
@@ -752,7 +752,7 @@ const es: UIStrings = {
     globalTitle: 'Global — base por clase de activo',
     globalHelp:
       'Los instrumentos globales usan el vector de su clase de activo directamente — no hay paso de calificación. La renta variable es la única excepción: su σ se ajusta por β abajo.',
-    betaSensitivity: 'Sensibilidad β renta variable',
+    betaSensitivity: 'Sensibilidad β de renta variable',
     betaHelp:
       'Solo renta variable. σ = σ base + (β − 1) × este valor. Así β 1,5 con sensibilidad 0,40 sube σ en 0,20; β 1,0 no cambia nada. Una acción importada sin β mantiene la σ base.',
     localTitle: 'Local — base + sensibilidad al rating',
@@ -789,8 +789,8 @@ const es: UIStrings = {
     empty: 'Aún no hay asesores — agrega uno para que los clientes puedan elegirlo al inicio.',
   },
   advisorPicker: {
-    title: '¿Quién eres?',
-    subtitle: 'Elige tu nombre para ver tus clientes. Puedes cambiar en cualquier momento.',
+    title: '¿Quién sos?',
+    subtitle: 'Elegí tu nombre para ver tus clientes. Podés cambiar en cualquier momento.',
     noAdvisors: 'Aún no hay asesores — crea uno en la consola de administración.',
     goAdmin: 'Abrir consola de administración',
   },
