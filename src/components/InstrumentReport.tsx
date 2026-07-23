@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react'
 import { colorForCategory, type Region } from '../lib/instruments'
 import { issuerProfile, type IssuerProfile } from '../lib/issuer'
 import {
+  companyKeyFor,
   fieldSpecsFor,
   kindLabel,
   localizedDetail,
-  localLogoUrl,
   type ManagedInstrument,
 } from '../lib/catalog'
 import { useLang, useT } from '../i18n/i18n'
@@ -176,12 +176,13 @@ export default function InstrumentReport({ instrument: inst, region, onBack }: P
   // or a preferred share's analyst targets) would still leak into the report.
   const shownKeys = new Set(specs.map((s) => s.key))
   // Local companies aren't on Parqet — resolve their bundled logo by issuer.
-  const logoSrc =
-    region === 'local' ? localLogoUrl(g('issuer') || g('fundManager') || inst.name) : undefined
   // Global bonds borrow the issuer's ticker (for the logo lookup) and its name
   // (so the monogram fallback reads off the company, not the bond's long title).
   const logoTicker = inst.ticker || issuer?.ticker || ''
   const logoName = inst.ticker ? inst.name : issuerName || inst.name
+  // Key the upload store by the resolved company, so a logo uploaded here also
+  // covers every other instrument from the same issuer.
+  const logoUploadKey = companyKeyFor(inst) || (logoTicker ? logoTicker.toLowerCase() : '')
 
   // Fit band.
   const fit = inst.fit
@@ -297,7 +298,13 @@ export default function InstrumentReport({ instrument: inst, region, onBack }: P
       {/* ── Header ──────────────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 items-start gap-4">
-          <CompanyLogo ticker={logoTicker} name={logoName} src={logoSrc} size={64} />
+          <CompanyLogo
+            ticker={logoTicker}
+            name={logoName}
+            uploadKey={logoUploadKey}
+            canUpload
+            size={64}
+          />
           <div className="min-w-0">
             <h3 className="font-serif text-2xl font-semibold leading-tight text-text">{inst.name}</h3>
             <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-xs text-muted">

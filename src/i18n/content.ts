@@ -19,22 +19,22 @@ const ROUNDS_ES: Record<number, { x: RoundSideEs; y: RoundSideEs }> = {
     y: { label: 'Ganancia más estable', notes: ['buen año', 'año sin cambios'] },
   },
   2: {
-    x: { label: 'Gran premio infrecuente', notes: ['gran premio raro', 'la mayoría de los años'] },
+    x: { label: 'Gran ganancia infrecuente', notes: ['gran ganancia rara', 'la mayoría de los años'] },
     y: {
       label: 'Ganancia frecuente, gran pérdida rara',
       notes: ['la mayoría de los años', 'gran pérdida rara'],
     },
   },
   3: {
-    x: { label: 'Apuesta 50/50', notes: ['ganas', 'pierdes'] },
+    x: { label: 'Apuesta 50/50', notes: ['ganás', 'perdés'] },
     y: { label: 'Ganancia garantizada', notes: ['seguro'] },
   },
   4: {
-    x: { label: 'Oscilación al alza', notes: ['ganancia', 'pérdida'] },
-    y: { label: 'Oscilación a la baja', notes: ['ganancia', 'pérdida'] },
+    x: { label: 'Oscilación con sesgo alcista', notes: ['ganancia', 'pérdida'] },
+    y: { label: 'Oscilación con sesgo bajista', notes: ['ganancia', 'pérdida'] },
   },
   5: {
-    x: { label: 'Premio gordo improbable', notes: ['premio 1 de 20', 'la mayoría de los años'] },
+    x: { label: 'Premio gordo improbable', notes: ['premio 1 de cada 20', 'la mayoría de los años'] },
     y: { label: 'Predecible', notes: ['la mayoría de los años', 'mal año'] },
   },
   6: {
@@ -42,22 +42,22 @@ const ROUNDS_ES: Record<number, { x: RoundSideEs; y: RoundSideEs }> = {
     y: { label: 'Ganancia más estable', notes: ['buen año', 'año sin cambios'] },
   },
   7: {
-    x: { label: 'Gran premio infrecuente', notes: ['gran premio raro', 'la mayoría de los años'] },
+    x: { label: 'Gran ganancia infrecuente', notes: ['gran ganancia rara', 'la mayoría de los años'] },
     y: {
       label: 'Ganancia frecuente, gran pérdida rara',
       notes: ['la mayoría de los años', 'gran pérdida rara'],
     },
   },
   8: {
-    x: { label: 'Apuesta 50/50', notes: ['ganas', 'pierdes'] },
+    x: { label: 'Apuesta 50/50', notes: ['ganás', 'perdés'] },
     y: { label: 'Ganancia garantizada', notes: ['seguro'] },
   },
   9: {
-    x: { label: 'Oscilación al alza', notes: ['ganancia', 'pérdida'] },
-    y: { label: 'Oscilación a la baja', notes: ['ganancia', 'pérdida'] },
+    x: { label: 'Oscilación con sesgo alcista', notes: ['ganancia', 'pérdida'] },
+    y: { label: 'Oscilación con sesgo bajista', notes: ['ganancia', 'pérdida'] },
   },
   10: {
-    x: { label: 'Premio gordo improbable', notes: ['premio 1 de 20', 'la mayoría de los años'] },
+    x: { label: 'Premio gordo improbable', notes: ['premio 1 de cada 20', 'la mayoría de los años'] },
     y: { label: 'Predecible', notes: ['la mayoría de los años', 'mal año'] },
   },
 }
@@ -84,7 +84,7 @@ export function localizeRound(round: AllocRound, lang: Lang): AllocRound {
 const ARCHETYPES_ES: Record<ArchetypeKey, Archetype> = {
   banker: {
     name: 'El Banquero',
-    desc: 'Proteges el capital ante todo — cedes rendimiento a cambio de certeza.',
+    desc: 'Protegés el capital ante todo — cedés potencial de alza a cambio de certeza.',
     traits: ['Preserva capital', 'Prefiere certeza', 'Conservador', 'Caídas acotadas'],
     products: [
       'Autocallables con capital protegido',
@@ -95,8 +95,8 @@ const ARCHETYPES_ES: Record<ArchetypeKey, Archetype> = {
   },
   quant: {
     name: 'El Cuantitativo',
-    desc: 'Sigues el valor esperado — modelos sobre narrativa, matemática sobre intuición.',
-    traits: ['Guiado por VE', 'Indiferente a la forma', 'Sistemático', 'Bajo sesgo conductual'],
+    desc: 'Seguís el valor esperado — modelos antes que narrativa, matemática antes que intuición.',
+    traits: ['Guiado por valor esperado', 'Indiferente a la forma del pago', 'Sistemático', 'Bajo sesgo conductual'],
     products: [
       'ETFs de factores de bajo costo',
       'Escaleras de bonos simples',
@@ -106,7 +106,7 @@ const ARCHETYPES_ES: Record<ArchetypeKey, Archetype> = {
   },
   venture: {
     name: 'El Capitalista de Riesgo',
-    desc: 'Apuestas fuerte por la chance de una ganancia extraordinaria.',
+    desc: 'Apostás fuerte por la chance de una ganancia extraordinaria.',
     traits: [
       'Orientado al alza',
       'Tolerante al riesgo',
@@ -114,15 +114,15 @@ const ARCHETYPES_ES: Record<ArchetypeKey, Archetype> = {
       'Resiliente a pérdidas',
     ],
     products: [
-      'Notas estructuradas con potencial ilimitado',
-      'Acciones individuales selectivas',
+      'Notas estructuradas sin tope de ganancia',
+      'Selección de acciones individuales',
       'Opciones de largo plazo sobre acciones',
       'Asignación satélite en notas de participación',
     ],
   },
   insurer: {
     name: 'El Asegurador',
-    desc: 'Cobras una prima constante por asumir el riesgo que otros evitan.',
+    desc: 'Cobrás una prima constante por asumir el riesgo que otros evitan.',
     traits: ['Cobra primas', 'Tolera asimetría negativa', 'Busca rendimiento', 'Suscribe riesgo'],
     products: [
       'Reverse convertibles autocallables',
@@ -133,20 +133,31 @@ const ARCHETYPES_ES: Record<ArchetypeKey, Archetype> = {
   },
   indexer: {
     name: 'El Indexador',
-    desc: 'Prefieres ser dueño del mercado antes que intentar ganarle.',
+    desc: 'Preferís ser dueño del mercado antes que intentar ganarle.',
     traits: ['Transparencia primero', 'Bajo costo', 'Mercado amplio', 'Baja complejidad'],
     products: [
-      'Trackers MSCI World / S&P 500',
-      'Bonos BVA investment grade simples',
+      'ETFs MSCI World / S&P 500',
+      'Bonos simples BVA investment grade',
       'ETF multiactivo diversificado',
       'Depósitos a plazo',
     ],
   },
 }
 
-/** Archetype copy in the given language. */
+// Admin-editable display names, layered over the bundled copy. The config
+// provider pushes these in (mirroring setActiveShapeVectors) so every call site
+// picks an override up without threading config through the whole tree.
+export type ArchetypeNameOverrides = Partial<Record<ArchetypeKey, { en?: string; es?: string }>>
+let NAME_OVERRIDES: ArchetypeNameOverrides = {}
+export function setArchetypeNameOverrides(o: ArchetypeNameOverrides | undefined): void {
+  NAME_OVERRIDES = o ?? {}
+}
+
+/** Archetype copy in the given language, with any admin rename applied. */
 export function localizedArchetype(key: ArchetypeKey, lang: Lang): Archetype {
-  return lang === 'es' ? ARCHETYPES_ES[key] : ARCHETYPES[key]
+  const base = lang === 'es' ? ARCHETYPES_ES[key] : ARCHETYPES[key]
+  const custom = (lang === 'es' ? NAME_OVERRIDES[key]?.es : NAME_OVERRIDES[key]?.en)?.trim()
+  return custom ? { ...base, name: custom } : base
 }
 
 // ── Asset classes ────────────────────────────────────────────────────────────

@@ -17,6 +17,7 @@ import type { ShapeArchetype, ShapeScores } from '../lib/scoring'
 import type { ArchetypeKey } from '../data/archetypes'
 import { useLang, useT } from '../i18n/i18n'
 import { assetClassLabel, categoryLabel, localizedArchetype, regionLabel } from '../i18n/content'
+import { ARCHETYPES } from '../data/archetypes'
 import AppNav from '../components/AppNav'
 import AdminNav from '../components/AdminNav'
 
@@ -28,6 +29,8 @@ const parseNum = (v: string, fallback = 0) => {
 
 // No `w-full` here on purpose: every use sets its own fixed width, and w-full
 // would win on CSS order and collapse the sibling label.
+const pickL = (lang: 'en' | 'es', en: string, es: string) => (lang === 'es' ? es : en)
+
 const numInput =
   'rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm text-text tnum shadow-soft outline-none transition-shadow focus:ring-2 focus:ring-teal/40'
 
@@ -68,7 +71,7 @@ function buildLocalMixDraft(
 export default function AdminArchetypesPage() {
   const t = useT()
   const { lang } = useLang()
-  const { config, setShapeVectors, setAssetMix, setLocalAssetMix, recomputeMix, reset } =
+  const { config, setShapeVectors, setArchetypeName, setAssetMix, setLocalAssetMix, recomputeMix, reset } =
     useArchetypeConfig()
 
   const [vectorDraft, setVectorDraft] = useState<VectorDraft>(config.shapeVectors)
@@ -167,6 +170,42 @@ export default function AdminArchetypesPage() {
           {t.adminArch.resetDefaults}
         </button>
       </div>
+
+      {/* ── Section 0: display names ────────────────────────────────────────── */}
+      <section className="mt-10">
+        <h2 className="font-mono text-xs uppercase tracking-[0.14em] text-muted">
+          {pickL(lang, 'Names', 'Nombres')}
+        </h2>
+        <p className="mt-2 max-w-2xl text-sm text-muted">
+          {pickL(
+            lang,
+            'Rename an archetype as clients and advisors see it. Leave a field blank to keep the built-in name.',
+            'Cambiá el nombre de un arquetipo tal como lo ven clientes y asesores. Dejá el campo vacío para conservar el nombre original.',
+          )}
+        </p>
+        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 min-[900px]:grid-cols-3">
+          {ARCHETYPE_ORDER.map((key) => (
+            <div key={key} className="rounded-2xl border border-border bg-surface p-4 shadow-soft">
+              <p className="font-mono text-[10px] uppercase tracking-wider text-muted">
+                {localizedArchetype(key, lang).name}
+              </p>
+              <div className="mt-2.5 space-y-2">
+                {(['en', 'es'] as const).map((l) => (
+                  <div key={l} className="flex items-center gap-2">
+                    <span className="w-6 shrink-0 font-mono text-[10px] uppercase text-faint">{l}</span>
+                    <input
+                      className={`${numInput} flex-1 text-left`}
+                      value={config.names?.[key]?.[l] ?? ''}
+                      placeholder={ARCHETYPES[key].name}
+                      onChange={(e) => setArchetypeName(key, l, e.target.value)}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
 
       {/* ── Section 1: risk vectors ─────────────────────────────────────────── */}
       <section className="mt-10">

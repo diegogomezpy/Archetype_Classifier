@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from 'react'
 import { ARCHETYPES, type ArchetypeKey } from '../data/archetypes'
+import { setArchetypeNameOverrides, type ArchetypeNameOverrides } from '../i18n/content'
 import { ASSET_CLASSES, type AssetClass, type LocalCategory } from './instruments'
 import {
   SHAPE_VECTORS,
@@ -39,6 +40,8 @@ export type ArchetypeConfig = {
   // The LOCAL model portfolio (across the Cadiem categories). Independent from
   // the global mix — the advisor dashboard shows both side by side.
   localAssetMix: Record<ArchetypeKey, LocalMixSlice[]>
+  // Admin renames for the archetypes, per language. Absent/blank = bundled name.
+  names?: ArchetypeNameOverrides
 }
 
 // Display order: shape archetypes first, then the two special cases.
@@ -139,7 +142,7 @@ export function seedConfig(): ArchetypeConfig {
   }
   const assetMix = {} as Record<ArchetypeKey, MixSlice[]>
   for (const key of ARCHETYPE_ORDER) assetMix[key] = computeDefaultMix(key, shapeVectors)
-  return { shapeVectors, assetMix, localAssetMix: seedLocalMix() }
+  return { shapeVectors, assetMix, localAssetMix: seedLocalMix(), names: {} }
 }
 
 // ── React context (backend-API backed) ──────────────────────────────────────
@@ -147,6 +150,8 @@ export function seedConfig(): ArchetypeConfig {
 type ArchetypeConfigContextValue = {
   config: ArchetypeConfig
   setShapeVectors: (vectors: Record<ShapeArchetype, ShapeScores>) => void
+  /** Rename an archetype for one language ('' clears back to the bundled name). */
+  setArchetypeName: (key: ArchetypeKey, lang: 'en' | 'es', value: string) => void
   setAssetMix: (key: ArchetypeKey, mix: MixSlice[]) => void
   setLocalAssetMix: (key: ArchetypeKey, mix: LocalMixSlice[]) => void
   /** Regenerate one archetype's global mix from the engine using the live vectors. */
@@ -157,6 +162,7 @@ type ArchetypeConfigContextValue = {
 const ArchetypeConfigContext = createContext<ArchetypeConfigContextValue>({
   config: seedConfig(),
   setShapeVectors: () => {},
+  setArchetypeName: () => {},
   setAssetMix: () => {},
   setLocalAssetMix: () => {},
   recomputeMix: () => [],
@@ -214,6 +220,7 @@ function mergeWithSeed(partial: Partial<ArchetypeConfig> | null): ArchetypeConfi
     shapeVectors: { ...seed.shapeVectors, ...(partial.shapeVectors ?? {}) },
     assetMix,
     localAssetMix: { ...seed.localAssetMix, ...(partial.localAssetMix ?? {}) },
+    names: { ...(seed.names ?? {}), ...(partial.names ?? {}) },
   }
 }
 
@@ -224,6 +231,7 @@ export function ArchetypeConfigProvider({ children }: { children: ReactNode }) {
 
   const persist = (next: ArchetypeConfig) => {
     setActiveShapeVectors(next.shapeVectors)
+    setArchetypeNameOverrides(next.names)
     setConfig(next)
     void api.put('/config/archetypes', next).catch((e) => console.warn('config save:', e))
   }
@@ -239,12 +247,14 @@ export function ArchetypeConfigProvider({ children }: { children: ReactNode }) {
           await api.put('/config/archetypes', seed)
           if (alive) {
             setActiveShapeVectors(seed.shapeVectors)
+            setArchetypeNameOverrides(seed.names)
             setConfig(seed)
           }
         } else {
           const merged = mergeWithSeed(loaded)
           if (alive) {
             setActiveShapeVectors(merged.shapeVectors)
+            setArchetypeNameOverrides(merged.names)
             setConfig(merged)
           }
         }
@@ -261,6 +271,11 @@ export function ArchetypeConfigProvider({ children }: { children: ReactNode }) {
     () => ({
       config,
       setShapeVectors: (vectors) => persist({ ...config, shapeVectors: vectors }),
+      setArchetypeName: (key, lang, value) =>
+        persist({
+          ...config,
+          names: { ...(config.names ?? {}), [key]: { ...(config.names?.[key] ?? {}), [lang]: value } },
+        }),
       setAssetMix: (key, mix) =>
         persist({ ...config, assetMix: { ...config.assetMix, [key]: mix } }),
       setLocalAssetMix: (key, mix) =>

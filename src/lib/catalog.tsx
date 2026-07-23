@@ -46,7 +46,7 @@ export type FieldSpec = { key: string; en: string; es: string }
 const DESCRIPTION: FieldSpec = { key: 'description', en: 'Description', es: 'Descripción' }
 // The research firm's own view — distinct from the fetched description, and
 // never overwritten by a market-data refresh.
-const RATIONALE: FieldSpec = { key: 'rationale', en: 'Investment rationale', es: 'Racional de inversión' }
+const RATIONALE: FieldSpec = { key: 'rationale', en: 'Investment rationale', es: 'Tesis de inversión' }
 const AS_OF: FieldSpec = { key: 'asOf', en: 'Data as of', es: 'Datos al' }
 
 export const ASSET_FIELD_SPECS: Record<AssetClass, FieldSpec[]> = {
@@ -64,14 +64,14 @@ export const ASSET_FIELD_SPECS: Record<AssetClass, FieldSpec[]> = {
     { key: 'dividendYield', en: 'Dividend yield (%)', es: 'Rendimiento por dividendo (%)' },
     { key: 'peRatio', en: 'P/E ratio (stocks)', es: 'Ratio P/E (acciones)' },
     { key: 'peForward', en: 'P/E forward (est.)', es: 'P/E estimado' },
-    { key: 'expenseRatio', en: 'Expense ratio (%, ETFs)', es: 'Comisión de gestión (%, ETFs)' },
+    { key: 'expenseRatio', en: 'Expense ratio (%, ETFs)', es: 'Ratio de gastos (%, ETFs)' },
     // Street consensus — all fetched; the research firm only sends the rationale.
     { key: 'priceTarget', en: 'Price target', es: 'Precio objetivo' },
     { key: 'potentialReturn', en: 'Potential return (%)', es: 'Retorno potencial (%)' },
     { key: 'recBuyPct', en: 'Buy recommendations (%)', es: 'Recomendaciones de compra (%)' },
     { key: 'recHoldPct', en: 'Hold recommendations (%)', es: 'Recomendaciones de mantener (%)' },
     { key: 'recSellPct', en: 'Sell recommendations (%)', es: 'Recomendaciones de venta (%)' },
-    { key: 'analystCount', en: 'Analysts covering', es: 'Analistas que cubren' },
+    { key: 'analystCount', en: 'Analysts covering', es: 'Analistas que cubren el activo' },
     { key: 'beta', en: 'Beta vs. market', es: 'Beta vs. mercado' },
     { key: 'impliedVol3m', en: 'ATM 3M implied vol (%)', es: 'Vol. implícita ATM 3M (%)' },
     AS_OF,
@@ -90,7 +90,7 @@ export const ASSET_FIELD_SPECS: Record<AssetClass, FieldSpec[]> = {
     { key: 'change1Y', en: '1-year change (%)', es: 'Variación 1 año (%)' },
     { key: 'range52w', en: '52-week range (USD)', es: 'Rango 52 semanas (USD)' },
     { key: 'dividendYield', en: 'Yield (%)', es: 'Rendimiento (%)' },
-    { key: 'expenseRatio', en: 'Expense ratio (%, ETFs)', es: 'Comisión de gestión (%, ETFs)' },
+    { key: 'expenseRatio', en: 'Expense ratio (%, ETFs)', es: 'Ratio de gastos (%, ETFs)' },
     { key: 'avgVolume', en: 'Avg. daily volume', es: 'Volumen diario promedio' },
     { key: 'marketCapAum', en: 'AUM', es: 'Patrimonio (AUM)' },
     // ── Individual-bond mirror — Gletir's "Listado de Bonos" columns, 1:1 and in
@@ -116,7 +116,7 @@ export const ASSET_FIELD_SPECS: Record<AssetClass, FieldSpec[]> = {
     // the spread added to it. TIPS only: the breakeven inflation. Gated by the
     // subclass so they never show on a plain fixed-rate bond.
     { key: 'referenceRate', en: 'Reference rate', es: 'Tasa de referencia' },
-    { key: 'spread', en: 'Floating spread (%)', es: 'Spread flotante (%)' },
+    { key: 'spread', en: 'Floating spread (%)', es: 'Spread sobre tasa (%)' },
     { key: 'impliedInflation', en: 'Breakeven inflation (%)', es: 'Inflación implícita (%)' },
     AS_OF,
   ],
@@ -131,12 +131,12 @@ export const ASSET_FIELD_SPECS: Record<AssetClass, FieldSpec[]> = {
     { key: 'underlying', en: 'Underlying(s)', es: 'Subyacente(s)' },
     // Phoenix
     { key: 'couponYield', en: 'Coupon / premium (% p.a.)', es: 'Cupón / prima (% anual)' },
-    { key: 'barrier', en: 'Protection barrier (% of initial)', es: 'Barrera de protección (% del inicial)' },
+    { key: 'barrier', en: 'Protection barrier (% of initial)', es: 'Barrera de protección (% del nivel inicial)' },
     { key: 'autocallLevel', en: 'Autocall level (%)', es: 'Nivel de autocall (%)' },
     { key: 'observationFrequency', en: 'Observation frequency', es: 'Frecuencia de observación' },
     { key: 'capitalProtection', en: 'Capital protection', es: 'Protección del capital' },
     // Participation
-    { key: 'participationRate', en: 'Participation rate (%)', es: 'Tasa de participación (%)' },
+    { key: 'participationRate', en: 'Participation rate (%)', es: 'Nivel de participación (%)' },
     { key: 'cap', en: 'Upside cap (% or uncapped)', es: 'Tope de ganancia (% o sin tope)' },
     { key: 'protectionLevel', en: 'Protection level (% of capital)', es: 'Nivel de protección (% del capital)' },
     // Common terms
@@ -266,7 +266,7 @@ const NOTE_COMMON = ['underlying', 'maturityMonths', 'issuer', 'issuerRating', '
 const GLOBAL_SUBCLASSES: Partial<Record<AssetClass, Subclass[]>> = {
   Equities: [
     { id: 'Acción Ordinaria', en: 'Common stock', es: 'Acción Ordinaria', keys: [...EQ_MARKET, 'peRatio', 'peForward', 'beta', 'impliedVol3m', ...EQ_ANALYST], fetch: EQ_FETCH, aliases: ['common', 'ordinaria', 'single stock', 'single', 'stock', 'accion', 'acción'] },
-    { id: 'Acción Preferida', en: 'Preferred stock', es: 'Acción Preferida', keys: [...EQ_MARKET, 'beta'], fetch: PREF_FETCH, aliases: ['preferred', 'preferida', 'preferente', 'preferid'] },
+    { id: 'Acción Preferida', en: 'Preferred stock', es: 'Acción preferida', keys: [...EQ_MARKET, 'beta'], fetch: PREF_FETCH, aliases: ['preferred', 'preferida', 'preferente', 'preferid'] },
     { id: 'ETF', en: 'Equity ETF', es: 'ETF de acciones', keys: [...EQ_MARKET, 'expenseRatio', 'beta'], fetch: ETF_FETCH, aliases: ['etf', 'fund', 'index'] },
   ],
   // Mirrors Gletir's own sections. Credit quality (IG/HY) and market
@@ -277,12 +277,12 @@ const GLOBAL_SUBCLASSES: Partial<Record<AssetClass, Subclass[]>> = {
     { id: 'Bond ETF', en: 'Bond ETF', es: 'ETF de bonos', keys: BOND_ETF_KEYS, fetch: ETF_FETCH, aliases: ['bond etf', 'etf', 'fund'] },
     { id: 'Corporate bond', en: 'Corporate bond', es: 'Bono corporativo', keys: BOND_CALLABLE, fallback: true, aliases: ['corporate', 'corporativo', 'corp', 'fixed-rate bond', 'fixed', 'fija', 'bono', 'bond'] },
     { id: 'Sovereign bond', en: 'Sovereign bond', es: 'Bono soberano', keys: BOND_CALLABLE, aliases: ['sovereign', 'soberano'] },
-    { id: 'Treasury', en: 'Treasury', es: 'Tesoro (Treasury)', keys: BOND_CORE, aliases: ['treasury', 'tesoro'] },
+    { id: 'Treasury', en: 'Treasury', es: 'Bono del Tesoro (Treasury)', keys: BOND_CORE, aliases: ['treasury', 'tesoro'] },
     // "treasury bill" must outrank Treasury's own "treasury" alias.
     { id: 'T-Bill', en: 'T-Bill', es: 'Letra del Tesoro (T-Bill)', keys: BOND_CORE, aliases: ['treasury bill', 't-bill', 'tbill', 'bill', 'letra'] },
     { id: 'Strip', en: 'Strip (zero-coupon)', es: 'Strip (cupón cero)', keys: BOND_CORE, aliases: ['strip', 'cupon cero', 'zero coupon', 'zero'] },
-    { id: 'TIPS', en: 'Inflation-linked (TIPS)', es: 'Indexado a inflación (TIPS)', keys: [...BOND_CORE, 'impliedInflation'], aliases: ['tips', 'inflation', 'inflacion', 'linker', 'indexado'] },
-    { id: 'Floating-rate', en: 'Floating-rate note', es: 'Bono tasa variable', keys: [...BOND_CORE, 'referenceRate', 'spread'], aliases: ['float', 'floating', 'variable', 'flotante', 'frn'] },
+    { id: 'TIPS', en: 'Inflation-linked (TIPS)', es: 'Indexado a la inflación (TIPS)', keys: [...BOND_CORE, 'impliedInflation'], aliases: ['tips', 'inflation', 'inflacion', 'linker', 'indexado'] },
+    { id: 'Floating-rate', en: 'Floating-rate note', es: 'Bono a tasa variable', keys: [...BOND_CORE, 'referenceRate', 'spread'], aliases: ['float', 'floating', 'variable', 'flotante', 'frn'] },
   ],
   'Structured notes': [
     { id: 'Phoenix', en: 'Phoenix', es: 'Phoenix', keys: [...NOTE_COMMON, 'couponYield', 'barrier', 'autocallLevel', 'observationFrequency', 'capitalProtection'], aliases: ['phoenix', 'pheonix', 'autocall', 'autocallable', 'income', 'reverse convertible'] },
@@ -293,7 +293,7 @@ const GLOBAL_SUBCLASSES: Partial<Record<AssetClass, Subclass[]>> = {
 const LOCAL_SUBCLASSES: Partial<Record<LocalCategory, Subclass[]>> = {
   Equities: [
     { id: 'Acción Ordinaria', en: 'Common stock', es: 'Acción Ordinaria', keys: ['issuer', 'rating', 'shareClass', 'estYield', 'price', 'available', 'currency'], aliases: ['common', 'ordinaria'] },
-    { id: 'Acción Preferida', en: 'Preferred stock', es: 'Acción Preferida', keys: ['issuer', 'rating', 'shareClass', 'estYield', 'price', 'available', 'currency'], aliases: ['preferred', 'preferida', 'preferente', 'prefer'] },
+    { id: 'Acción Preferida', en: 'Preferred stock', es: 'Acción preferida', keys: ['issuer', 'rating', 'shareClass', 'estYield', 'price', 'available', 'currency'], aliases: ['preferred', 'preferida', 'preferente', 'prefer'] },
   ],
   'Fixed income': [
     { id: 'Bono corporativo', en: 'Corporate bond', es: 'Bono corporativo', all: true, aliases: ['corporativo', 'corporate', 'corp'] },
@@ -429,13 +429,44 @@ export const kindLabel = (
 // the admin and served from the per-company store at /api/logos/:key, keyed by
 // the issuer name normalized (accents + punctuation stripped, lowercased) so
 // "IBI SAECA", "IBI S.A.E.C.A" and "Import Center**" all map to one logo.
+// Companies that trade under more than one corporate name. Both sides must
+// collapse to ONE key so they share a logo and appear once in the admin panel —
+// Imperial SAE and Petromax are the same company.
+const COMPANY_ALIASES: Record<string, string> = {
+  imperialsae: 'petromax',
+}
+
+/**
+ * Preferred display name for a merged company. Without this the label is
+ * whichever alias happened to be seen first ("Imperial SAE"), which reads as the
+ * wrong company even though the logo key is already correct.
+ */
+export const COMPANY_DISPLAY_NAMES: Record<string, string> = {
+  petromax: 'Petromax',
+}
+
 /** Normalized issuer/company slug used as the logo key. */
-export const logoKey = (s: string): string =>
-  s
+export const logoKey = (s: string): string => {
+  const slug = s
     .toLowerCase()
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .replace(/[^a-z0-9]/g, '')
+  return COMPANY_ALIASES[slug] ?? slug
+}
+
+/**
+ * The company an instrument belongs to, as an upload-store key. Global names are
+ * keyed by ticker (one logo per listed company); local ones by issuer, so every
+ * bond from the same Paraguayan issuer shares a single uploaded logo.
+ */
+export const companyKeyFor = (inst: ManagedInstrument): string => {
+  const local = (inst.region ?? 'global') === 'local'
+  const name = local
+    ? inst.details.issuer || inst.details.fundManager || inst.name
+    : inst.ticker || inst.details.issuer || inst.name
+  return name ? logoKey(name) : ''
+}
 /**
  * Logo URL for a local company/issuer — points at the per-company upload store.
  * When nothing's been uploaded it 404s and CompanyLogo falls back to a monogram.

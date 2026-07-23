@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react'
-import { logoKey, useCatalog } from '../lib/catalog'
+import { companyKeyFor, COMPANY_DISPLAY_NAMES, useCatalog } from '../lib/catalog'
+import CompanyLogo from './CompanyLogo'
 import { deleteLogo, listLogoKeys, logoImgUrl, uploadLogo } from '../lib/logos'
 import { useLang } from '../i18n/i18n'
 
@@ -16,17 +17,26 @@ export default function CompanyLogos() {
   const [bust, setBust] = useState<Record<string, number>>({})
   const [busy, setBusy] = useState<string | null>(null)
 
-  // Distinct local companies (issuer / fund manager / name), deduped by slug.
+  // Every distinct company in the catalog, deduped by its canonical key — local
+  // issuers AND listed globals, so a logo can be supplied for any company whose
+  // feed lookup comes up empty. Aliased names (Imperial SAE / Petromax) collapse
+  // into one entry because companyKeyFor resolves them to the same key.
   const companies = useMemo(() => {
-    const map = new Map<string, string>()
+    const map = new Map<string, { name: string; ticker: string }>()
     for (const i of instruments) {
-      if ((i.region ?? 'global') !== 'local') continue
-      const name = (i.details.issuer || i.details.fundManager || i.name || '').trim()
-      const k = name && logoKey(name)
-      if (k && !map.has(k)) map.set(k, name)
+      const key = companyKeyFor(i)
+      if (!key || map.has(key)) continue
+      const local = (i.region ?? 'global') === 'local'
+      const name = (
+        local ? i.details.issuer || i.details.fundManager || i.name : i.details.issuer || i.name
+      ).trim()
+      map.set(key, {
+        name: COMPANY_DISPLAY_NAMES[key] ?? name ?? i.name,
+        ticker: local ? '' : (i.ticker ?? '').trim(),
+      })
     }
     return [...map.entries()]
-      .map(([key, name]) => ({ key, name }))
+      .map(([key, v]) => ({ key, ...v }))
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [instruments])
 
@@ -78,8 +88,8 @@ export default function CompanyLogos() {
       <p className="mt-2 text-xs text-muted">
         {pick(
           lang,
-          'Upload a logo per local company (PNG or SVG, ideally square, transparent). It shows on every instrument from that issuer; without one, a monogram is used.',
-          'Subí un logo por empresa local (PNG o SVG, idealmente cuadrado y transparente). Aparece en todos los instrumentos de ese emisor; sin logo se usa un monograma.',
+          'One logo per company (PNG or SVG, ideally square, transparent). Listed companies use their feed logo automatically — upload only when none is found. It applies to every instrument from that company.',
+          'Un logo por empresa (PNG o SVG, idealmente cuadrado y transparente). Las empresas listadas usan su logo automáticamente — subí uno solo si no se encuentra. Aplica a todos los instrumentos de esa empresa.',
         )}
       </p>
 
@@ -92,19 +102,15 @@ export default function CompanyLogos() {
               key={c.key}
               className="flex items-center gap-3 rounded-xl border border-border bg-bg/40 p-3"
             >
-              <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-lg border border-border bg-white">
-                {has ? (
-                  <img
-                    src={logoImgUrl(c.key, bust[c.key])}
-                    alt=""
-                    className="h-full w-full object-contain p-1"
-                  />
-                ) : (
-                  <span className="font-serif text-sm font-semibold text-muted">
-                    {c.name.slice(0, 2).toUpperCase()}
-                  </span>
-                )}
-              </div>
+              {/* Same resolution chain as the report, so this shows exactly what
+                  an advisor sees — feed logo, uploaded logo, or a monogram. */}
+              <CompanyLogo
+                key={`${c.key}-${bust[c.key] ?? 0}`}
+                ticker={c.ticker}
+                name={c.name}
+                uploadKey={c.key}
+                size={48}
+              />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-text">{c.name}</p>
                 <div className="mt-1 flex items-center gap-3">
