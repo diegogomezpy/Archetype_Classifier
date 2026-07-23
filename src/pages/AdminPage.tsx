@@ -12,6 +12,7 @@ import {
   fieldSpecsFor,
   kindLabel,
   localQuickFacts,
+  companyKeyFor,
   subclassesFor,
   subclassFor,
   supportsFetch,
@@ -24,7 +25,7 @@ import { useLang, useT } from '../i18n/i18n'
 import { categoryLabel, regionLabel } from '../i18n/content'
 import AppNav from '../components/AppNav'
 import AdminNav from '../components/AdminNav'
-import CompanyLogos from '../components/CompanyLogos'
+import CompanyLogo from '../components/CompanyLogo'
 import ImportInstruments from '../components/ImportInstruments'
 import InstrumentDocs from '../components/InstrumentDocs'
 
@@ -240,6 +241,24 @@ function InstrumentForm({
       <h3 className="font-mono text-xs uppercase tracking-[0.14em] text-muted">
         {pick(lang, 'Identity', 'Identidad')}
       </h3>
+      {/* This instrument's logo, editable right here — the same image the advisor
+          sees. Uploading applies to the whole company (all its instruments). */}
+      <div className="mt-4 flex items-start gap-4">
+        <CompanyLogo
+          ticker={draft.ticker}
+          name={draft.name || '—'}
+          uploadKey={companyKeyFor(draft)}
+          canUpload
+          size={56}
+        />
+        <p className="max-w-xs pt-1 text-xs leading-snug text-muted">
+          {pick(
+            lang,
+            'Pulled from the ticker automatically. Upload or replace to override it — applies to every instrument from this company.',
+            'Se toma del ticker automáticamente. Subí o reemplazá para cambiarlo — aplica a todos los instrumentos de esta empresa.',
+          )}
+        </p>
+      </div>
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="sm:col-span-2">
           <label className={labelCls}>{t.admin.name}</label>
@@ -758,11 +777,6 @@ export default function AdminPage() {
 
       {/* Bulk import from a spreadsheet */}
       <ImportInstruments />
-
-      {/* Per-company logos for local issuers (Parqet only covers US tickers) */}
-      <div className="mt-4">
-        <CompanyLogos />
-      </div>
 
       {/* New-instrument form */}
       {adding && (
