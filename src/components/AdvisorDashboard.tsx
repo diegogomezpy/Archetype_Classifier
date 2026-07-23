@@ -209,16 +209,6 @@ export default function AdvisorDashboard({ data, clientName }: Props) {
         </div>
       </section>
 
-      {/* ── Actions ─────────────────────────────────────────────────────────── */}
-      <div className="no-print mt-12">
-        <button
-          type="button"
-          onClick={() => window.print()}
-          className="rounded-2xl bg-teal px-6 py-3.5 text-sm font-medium text-white shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card"
-        >
-          {t.dashboard.downloadReport}
-        </button>
-      </div>
     </div>
   )
 }

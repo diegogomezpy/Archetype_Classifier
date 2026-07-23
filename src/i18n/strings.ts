@@ -117,7 +117,6 @@ const en = {
     portfolioGlobal: 'Global portfolio',
     portfolioLocal: 'Local portfolio',
     localNone: 'No local model mix set for this archetype yet.',
-    downloadReport: 'Download report (PDF)',
   },
   instrumentDetail: {
     noDetails: 'No details on file yet — add them in the admin console.',
@@ -521,7 +520,6 @@ const es: UIStrings = {
     portfolioGlobal: 'Portafolio global',
     portfolioLocal: 'Portafolio local',
     localNone: 'Aún no hay mezcla modelo local para este arquetipo.',
-    downloadReport: 'Descargar informe (PDF)',
   },
   instrumentDetail: {
     noDetails: 'Aún no hay detalles cargados — agrégalos en la consola de administración.',
@@ -533,11 +531,11 @@ const es: UIStrings = {
     housePick: 'Selección de la casa',
     updated: 'Actualizado',
     // Vista de informe
-    profileFit: 'Ajuste al perfil',
-    fitStrong: 'Ajuste fuerte',
-    fitGood: 'Buen ajuste',
-    fitModerate: 'Ajuste moderado',
-    fitWeak: 'Ajuste débil',
+    profileFit: 'Compatibilidad con el perfil',
+    fitStrong: 'Muy compatible',
+    fitGood: 'Compatible',
+    fitModerate: 'Compatibilidad moderada',
+    fitWeak: 'Poco compatible',
     whyRecommend: 'Por qué lo recomendamos',
     about: 'Acerca de',
     price: 'Precio',

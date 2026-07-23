@@ -5,8 +5,6 @@ import { CatalogProvider } from './lib/catalog'
 import { ArchetypeConfigProvider } from './lib/archetypeConfig'
 import { RiskParamsProvider } from './lib/riskParamsConfig'
 import { DirectoryProvider } from './lib/directory'
-import LanguageToggle from './components/LanguageToggle'
-import ThemeToggle from './components/ThemeToggle'
 import TestFlowPage from './pages/TestFlowPage'
 import AdvisorListPage from './pages/AdvisorListPage'
 import AdvisorClientPage from './pages/AdvisorClientPage'
@@ -49,8 +47,6 @@ export default function App() {
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </HashRouter>
-              <LanguageToggle />
-              <ThemeToggle />
             </div>
           </CatalogProvider>
           </RiskParamsProvider>

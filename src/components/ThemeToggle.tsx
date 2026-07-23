@@ -1,9 +1,11 @@
 import { useTheme } from '../lib/theme'
 
-// Global theme switch — fixed to the bottom-left corner on every route (mirrors
-// the language toggle at bottom-right; hidden from the print report). A sun in
-// dark mode (→ switch to light), a moon in light mode (→ switch to dark).
-export default function ThemeToggle() {
+/**
+ * Theme switch. `inline` sits at the end of the masthead as a bare icon; without
+ * it the control floats bottom-left, for the one route that hides the masthead.
+ * A sun in dark mode (→ switch to light), a moon in light mode (→ switch to dark).
+ */
+export default function ThemeToggle({ inline = false }: { inline?: boolean }) {
   const { theme, toggle } = useTheme()
   const dark = theme === 'dark'
 
@@ -13,7 +15,11 @@ export default function ThemeToggle() {
       onClick={toggle}
       aria-label={dark ? 'Switch to light theme' : 'Switch to dark theme'}
       title={dark ? 'Light' : 'Dark'}
-      className="no-print fixed bottom-4 left-4 z-40 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-surface text-muted shadow-soft transition-colors hover:text-text"
+      className={
+        inline
+          ? 'no-print flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:text-text'
+          : 'no-print fixed bottom-4 left-4 z-40 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-surface text-muted shadow-soft transition-colors hover:text-text'
+      }
     >
       {dark ? (
         <svg

@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import IntroScreen, { type StartInfo } from '../components/IntroScreen'
 import AppNav from '../components/AppNav'
+import LanguageToggle from '../components/LanguageToggle'
+import ThemeToggle from '../components/ThemeToggle'
 import RoundScreen from '../components/RoundScreen'
 import HalfwayScreen from '../components/HalfwayScreen'
 import ClientResult from '../components/ClientResult'
@@ -150,6 +152,15 @@ export default function TestFlowPage() {
 
       {state === 'result' && dashboardData && (
         <ClientResult data={dashboardData} onRetake={retake} />
+      )}
+
+      {/* Language + theme live in the masthead everywhere else, but this is the
+          one flow that hides it — float them so the client keeps both controls. */}
+      {state !== 'intro' && (
+        <>
+          <LanguageToggle />
+          <ThemeToggle />
+        </>
       )}
     </div>
   )
