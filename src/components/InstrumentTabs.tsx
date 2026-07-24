@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { colorForCategory, type Category, type Region } from '../lib/instruments'
 import { computeFitScore } from '../lib/scoring'
-import type { NormalizedScores } from '../lib/scoring'
+import { assignedLevel } from '../lib/portfolio'
+import type { AxisScores } from '../lib/scoring'
 import { useCatalog, type ManagedInstrument } from '../lib/catalog'
 import { useLang, useT } from '../i18n/i18n'
 import { categoryLabel } from '../i18n/content'
@@ -10,7 +11,7 @@ import InstrumentList from './InstrumentList'
 type Props = {
   /** Allocation slices (pct > 0), already sorted by weight desc. */
   allocation: { assetClass: Category; pct: number }[]
-  scores: NormalizedScores
+  scores: AxisScores
   /** Which universe to draw instruments from (global vs local). */
   region?: Region
   /** Max instruments shown per asset-class tab. Defaults to all (no cap). */
@@ -47,7 +48,7 @@ export default function InstrumentTabs({
     for (const cls of classes) {
       map[cls] = instruments
         .filter((i) => (i.region ?? 'global') === region && i.assetClass === cls && i.visible)
-        .map((i) => ({ ...i, fit: computeFitScore(i, scores) }))
+        .map((i) => ({ ...i, fit: computeFitScore(i, scores, assignedLevel(i)) }))
         .sort((a, b) => (b.emphasized ? 1 : 0) - (a.emphasized ? 1 : 0) || b.fit - a.fit)
         .slice(0, perClassLimit)
     }

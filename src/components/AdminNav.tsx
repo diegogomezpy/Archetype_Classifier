@@ -1,8 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import { useT } from '../i18n/i18n'
 
-// Admin section tabs (Instruments / Archetypes / Advisors). The global AppNav
-// bar sits above this on every admin page.
+// Admin section tabs. The global AppNav bar sits above this on every admin page.
 export default function AdminNav() {
   const t = useT()
 
@@ -12,15 +11,21 @@ export default function AdminNav() {
     }`
 
   return (
-    <div className="flex items-center gap-1 border-b border-border pb-3">
+    <div className="flex flex-wrap items-center gap-1 border-b border-border pb-3">
       <NavLink to="/admin" end className={tab}>
         {t.adminNav.instruments}
       </NavLink>
-      <NavLink to="/admin/archetypes" className={tab}>
-        {t.adminNav.archetypes}
+      <NavLink to="/admin/questions" className={tab}>
+        {t.adminNav.questions}
+      </NavLink>
+      <NavLink to="/admin/bands" className={tab}>
+        {t.adminNav.bands}
       </NavLink>
       <NavLink to="/admin/risk" className={tab}>
         {t.adminNav.risk}
+      </NavLink>
+      <NavLink to="/admin/portfolio" className={tab}>
+        {t.adminNav.portfolio}
       </NavLink>
       <NavLink to="/admin/advisors" className={tab}>
         {t.adminNav.advisors}

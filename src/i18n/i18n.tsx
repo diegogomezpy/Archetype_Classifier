@@ -12,13 +12,15 @@ function initialLang(): Lang {
   } catch {
     /* ignore */
   }
-  return typeof navigator !== 'undefined' && navigator.language?.toLowerCase().startsWith('es')
-    ? 'es'
-    : 'en'
+  // Spanish-first: the audience is a Paraguayan brokerage, so default to ES
+  // unless the visitor's browser is explicitly English. A saved choice wins.
+  return typeof navigator !== 'undefined' && navigator.language?.toLowerCase().startsWith('en')
+    ? 'en'
+    : 'es'
 }
 
 const LanguageContext = createContext<{ lang: Lang; setLang: (l: Lang) => void }>({
-  lang: 'en',
+  lang: 'es',
   setLang: () => {},
 })
 

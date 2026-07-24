@@ -4,12 +4,12 @@ import { api } from './api'
 // ---------------------------------------------------------------------------
 // Session persistence (backend API → Firestore)
 // ---------------------------------------------------------------------------
-// A completed test is submitted to the server, which finds-or-creates the client
-// (advisor + name) and stores the session linked to both. The drawn game P&L is
-// deliberately NOT part of the record — it's an engagement metric, not profile
-// data.
+// A completed questionnaire is submitted to the server, which finds-or-creates
+// the client (advisor + name) and stores the session linked to both. The raw
+// answers are kept alongside the derived scores so a session can be re-scored if
+// the questionnaire ever changes.
 
-export type SessionAnswer = { roundId: number; allocX: number }
+export type SessionAnswer = { questionId: string; value: number }
 
 export type SessionRecord = DashboardData & {
   id: string

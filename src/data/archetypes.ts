@@ -1,8 +1,11 @@
-// Archetype keys are the internal identifiers used throughout scoring; the
-// `name` field is what the client sees. The payoff-shape signatures (σ, α, λ)
-// live in SHAPE_VECTORS in scoring.ts — the single source of truth — so they're
-// intentionally NOT duplicated here.
-export type ArchetypeKey = 'banker' | 'quant' | 'venture' | 'insurer' | 'indexer'
+// An archetype id. Archetypes are ADMIN-DEFINED (add / remove / rename / retune
+// on the Archetypes page), so the id is any string. The five below are the seed
+// set — each is a point on the two profile axes (risk aversion, liquidity
+// preference) plus its bilingual copy and model portfolios. Their asset-class
+// mixes double as the admin's allocation PRESETS on the advisor screen.
+export type ArchetypeKey = string
+// The seed ids, in display order — used to build the default archetype list.
+export const SEED_ARCHETYPE_IDS = ['guardian', 'income', 'balanced', 'opportunist', 'builder'] as const
 
 export type Archetype = {
   name: string
@@ -14,67 +17,67 @@ export type Archetype = {
 // Accent color per archetype, used for client-card avatars and chips on the
 // advisor pages. Chosen from the app palette to read at a glance.
 export const ARCHETYPE_COLORS: Record<ArchetypeKey, string> = {
-  banker: '#378ADD', // blue — capital preservation
-  quant: '#9B59B6', // purple — systematic
-  venture: '#E05C5C', // red — bold upside
-  insurer: '#C9933A', // amber — income
-  indexer: '#5AA98B', // teal-green — broad market
+  guardian: '#378ADD', // blue — capital preservation + liquidity
+  income: '#C9933A', // amber — steady income
+  balanced: '#5AA98B', // green — diversified middle
+  opportunist: '#00C9A7', // teal — nimble, risk-tolerant
+  builder: '#E05C5C', // red — long-horizon growth
 }
 
 export const ARCHETYPES: Record<ArchetypeKey, Archetype> = {
-  banker: {
-    name: 'The Banker',
-    desc: "You protect capital first — you'll trade upside for certainty.",
-    traits: ['Capital-preserving', 'Prefers certainty', 'Conservative', 'Low drawdown'],
+  guardian: {
+    name: 'The Guardian',
+    desc: 'You protect capital first and keep it within reach — certainty and access over upside.',
+    traits: ['Capital-preserving', 'Values liquidity', 'Low drawdown', 'Conservative'],
     products: [
-      'Capital-protected autocallables',
       'Short-duration investment grade bonds',
-      'BVA sovereign bond ladder',
-      'Multi-asset ETFs with downside hedge',
+      'Treasury bill ladder',
+      'Term deposits (CDs)',
+      'Money-market and liquid funds',
     ],
   },
-  quant: {
-    name: 'The Quant',
-    desc: 'You follow the expected value — models over narrative, math over feel.',
-    traits: ['EV-driven', 'Shape-indifferent', 'Systematic', 'Low behavioral bias'],
+  income: {
+    name: 'The Income Seeker',
+    desc: 'You want steady income and will lock capital up to earn it, as long as risk stays moderate.',
+    traits: ['Yield-seeking', 'Accepts lock-ups', 'Moderate risk', 'Income-focused'],
     products: [
-      'Low-cost factor ETFs',
-      'Plain bond ladders',
-      'BVA sovereign notes',
-      'Systematic rebalancing strategies',
+      'Investment grade corporate bonds',
+      'Sovereign bond ladder',
+      'Coupon-paying structured notes',
+      'Multi-year investment funds',
     ],
   },
-  venture: {
-    name: 'The Venture Capitalist',
-    desc: 'You back bold bets for the shot at an outsized win.',
-    traits: ['Upside-oriented', 'Risk-tolerant', 'Conviction-driven', 'Loss-resilient'],
+  balanced: {
+    name: 'The Balanced',
+    desc: 'You split the difference — a diversified mix that balances growth against stability and access.',
+    traits: ['Diversified', 'Balanced risk', 'Flexible', 'Middle-of-the-road'],
     products: [
-      'Structured notes with uncapped upside',
-      'Selective single-name equity',
-      'Long-dated equity options',
-      'Satellite participation notes',
+      'Diversified multi-asset ETFs',
+      'A blend of bonds and equities',
+      'Broad-market index funds',
+      'Balanced mutual funds',
     ],
   },
-  insurer: {
-    name: 'The Insurer',
-    desc: 'You collect steady premium for taking on the risk others avoid.',
-    traits: ['Premium-collecting', 'Negative-skew tolerant', 'Yield-seeking', 'Underwrites risk'],
+  opportunist: {
+    name: 'The Opportunist',
+    desc: 'You take on risk but keep your powder dry — nimble positions you can exit to seize the next move.',
+    traits: ['Risk-tolerant', 'Values liquidity', 'Tactical', 'Opportunistic'],
     products: [
-      'Autocallable reverse convertibles',
-      'Covered-call overlay ETFs',
-      'High-yield BVA corporates',
-      'Quarterly observation structured notes',
+      'Liquid equity ETFs',
+      'Single-name equities',
+      'Sector and thematic ETFs',
+      'Exchange-traded participation notes',
     ],
   },
-  indexer: {
-    name: 'The Indexer',
-    desc: "You'd rather own the market than try to outguess it.",
-    traits: ['Transparency-first', 'Low-cost', 'Broad-market', 'Low complexity'],
+  builder: {
+    name: 'The Builder',
+    desc: 'You back long-horizon growth and can lock capital away for years to compound it.',
+    traits: ['Growth-oriented', 'Long horizon', 'Loss-resilient', 'High conviction'],
     products: [
-      'MSCI World / S&P 500 trackers',
-      'Plain BVA investment grade bonds',
-      'Diversified multi-asset ETF',
-      'Term deposits',
+      'Growth and thematic equities',
+      'Uncapped participation notes',
+      'Private and venture funds',
+      'Long-dated equity positions',
     ],
   },
 }

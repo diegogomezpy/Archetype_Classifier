@@ -1,5 +1,5 @@
 import { useLang, useT } from '../i18n/i18n'
-import { localizedArchetype } from '../i18n/content'
+import { localizedBand, bandColor } from '../i18n/content'
 import type { DashboardData } from '../lib/scoring'
 
 type Props = {
@@ -7,17 +7,14 @@ type Props = {
   onRetake: () => void
 }
 
-// The client's end-of-game screen: ONLY the archetype and a brief description.
-// Allocation, instruments, scores, and talking points are advisor-facing and
-// live exclusively on the #/advisor routes.
+// The client's end screen: their risk band (level + name + description). The
+// portfolio, instruments, and measures are advisor-facing and live exclusively
+// on the #/advisor routes.
 export default function ClientResult({ data, onRetake }: Props) {
   const t = useT()
   const { lang } = useLang()
-  const archetype = localizedArchetype(data.archetype, lang)
-  const secondary =
-    data.isBlend && data.secondaryArchetype
-      ? localizedArchetype(data.secondaryArchetype, lang)
-      : null
+  const band = localizedBand(data.level, lang)
+  const color = bandColor(data.level)
 
   return (
     <div className="flex min-h-[100svh] w-full items-center justify-center px-6 py-16">
@@ -26,28 +23,22 @@ export default function ClientResult({ data, onRetake }: Props) {
           {t.result.eyebrow}
         </p>
 
+        <span
+          className="mb-5 inline-flex items-center gap-2 rounded-full border px-3.5 py-1 font-mono text-xs font-medium uppercase tracking-wider"
+          style={{ borderColor: `${color}66`, color, backgroundColor: `${color}14` }}
+        >
+          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+          {t.result.level(data.level)}
+        </span>
+
         <h1 className="text-4xl font-semibold leading-tight tracking-tight text-text sm:text-[3rem]">
-          {archetype.name}
+          {band.name}
         </h1>
 
-        {secondary && (
-          <p className="mt-3 text-sm text-muted">
-            {t.result.secondaryLean}{' '}
-            <span className="font-medium text-amber">{secondary.name}</span>
-          </p>
-        )}
-
-        {data.tentative && (
-          <p className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-amber/40 bg-amber/[0.07] px-3 py-1 text-xs font-medium text-amber">
-            <span aria-hidden>≈</span>
-            {t.result.tentative}
-          </p>
-        )}
-
-        <p className="mt-6 max-w-md text-lg leading-relaxed text-muted">{archetype.desc}</p>
+        <p className="mt-6 max-w-md text-lg leading-relaxed text-muted">{band.desc}</p>
 
         <div className="mt-7 flex flex-wrap justify-center gap-2.5">
-          {archetype.traits.map((trait) => (
+          {band.traits.map((trait) => (
             <span
               key={trait}
               className="rounded-full border border-border bg-surface px-3.5 py-1.5 text-sm text-text shadow-soft"

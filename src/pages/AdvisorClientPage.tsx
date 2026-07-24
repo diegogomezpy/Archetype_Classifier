@@ -2,11 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { getSessionStore, type SessionRecord } from '../lib/storage'
 import { reclassifyScores } from '../lib/scoring'
-import { useArchetypeConfig } from '../lib/archetypeConfig'
 import { useDirectory } from '../lib/directory'
 import { dateLocale, useLang, useT } from '../i18n/i18n'
-import { localizedArchetype } from '../i18n/content'
-import { ARCHETYPE_COLORS } from '../data/archetypes'
+import { bandColor, localizedBand } from '../i18n/content'
 import AppNav from '../components/AppNav'
 
 function fmtDate(iso: string, locale: string): string {
@@ -28,7 +26,6 @@ function hexA(hex: string, alpha: number): string {
 export default function AdvisorClientPage() {
   const t = useT()
   const { lang } = useLang()
-  const { config } = useArchetypeConfig()
   const { loggedInAdvisorId } = useDirectory()
   const { clientId } = useParams<{ clientId: string }>()
   const [sessions, setSessions] = useState<SessionRecord[] | null>(null)
@@ -52,10 +49,10 @@ export default function AdvisorClientPage() {
     [sessions],
   )
   const clientName = mySessions[0]?.clientLabel ?? null
-  // The client's current classification (newest session) drives the header accent.
-  const latestLive = mySessions[0] ? reclassifyScores(mySessions[0].scores, config.shapeVectors) : null
-  const latestColor = latestLive ? ARCHETYPE_COLORS[latestLive.archetype] : '#8A8D99'
-  const latestName = latestLive ? localizedArchetype(latestLive.archetype, lang).name : null
+  // The client's current band (newest session) drives the header accent.
+  const latestLive = mySessions[0] ? reclassifyScores(mySessions[0].scores) : null
+  const latestColor = latestLive ? bandColor(latestLive.level) : '#8A8D99'
+  const latestName = latestLive ? localizedBand(latestLive.level, lang).name : null
 
   const handleDelete = (s: SessionRecord) => {
     void getSessionStore()
@@ -104,9 +101,9 @@ export default function AdvisorClientPage() {
 
       <ul className="mt-8 space-y-3">
         {mySessions.map((s) => {
-          const live = reclassifyScores(s.scores, config.shapeVectors)
-          const archetype = localizedArchetype(live.archetype, lang)
-          const sColor = ARCHETYPE_COLORS[live.archetype]
+          const live = reclassifyScores(s.scores)
+          const band = localizedBand(live.level, lang)
+          const sColor = bandColor(live.level)
           return (
             <li key={s.id} className="group relative">
               <Link
@@ -120,21 +117,15 @@ export default function AdvisorClientPage() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2.5">
                     <span className="truncate text-base font-semibold text-text">
-                      {archetype.name}
+                      {band.name}
                     </span>
-                    {live.tentative && (
-                      <span className="shrink-0 rounded-full border border-amber/40 bg-amber/[0.07] px-2 py-0.5 text-[11px] font-medium text-amber">
-                        {t.advisorList.tentativeBadge}
-                      </span>
-                    )}
                   </div>
                   <p className="mt-1 text-sm text-muted">{fmtDate(s.createdAt, dateLocale(lang))}</p>
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className="font-mono text-sm font-medium text-text tnum">
-                    {Math.round(live.confidence * 100)}%
+                  <p className="font-mono text-sm font-medium tnum" style={{ color: sColor }}>
+                    {t.result.level(live.level)}
                   </p>
-                  <p className="mt-0.5 text-xs text-muted">{t.advisorList.confidence}</p>
                 </div>
                 <span aria-hidden className="text-muted">
                   →

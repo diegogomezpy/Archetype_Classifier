@@ -1,6 +1,6 @@
 import type { ManagedInstrument } from './catalog'
 import type { LocalCategory } from './instruments'
-import { deriveDefaults, deriveRiskVector } from './riskDerivation'
+import { deriveDefaults } from './riskDerivation'
 import type { ImportResult } from './importSchema'
 
 // ---------------------------------------------------------------------------
@@ -162,8 +162,9 @@ export function parseBulletin(lines: string[]): ImportResult {
     details: Record<string, string>,
     kind?: string,
   ) => {
-    const vec = deriveRiskVector('local', cat, rtg ? { rating: rtg } : {})
     const def = deriveDefaults('local', cat)
+    // Keep the rating in details so the risk level derives from it live.
+    if (rtg && !details.rating) details.rating = rtg
     seq += 1
     let id = `blt-${cat.toLowerCase().replace(/[^a-z]+/g, '')}-${String(seq).padStart(2, '0')}`
     while (seen.has(id)) id += 'x'
@@ -175,9 +176,6 @@ export function parseBulletin(lines: string[]): ImportResult {
       region: 'local',
       assetClass: cat,
       kind: kind ?? KIND[cat],
-      sigmaLoad: vec.sigmaLoad,
-      alphaLoad: vec.alphaLoad,
-      lambdaLoad: vec.lambdaLoad,
       liquidityTier: def.liquidityTier,
       lockupMonths: def.lockupMonths,
       visible: true,

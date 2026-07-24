@@ -2,11 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getSessionStore, type SessionRecord } from '../lib/storage'
 import { reclassifyScores } from '../lib/scoring'
-import { useArchetypeConfig } from '../lib/archetypeConfig'
 import { useDirectory, type Advisor } from '../lib/directory'
 import { dateLocale, useLang, useT } from '../i18n/i18n'
-import { localizedArchetype } from '../i18n/content'
-import { ARCHETYPE_COLORS } from '../data/archetypes'
+import { bandColor, localizedBand } from '../i18n/content'
 import AppNav from '../components/AppNav'
 
 function fmtDate(iso: string, locale: string): string {
@@ -92,7 +90,6 @@ function AdvisorPicker({ advisors }: { advisors: Advisor[] }) {
 export default function AdvisorListPage() {
   const t = useT()
   const { lang } = useLang()
-  const { config } = useArchetypeConfig()
   const { advisors, loggedInAdvisorId, logout } = useDirectory()
   const [sessions, setSessions] = useState<SessionRecord[] | null>(null)
 
@@ -173,9 +170,9 @@ export default function AdvisorListPage() {
 
           <ul className="mt-8 space-y-3">
             {rows.map(({ clientId, name, count, latest }) => {
-              const live = latest ? reclassifyScores(latest.scores, config.shapeVectors) : null
-              const archetype = live ? localizedArchetype(live.archetype, lang) : null
-              const color = live ? ARCHETYPE_COLORS[live.archetype] : '#8A8D99'
+              const live = latest ? reclassifyScores(latest.scores) : null
+              const band = live ? localizedBand(live.level, lang) : null
+              const color = live ? bandColor(live.level) : '#8A8D99'
               return (
                 <li key={clientId}>
                   <Link
@@ -196,7 +193,7 @@ export default function AdvisorListPage() {
                             className="h-2 w-2 shrink-0 rounded-full"
                             style={{ backgroundColor: color }}
                           />
-                          {archetype ? archetype.name : '—'}
+                          {band ? band.name : '—'}
                         </span>
                         <span className="text-muted/40">·</span>
                         <span>{t.advisorClients.sessions(count)}</span>

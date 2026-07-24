@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useT } from '../i18n/i18n'
 import { useDirectory } from '../lib/directory'
+import { useQuestionnaire } from '../lib/questionnaire'
 
 export type StartInfo = { name: string; advisorId: string | null }
 
@@ -11,6 +12,7 @@ type Props = {
 export default function IntroScreen({ onStart }: Props) {
   const t = useT()
   const { advisors, lastClient } = useDirectory()
+  const { questions } = useQuestionnaire()
 
   // Prefill from the device-remembered client (if their advisor still exists).
   const rememberedAdvisor =
@@ -32,7 +34,7 @@ export default function IntroScreen({ onStart }: Props) {
   }
 
   const stats = [
-    { value: '10', label: t.intro.statDecisions },
+    { value: String(questions.length), label: t.intro.statQuestions },
     { value: t.intro.statTimeValue, label: t.intro.statTime },
     { value: '5', label: t.intro.statProfiles },
   ]

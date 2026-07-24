@@ -6,7 +6,7 @@ import { isAutoFillable, parseInstruments, templateCsv, type ImportResult } from
 import { parseBulletin } from '../lib/bulletinParse'
 import { extractPdfLines } from '../lib/pdfText'
 import { fetchInstrumentData } from '../lib/marketData'
-import { deriveRiskVector } from '../lib/riskDerivation'
+import { assignedLevel } from '../lib/portfolio'
 import { useLang, useT } from '../i18n/i18n'
 import { categoryLabel, regionLabel } from '../i18n/content'
 
@@ -16,7 +16,6 @@ const selCls =
 const btnCls =
   'rounded-lg border border-border bg-surface px-3.5 py-2 text-sm font-medium text-muted transition-colors hover:text-teal disabled:cursor-not-allowed disabled:opacity-50'
 const labelCls = 'flex flex-col gap-1 text-xs font-medium text-muted'
-const num = (n: number) => (n >= 0 ? '+' : '') + n.toFixed(2)
 
 // A row autofills only if it names a ticker AND its subclass has a market-data
 // source. So an individual-bond listing (no ticker, or a Fixed-rate/TIPS/
@@ -196,7 +195,7 @@ export default function ImportInstruments() {
               <ul className="mt-3 max-h-44 space-y-1 overflow-y-auto pr-2 font-mono text-[11px] text-muted tnum">
                 {result.instruments.slice(0, 12).map((i) => (
                   <li key={i.id} className="truncate">
-                    {i.name} · σ {num(i.sigmaLoad)} · α {num(i.alphaLoad)} · λ {num(i.lambdaLoad)}
+                    {i.name} · Nivel {assignedLevel(i)}
                   </li>
                 ))}
                 {result.instruments.length > 12 && <li>+{result.instruments.length - 12}…</li>}
@@ -253,14 +252,12 @@ async function autofillAll(
       const rest: Record<string, string> = {}
       for (const [k, v] of Object.entries(fields)) if (k !== 'name' && allowed.has(k)) rest[k] = v
       const details = { ...rest, ...inst.details } // the file overrides the feed
-      const vec = details.beta
-        ? deriveRiskVector(inst.region ?? 'global', inst.assetClass, { beta: details.beta })
-        : null
+      // The risk level derives live from the (now-enriched) details, so there's
+      // nothing to re-persist here.
       out[i] = {
         ...inst,
         name: inst.details.name || fields.name || inst.name,
         kind: inst.kind || details.kind,
-        ...(vec ?? {}),
         details,
       }
       onFetched()

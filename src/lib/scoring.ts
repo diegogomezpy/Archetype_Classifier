@@ -1,445 +1,147 @@
-import type { Round, Scores } from '../types'
-import type { ArchetypeKey } from '../data/archetypes'
-import { ROUNDS } from '../data/rounds'
-import { type AssetClass, type Instrument } from './instruments'
-import { computeOutcomes, INPUT } from './outcomes'
+import {
+  type AssetClass,
+  type Category,
+  type Instrument,
+  type LocalCategory,
+  type Region,
+} from './instruments'
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
 
-export const EMPTY_SCORES: Scores = { sigma: 0, alpha: 0, lambda: 0, ev: 0 }
-
-/**
- * Per-round SHAPE scoring contributions (10-round paired all-mismatched design).
- * Every round is an allocation slider: Growth (X) is always the more aggressive
- * side, so the signal is monotone: s = (allocX - 50) / 50 ∈ [-1, +1]; positive
- * s = leaning toward X. Shape weights are signed in the X-direction.
- *
- * Rounds come in pairs sharing a shape contrast (ids n and n+5):
- *   1/6  variance (σ), gain-only
- *   2/7  skew (α)
- *   3/8  loss aversion (a little σ; λ read separately — see below)
- *   4/9  combined risk profile (σ + α; λ read separately)
- *   5/10 lottery skew (α)
- * Both rounds of a pair carry IDENTICAL shape weights (X is the aggressive side
- * in both), so the shape signal is the pair's average.
- *
- * EV-discipline (ev) is NOT in this table — it's scored from each round's actual
- * EV gap (`round.evGap`, the single source of truth) in applyScore: the
- * contribution is evGap · s. The richer side is sign(evGap), so leaning toward
- * it accumulates positive ev, and bigger-gap rounds count more. evGap flips sign
- * between a pair (+ on the screen-1 round, − on the screen-2 round), so a
- * pure-shape player (same slider both times) nets ~0 on ev while an EV-chaser
- * accumulates it.
- *
- * NOTE: λ (loss aversion) is NOT scored here either. A linear slider weight
- * conflated it with σ, so λ is read from the realized downside the player took
- * on — expected shortfall — in computeLossAversion() below.
- */
-export const ROUND_SCORES: Record<
-  number,
-  { dim: 'sigma' | 'alpha'; weight: number }[]
-> = {
-  // ── screen 1: the "a" rounds, aggressive side (X) is the richer one ──
-  1: [{ dim: 'sigma', weight: 2 }],
-  2: [{ dim: 'alpha', weight: 2 }],
-  3: [{ dim: 'sigma', weight: 1 }],
-  4: [
-    { dim: 'sigma', weight: 1 },
-    { dim: 'alpha', weight: 1 },
-  ],
-  5: [{ dim: 'alpha', weight: 2 }],
-  // ── screen 2: the "b" rounds, calm side (Y) is the richer one ──
-  6: [{ dim: 'sigma', weight: 2 }],
-  7: [{ dim: 'alpha', weight: 2 }],
-  8: [{ dim: 'sigma', weight: 1 }],
-  9: [
-    { dim: 'sigma', weight: 1 },
-    { dim: 'alpha', weight: 1 },
-  ],
-  10: [{ dim: 'alpha', weight: 2 }],
+// ---------------------------------------------------------------------------
+// The two-axis profile
+// ---------------------------------------------------------------------------
+// A client is placed on exactly two axes, both in [-1, 1]:
+//   riskAversion  +1 = protects capital, avoids volatility · −1 = seeks upside
+//   liquidity     +1 = wants ready access to cash · −1 = can lock capital away
+// The scores come from an admin-authored questionnaire (see lib/questionnaire),
+// NOT from any fixed instrument-level model — the risk model is the client's
+// answers alone.
+export type AxisScores = {
+  riskAversion: number
+  liquidity: number
 }
 
-/**
- * Accumulate a round's contribution into the raw score accumulator. The slider
- * value maps to a monotone signal and is scaled by the signed ROUND_SCORES
- * weights.
- */
-export function applyScore(acc: Scores, round: Round, allocX: number): Scores {
-  const next: Scores = { ...acc }
-  const signal = (allocX - 50) / 50 // [-1, +1]
+export const EMPTY_SCORES: AxisScores = { riskAversion: 0, liquidity: 0 }
 
-  // Shape axes (σ, α) from the fixed per-round weights.
-  for (const { dim, weight } of ROUND_SCORES[round.id] ?? []) {
-    next[dim] += weight * signal
-  }
-  // EV-discipline: weighted by the round's actual EV gap. Leaning toward the
-  // richer side (the sign of evGap) accumulates positive ev; bigger gaps count
-  // more. Normalized by Σ|evGap| in normalizeScores.
-  next.ev += round.evGap * signal
-  return next
-}
-
-export type NormalizedScores = {
-  sigma: number // [-1, 1] variance tolerance
-  alpha: number // [-1, 1] skew preference (positive = seeks positive skew)
-  lambda: number // [-1, 1] loss aversion (positive = more loss averse)
-  ev: number // [-1, 1] EV-discipline (positive = chases higher expected value)
-}
-
-// Normalization denominators = max attainable |raw| per dimension.
-// sigma:  Σ|weights| = 1(2)+3(1)+4(1)+6(2)+8(1)+9(1)  = 8
-// alpha:  Σ|weights| = 2(2)+4(1)+5(2)+7(2)+9(1)+10(2) = 10
-// ev:     Σ|evGap| across all rounds — computed from ROUNDS so it stays in sync
-//         with the data (evGap is the source of truth for the ev axis).
-// (λ is NOT accumulated linearly — see computeLossAversion below.)
-const NORM_SIGMA = 8
-const NORM_ALPHA = 10
-const NORM_EV = ROUNDS.reduce((sum, r) => sum + Math.abs(r.evGap), 0)
-
-export function normalizeScores(raw: Scores): NormalizedScores {
+// A stored session may predate this model (old {sigma,alpha,lambda,ev} shape),
+// so coerce anything missing to a neutral 0 rather than crashing the dashboard.
+function coerce(scores: Partial<AxisScores> | null | undefined): AxisScores {
   return {
-    sigma: clamp(raw.sigma / NORM_SIGMA, -1, 1),
-    alpha: clamp(raw.alpha / NORM_ALPHA, -1, 1),
-    // Placeholder — λ is derived from realized downside (expected shortfall) in
-    // buildDashboardData via computeLossAversion, not from a linear weight sum.
-    lambda: 0,
-    ev: clamp(raw.ev / NORM_EV, -1, 1),
+    riskAversion: clamp(Number(scores?.riskAversion) || 0, -1, 1),
+    liquidity: clamp(Number(scores?.liquidity) || 0, -1, 1),
   }
 }
 
 // ---------------------------------------------------------------------------
-// Loss aversion (λ) from realized downside — expected shortfall
+// Risk bands (the classification)
 // ---------------------------------------------------------------------------
+// The profile reduces to a fixed 1–5 risk band, driven by the risk-aversion
+// axis alone. Nivel 1 = most conservative (highest aversion) … Nivel 5 = most
+// aggressive. The liquidity axis does NOT move the band — it's a lever the
+// advisor's within-class optimizer uses to prefer liquid vs locked-up holdings.
+export const RISK_LEVELS = [1, 2, 3, 4, 5] as const
+export type RiskLevel = (typeof RISK_LEVELS)[number]
 
-export type Answer = { round: Round; allocX: number }
+// Thresholds on riskAversion. Kept alongside the level so the admin editor can
+// show each band's range. Ordered most-conservative first.
+export const BAND_THRESHOLDS: { level: RiskLevel; min: number; max: number }[] = [
+  { level: 1, min: 0.6, max: 1 },
+  { level: 2, min: 0.2, max: 0.6 },
+  { level: 3, min: -0.2, max: 0.2 },
+  { level: 4, min: -0.6, max: -0.2 },
+  { level: 5, min: -1, max: -0.6 },
+]
 
-// λ is read from how much downside the player actually took on, via EXPECTED
-// SHORTFALL — the probability-weighted expected loss below the $10k input. We
-// compute each side's standalone shortfall (esX = all-Growth, esY = all-Anchor)
-// and score how far the player leaned toward the SAFER (lower-shortfall) side.
-// Leaning to the safer side = loss-averse; leaning to the riskier side = loss-
-// tolerant; a neutral 50/50 split is exactly λ-neutral.
-//
-// Why the per-side reading, not the shortfall of the actual mix: shortfall of
-// the blended portfolio is convex in the split, so a diversified ~50/50 player
-// can sit at (or below) the downside minimum purely from decorrelation — and a
-// naive "took the least loss available" reading would mislabel them as maximally
-// loss-averse. Scoring the lean between the two sides is linear in the split, so
-// diversification can't masquerade as loss aversion.
-//
-// The two SKEW contrasts (tags 'Skew' and 'Long shot') are deliberately
-// EXCLUDED: there the loss tail is a frequency/size trade driven by skew taste
-// (e.g. the lottery's aggressive side carries a small, frequent loss), so its
-// shortfall reflects α, not loss aversion. λ is read only from the genuine
-// depth-of-loss rounds (loss-aversion + combined risk-profile contrasts);
-// gain-only rounds have equal (zero) shortfall on both sides and drop out.
-const LAMBDA_EXCLUDED_TAGS = new Set(['Skew', 'Long shot'])
-
-// Expected shortfall of a split: Σ p·max(0, INPUT − outcome).
-export function expectedShortfall(round: Round, allocX: number): number {
-  return computeOutcomes(round, allocX).reduce(
-    (s, o) => s + o.p * Math.max(0, INPUT - o.end),
-    0,
-  )
-}
-
-export function computeLossAversion(answers: Answer[]): number {
-  let weightedTol = 0
-  let weightSum = 0
-  for (const { round, allocX } of answers) {
-    if (LAMBDA_EXCLUDED_TAGS.has(round.tag)) continue
-    const esX = expectedShortfall(round, 100) // all-Growth standalone shortfall
-    const esY = expectedShortfall(round, 0) // all-Anchor standalone shortfall
-    const gap = Math.abs(esX - esY)
-    if (gap < 1) continue // both sides equally safe: no loss-aversion signal
-    // Weight-implied shortfall the player signed up for, normalized between the
-    // safer side (0) and the riskier side (1). Linear in the split by design.
-    const p = allocX / 100
-    const lo = Math.min(esX, esY)
-    const hi = Math.max(esX, esY)
-    const tol = clamp((p * esX + (1 - p) * esY - lo) / (hi - lo), 0, 1)
-    // Weight by the dollar shortfall gap so rounds with a bigger downside
-    // decision count for more.
-    weightedTol += tol * gap
-    weightSum += gap
-  }
-  if (weightSum === 0) return 0
-  return clamp(1 - 2 * (weightedTol / weightSum), -1, 1) // high = loss-averse
-}
-
-// ---------------------------------------------------------------------------
-// Archetype classification
-// ---------------------------------------------------------------------------
-
-// The base archetype is decided by payoff SHAPE only — variance, skew, loss
-// aversion. EV-discipline is deliberately NOT part of these vectors (every
-// shape archetype is ev-neutral). The Optimizer is handled as an ADDITIVE
-// overlay on top of the shape result: it isn't a competing direction in the
-// same space, it's a separate reading of one axis.
-export type ShapeScores = { sigma: number; alpha: number; lambda: number }
-
-// Archetypes that compete on payoff SHAPE via cosine similarity. The Quant
-// (EV overlay) and the Indexer are both intentionally absent. The Indexer is
-// NOT a direction in shape space — its old vector sat ~0.81 collinear with the
-// Banker, so the Banker-vs-Indexer result was really decided by magnitude,
-// which cosine discards. The Indexer is instead the LOW-CONVICTION outcome
-// (see classify): when no shape tilt is strong enough, "own the market" wins.
-export type ShapeArchetype = Exclude<ArchetypeKey, 'quant' | 'indexer'>
-export const SHAPE_VECTORS: Record<ShapeArchetype, ShapeScores> = {
-  // Low variance + high loss aversion; no skew view (a Banker shuns both the
-  // rare-big-loss side and the lottery, so α nets to ~0).
-  banker: { sigma: -0.7, alpha: 0.0, lambda: +0.8 },
-  // High variance, strong positive skew, loss-tolerant.
-  venture: { sigma: +0.6, alpha: +0.9, lambda: -0.5 },
-  // Strong negative skew (premium for taking the rare big loss); mildly variance-
-  // averse (wants steady income); loss-neutral (accepts the tail).
-  insurer: { sigma: -0.2, alpha: -0.8, lambda: 0.0 },
-}
-
-// The shape vectors classification ACTUALLY uses. Defaults to the built-ins
-// above; the admin console overrides it at runtime via setActiveShapeVectors so
-// the archetype geometry can be retuned without a code change. Scripts and tests
-// that never call the setter keep using SHAPE_VECTORS unchanged.
-let ACTIVE_SHAPE_VECTORS: Record<ShapeArchetype, ShapeScores> = SHAPE_VECTORS
-
-export function setActiveShapeVectors(vectors: Record<ShapeArchetype, ShapeScores>): void {
-  ACTIVE_SHAPE_VECTORS = vectors
-}
-
-export function getActiveShapeVectors(): Record<ShapeArchetype, ShapeScores> {
-  return ACTIVE_SHAPE_VECTORS
-}
-
-export function cosineSim(a: ShapeScores, b: ShapeScores): number {
-  const dot = a.sigma * b.sigma + a.alpha * b.alpha + a.lambda * b.lambda
-  const magA = Math.sqrt(a.sigma ** 2 + a.alpha ** 2 + a.lambda ** 2)
-  const magB = Math.sqrt(b.sigma ** 2 + b.alpha ** 2 + b.lambda ** 2)
-  return magA && magB ? dot / (magA * magB) : 0
-}
-
-export type Classification = {
-  archetype: ArchetypeKey
-  secondary: ArchetypeKey | null
-  primarySim: number
-  secondarySim: number | null
-  isBlend: boolean
-  confidence: number // 0..1 — how trustworthy the call is (conviction + separation)
-  tentative: boolean // true when confidence is low enough to caveat the result
-}
-
-// Below this STYLE magnitude — skew + loss-shape, √(α²+λ²) — there's no archetype
-// identity. Variance tolerance (σ) alone is a dial, not a style: a player who
-// just accepts market volatility with no skew or loss view is an Indexer, not a
-// weak Venture. So the gate looks only at α and λ; σ still refines the cosine
-// (and drives the asset mix) for players who DO have a style. Result is the
-// Indexer ("own the market"), unless EV-discipline is strong enough for a Quant.
-const STYLE_MIN = 0.3
-// EV-discipline strong enough to surface the Quant overlay. Set above the noise
-// floor so "+ Quant" means a genuinely EV-disciplined player, not someone who
-// chased the richer side once or twice. (See scripts/coverage.ts.)
-const EV_TAG = 0.45
-// Confidence calibration: a shape tilt of this magnitude — and a top-2 cosine
-// margin of this size — each count as fully convincing on their own.
-const CONVICTION_FULL = 0.6
-const MARGIN_FULL = 0.25
-// Below this composite confidence the result is flagged tentative.
-const TENTATIVE_BELOW = 0.4
-
-export function classify(
-  scores: { sigma: number; alpha: number; lambda: number; ev: number },
-  vectors: Record<ShapeArchetype, ShapeScores> = ACTIVE_SHAPE_VECTORS,
-): Classification {
-  const shape: ShapeScores = { sigma: scores.sigma, alpha: scores.alpha, lambda: scores.lambda }
-  const styleMag = Math.sqrt(shape.alpha ** 2 + shape.lambda ** 2) // skew + loss-shape only
-  const shapeMag = Math.sqrt(shape.sigma ** 2 + shape.alpha ** 2 + shape.lambda ** 2) // overall tilt
-  const evStrong = scores.ev >= EV_TAG
-  // The Quant "match" is read straight off the EV axis (0..1).
-  const evSim = clamp(scores.ev, 0, 1)
-
-  // No style signal (flat skew & loss-shape): no archetype identity. Strong EV-
-  // discipline => a pure Quant; otherwise the Indexer. The flatter the style, the
-  // more confidently an Indexer; a near-threshold tilt is borderline → tentative.
-  if (styleMag < STYLE_MIN) {
-    if (evStrong) {
-      return {
-        archetype: 'quant', secondary: null, primarySim: evSim, secondarySim: null,
-        isBlend: false, confidence: evSim, tentative: evSim < 0.5,
-      }
-    }
-    const confidence = clamp(1 - styleMag / STYLE_MIN, 0, 1)
-    return {
-      archetype: 'indexer', secondary: null, primarySim: 0, secondarySim: null,
-      isBlend: false, confidence, tentative: confidence < TENTATIVE_BELOW,
-    }
-  }
-
-  const sims = (Object.keys(vectors) as ShapeArchetype[])
-    .map((key) => ({ key, sim: cosineSim(shape, vectors[key]) }))
-    .sort((a, b) => b.sim - a.sim)
-  const primary = sims[0]
-  const margin = primary.sim - sims[1].sim
-
-  // Confidence = how strongly the player tilted (conviction) and how clearly one
-  // archetype won (separation).
-  const conviction = clamp(shapeMag / CONVICTION_FULL, 0, 1)
-  const separation = clamp(margin / MARGIN_FULL, 0, 1)
-  const confidence = 0.6 * conviction + 0.4 * separation
-  const tentative = confidence < TENTATIVE_BELOW
-
-  // The Quant rides on top additively when EV-discipline is strong; otherwise the
-  // runner-up shape archetype fills the secondary slot (a blend when it's close).
-  if (evStrong) {
-    return {
-      archetype: primary.key, secondary: 'quant', primarySim: primary.sim,
-      secondarySim: evSim, isBlend: true, confidence, tentative,
-    }
-  }
-  return {
-    archetype: primary.key, secondary: sims[1].key, primarySim: primary.sim,
-    secondarySim: sims[1].sim, isBlend: margin < 0.15, confidence, tentative,
-  }
+export function riskLevelFor(scores: Partial<AxisScores>): RiskLevel {
+  const ra = coerce(scores).riskAversion
+  if (ra >= 0.6) return 1
+  if (ra >= 0.2) return 2
+  if (ra >= -0.2) return 3
+  if (ra >= -0.6) return 4
+  return 5
 }
 
 // ---------------------------------------------------------------------------
 // Asset-class allocation engine
 // ---------------------------------------------------------------------------
+// The model portfolio is DERIVED from the two axes: a more risk-averse client
+// tilts to fixed income, a more risk-tolerant one to equities; a stronger
+// liquidity preference pulls toward liquid classes and away from locked-up
+// satellites. Used to seed each band's preset mix; the admin can override it.
 
-// Asset-class allocation is driven by payoff shape only (σ, α, λ); the ev axis
-// describes how the client decides, not what an asset class is.
-type ShapeVector = { sigma: number; alpha: number; lambda: number }
+// Raw (non-negative) class weights as a function of the profile, per region.
+function rawWeights(v: AxisScores, region: Region): { cls: Category; w: number }[] {
+  const r = (clamp(v.riskAversion, -1, 1) + 1) / 2 // 0 tolerant … 1 averse
+  const l = (clamp(v.liquidity, -1, 1) + 1) / 2 // 0 lock-up ok … 1 needs liquidity
+  const liqTilt = (l - 0.5) * 2 // −1 … +1
 
-export const ASSET_CLASS_LOADINGS: Record<AssetClass, ShapeVector> = {
-  'Fixed income': { sigma: -0.333, alpha: -0.267, lambda: +0.283 },
-  Equities: { sigma: +0.371, alpha: +0.171, lambda: -0.193 },
-  // The merged structured-note class spans both payoffs — Phoenix (α −0.64) and
-  // Participation (α +0.80) — so the CLASS vector sits at their midpoint and is
-  // near-neutral on skew. The advisor picks the payoff that suits the client at
-  // the subclass level; the sleeve stays a satellite either way.
-  'Structured notes': { sigma: -0.075, alpha: +0.08, lambda: 0.0 },
+  if (region === 'local') {
+    const rows: { cls: LocalCategory; w: number }[] = [
+      { cls: 'CDs', w: 0.08 + 0.34 * r + 0.16 * l },
+      { cls: 'Fixed income', w: 0.12 + 0.3 * r + 0.1 * l },
+      { cls: 'Mutual funds', w: 0.14 + 0.06 * (1 - r) },
+      { cls: 'Equities', w: 0.08 + 0.42 * (1 - r) },
+      { cls: 'Investment funds', w: 0.1 + 0.3 * (1 - r) - 0.14 * liqTilt },
+    ]
+    return rows.map((x) => ({ cls: x.cls as Category, w: Math.max(0, x.w) }))
+  }
+
+  const rows: { cls: AssetClass; w: number }[] = [
+    { cls: 'Fixed income', w: 0.15 + 0.55 * r + 0.28 * l },
+    { cls: 'Equities', w: 0.15 + 0.7 * (1 - r) },
+    { cls: 'Structured notes', w: 0.14 + 0.14 * (1 - r) - 0.18 * liqTilt },
+  ]
+  return rows.map((x) => ({ cls: x.cls as Category, w: Math.max(0, x.w) }))
 }
-
-// Per-archetype hard caps prevent degenerate outcomes. Where a class previously
-// had separate income/growth caps, the tighter of the two carries over.
-const ALLOC_CAPS: Record<string, Partial<Record<AssetClass, number>>> = {
-  banker: { 'Structured notes': 0.12 },
-  venture: { 'Structured notes': 0.06 },
-  insurer: { 'Structured notes': 0.06 },
-  indexer: { 'Structured notes': 0.06 },
-}
-
-function vecDistance(a: ShapeVector, b: ShapeVector): number {
-  return Math.sqrt((a.sigma - b.sigma) ** 2 + (a.alpha - b.alpha) ** 2 + (a.lambda - b.lambda) ** 2)
-}
-
-// Affinity temperature for the softmax in step 1. Lower = sharper (allocations
-// concentrate in the closest-fitting classes); higher = flatter (allocations
-// spread evenly regardless of profile). 0.5 gives a moderate tilt: the
-// closest-fitting classes lead while keeping a sensibly diversified spread
-// across the rest. This is the one knob to tune the overall conviction of the
-// allocation engine.
-export const ALLOC_TEMPERATURE = 0.5
-
-// "Core" asset classes that may take large allocations. Everything else is a
-// satellite sleeve that gets held down (see SATELLITE_PENALTY).
-const CORE_CLASSES = new Set<AssetClass>(['Fixed income', 'Equities'])
-
-// Satellite-sleeve penalty strength. After the softmax, every non-core class's
-// weight w is passed through a saturating map w / (1 + k·w): small sleeves pass
-// through nearly unchanged, but large sleeves are damped progressively harder,
-// so the bigger a satellite allocation would be, the more it's penalized. The
-// freed weight flows to the core classes on renormalization. Higher k = more
-// core-heavy portfolios. 0 disables the penalty.
-export const SATELLITE_PENALTY = 10
 
 export function computeAllocation(
-  archetype: string,
-  scores: { sigma: number; alpha: number; lambda: number },
-): { assetClass: AssetClass; pct: number }[] {
-  // The Quant has no payoff-shape preference (σ=α=λ≈0), so the distance engine
-  // would hand back a flat, characterless spread. A disciplined EV-maximizer is
-  // better expressed as a concentrated, low-cost equity book with a small
-  // convex satellite — fix it at 90% equities / 10% structured notes.
-  if (archetype === 'quant') {
-    return [
-      { assetClass: 'Equities', pct: 90 },
-      { assetClass: 'Structured notes', pct: 10 },
-    ]
-  }
+  vector: AxisScores,
+  region: Region = 'global',
+): { assetClass: Category; pct: number }[] {
+  const weights = rawWeights(vector, region)
+  const sum = weights.reduce((s, w) => s + w.w, 0) || 1
 
-  const target = { sigma: scores.sigma, alpha: scores.alpha, lambda: scores.lambda }
-  const classes = Object.keys(ASSET_CLASS_LOADINGS) as AssetClass[]
-  const caps = ALLOC_CAPS[archetype] ?? {}
+  // Normalize, then a uniform 60% cap per class so a lopsided profile can't hand
+  // back a single-class portfolio (the admin can still hand-edit past this).
+  let frac = weights.map((w) => ({ cls: w.cls, p: Math.min(0.6, w.w / sum) }))
+  const capSum = frac.reduce((s, w) => s + w.p, 0) || 1
+  frac = frac.map((w) => ({ cls: w.cls, p: w.p / capSum }))
 
-  // Step 1: softmax affinity toward each asset class. Weight ∝ exp(-d / T),
-  // where d is the distance from the client's profile to the class loading and
-  // T is the temperature. This rewards proximity far more sharply than the old
-  // 1/(1+d) kernel (which compressed every class into a similar share, making
-  // all profiles look alike); the closest classes now dominate. Result sums to 1.
-  const exps: Record<string, number> = {}
-  for (const cls of classes) {
-    const d = vecDistance(ASSET_CLASS_LOADINGS[cls], target)
-    exps[cls] = Math.exp(-d / ALLOC_TEMPERATURE)
-  }
-  const expTotal = Object.values(exps).reduce((s, v) => s + v, 0) || 1
-  const raw: Record<string, number> = {}
-  for (const cls of classes) raw[cls] = exps[cls] / expTotal
+  // Largest-remainder rounding to integers summing to 100.
+  const rows = frac.map((w) => ({ cls: w.cls, raw: w.p * 100, pct: Math.floor(w.p * 100) }))
+  const remainder = 100 - rows.reduce((s, w) => s + w.pct, 0)
+  rows.sort((a, b) => b.raw - Math.floor(b.raw) - (a.raw - Math.floor(a.raw)))
+  for (let i = 0; i < remainder && rows.length > 0; i++) rows[i % rows.length].pct++
 
-  // Step 1b: satellite-sleeve penalty. Non-core classes (everything but Fixed
-  // income and Equities) pass through a saturating map w / (1 + k·w), so larger
-  // would-be satellite allocations are damped progressively harder. The core
-  // classes keep their full weight and absorb the freed share on renormalization.
-  for (const cls of classes) {
-    if (!CORE_CLASSES.has(cls)) raw[cls] = raw[cls] / (1 + SATELLITE_PENALTY * raw[cls])
-  }
-
-  // Step 2: apply archetype caps plus global 60% cap
-  const capped: Record<string, number> = {}
-  for (const cls of classes) {
-    const cap = caps[cls] !== undefined ? caps[cls]! : 0.6
-    capped[cls] = Math.min(cap, raw[cls])
-  }
-
-  // Step 4: renormalize
-  const total = Object.values(capped).reduce((s, v) => s + v, 0)
-  const norm: Record<string, number> = {}
-  for (const cls of classes) norm[cls] = total > 0 ? capped[cls] / total : 0
-
-  // Step 5: largest-remainder rounding to integers summing to 100
-  const rawPcts: Record<string, number> = {}
-  for (const cls of classes) rawPcts[cls] = norm[cls] * 100
-
-  const floored: Record<string, number> = {}
-  for (const cls of classes) floored[cls] = Math.floor(rawPcts[cls])
-
-  const remainder = 100 - Object.values(floored).reduce((s, v) => s + v, 0)
-  const sorted = classes
-    .slice()
-    .sort((a, b) => rawPcts[b] - floored[b] - (rawPcts[a] - floored[a]))
-  for (let i = 0; i < remainder; i++) floored[sorted[i]]++
-
-  return classes
-    .filter((cls) => floored[cls] > 0)
-    .map((cls) => ({ assetClass: cls as AssetClass, pct: floored[cls] }))
+  return rows
+    .filter((w) => w.pct > 0)
+    .map((w) => ({ assetClass: w.cls, pct: w.pct }))
     .sort((a, b) => b.pct - a.pct)
 }
 
 // ---------------------------------------------------------------------------
 // Instrument fit scoring
 // ---------------------------------------------------------------------------
-
+// Fit blends how close the instrument's assigned 1–5 risk LEVEL is to the
+// client's band (the primary term) with how well its liquidity tier matches the
+// client's liquidity preference. The instrument's level is resolved upstream
+// (lib/portfolio → assignedLevel) and passed in, keeping this module free of any
+// catalog/portfolio dependency.
 export function computeFitScore(
   instrument: Instrument,
-  scores: { sigma: number; alpha: number; lambda: number },
+  scores: AxisScores,
+  instrumentLevel: RiskLevel,
 ): number {
-  // Fit: proximity in (sigma, alpha, lambda) space
-  const sigmaMatch = 1 - Math.abs(scores.sigma - instrument.sigmaLoad) / 2
-  const alphaMatch = 1 - Math.abs(scores.alpha - instrument.alphaLoad) / 2
-  const lambdaMatch = 1 - Math.abs(scores.lambda - instrument.lambdaLoad) / 2
+  const clientLevel = riskLevelFor(scores)
+  const riskMatch = 1 - Math.abs(instrumentLevel - clientLevel) / 4 // levels 1..5 → 0..1
 
-  // Alpha weighted highest — skew preference is the most differentiating axis
-  const coreFit = (sigmaMatch * 0.3 + alphaMatch * 0.45 + lambdaMatch * 0.25) * 100
+  const instLiq = clamp(1 - (instrument.liquidityTier - 1) * (2 / 3), -1, 1)
+  const liqMatch = 1 - Math.abs(scores.liquidity - instLiq) / 2
 
-  return Math.round(Math.max(0, Math.min(100, coreFit)))
+  // Risk level is the primary axis, so weight it above liquidity.
+  const fit = (riskMatch * 0.65 + liqMatch * 0.35) * 100
+  return Math.round(Math.max(0, Math.min(100, fit)))
 }
 
 // ---------------------------------------------------------------------------
@@ -447,45 +149,15 @@ export function computeFitScore(
 // ---------------------------------------------------------------------------
 
 export interface DashboardData {
-  archetype: ArchetypeKey
-  secondaryArchetype: ArchetypeKey | null
-  isBlend: boolean
-  primarySimilarity: number
-  secondarySimilarity: number | null
-  confidence: number
-  tentative: boolean
-  scores: NormalizedScores
+  level: RiskLevel
+  scores: AxisScores
 }
 
-function classificationToDashboard(scores: NormalizedScores, c: Classification): DashboardData {
-  return {
-    archetype: c.archetype,
-    secondaryArchetype: c.secondary,
-    isBlend: c.isBlend,
-    primarySimilarity: c.primarySim,
-    secondarySimilarity: c.secondarySim,
-    confidence: c.confidence,
-    tentative: c.tentative,
-    scores,
-  }
-}
-
-export function buildDashboardData(
-  normalized: NormalizedScores,
-  answers: Answer[],
-): DashboardData {
-  // Fill in λ from realized downside (the normalized λ is a placeholder).
-  const scores: NormalizedScores = { ...normalized, lambda: computeLossAversion(answers) }
-  return classificationToDashboard(scores, classify(scores))
-}
-
-// Re-derive a session's classification from its stored SCORES using the given
-// shape vectors. Scores are language- and vector-independent (they come from the
-// player's answers), so a saved session always reflects the CURRENT admin config
-// when re-classified this way — the advisor dashboard never shows a stale call.
-export function reclassifyScores(
-  scores: NormalizedScores,
-  vectors?: Record<ShapeArchetype, ShapeScores>,
-): DashboardData {
-  return classificationToDashboard(scores, classify(scores, vectors))
+// Re-derive a session's band from its stored SCORES. Scores are band-independent
+// (they come from the client's answers), so a saved session always reflects the
+// CURRENT thresholds + presets when re-derived this way — the advisor view never
+// shows a stale call.
+export function reclassifyScores(scores: Partial<AxisScores>): DashboardData {
+  const point = coerce(scores)
+  return { level: riskLevelFor(point), scores: point }
 }

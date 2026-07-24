@@ -1,163 +1,120 @@
-import type { AllocRound } from '../types'
 import type { Lang } from './i18n'
-import { ARCHETYPES, type Archetype, type ArchetypeKey } from '../data/archetypes'
+import {
+  ARCHETYPES,
+  ARCHETYPE_COLORS,
+  SEED_ARCHETYPE_IDS,
+  type Archetype,
+  type ArchetypeKey,
+} from '../data/archetypes'
 import type { AssetClass, Category, LocalCategory, Region } from '../lib/instruments'
 
 // ---------------------------------------------------------------------------
 // Content translations. English lives in the data files (the source of truth
-// for scoring — ids, probabilities, and amounts never change per language);
-// Spanish is layered on top at render time via the helpers below.
+// for scoring — ids and amounts never change per language); Spanish is layered
+// on top at render time via the helpers below.
 // ---------------------------------------------------------------------------
 
-// ── Rounds: per-id display strings (side labels + scenario notes) ───────────
-// Note: the round q/sub prompts are not rendered by the UI, so only labels and
-// notes need translating. Notes are matched by scenario index.
-type RoundSideEs = { label: string; notes: string[] }
-const ROUNDS_ES: Record<number, { x: RoundSideEs; y: RoundSideEs }> = {
-  1: {
-    x: { label: 'Mayor potencial', notes: ['gran año', 'año sin cambios'] },
-    y: { label: 'Ganancia más estable', notes: ['buen año', 'año sin cambios'] },
-  },
-  2: {
-    x: { label: 'Gran ganancia infrecuente', notes: ['gran ganancia rara', 'la mayoría de los años'] },
-    y: {
-      label: 'Ganancia frecuente, gran pérdida rara',
-      notes: ['la mayoría de los años', 'gran pérdida rara'],
-    },
-  },
-  3: {
-    x: { label: 'Apuesta 50/50', notes: ['ganás', 'perdés'] },
-    y: { label: 'Ganancia garantizada', notes: ['seguro'] },
-  },
-  4: {
-    x: { label: 'Oscilación con sesgo alcista', notes: ['ganancia', 'pérdida'] },
-    y: { label: 'Oscilación con sesgo bajista', notes: ['ganancia', 'pérdida'] },
-  },
-  5: {
-    x: { label: 'Premio gordo improbable', notes: ['premio 1 de cada 20', 'la mayoría de los años'] },
-    y: { label: 'Predecible', notes: ['la mayoría de los años', 'mal año'] },
-  },
-  6: {
-    x: { label: 'Mayor potencial', notes: ['gran año', 'año sin cambios'] },
-    y: { label: 'Ganancia más estable', notes: ['buen año', 'año sin cambios'] },
-  },
-  7: {
-    x: { label: 'Gran ganancia infrecuente', notes: ['gran ganancia rara', 'la mayoría de los años'] },
-    y: {
-      label: 'Ganancia frecuente, gran pérdida rara',
-      notes: ['la mayoría de los años', 'gran pérdida rara'],
-    },
-  },
-  8: {
-    x: { label: 'Apuesta 50/50', notes: ['ganás', 'perdés'] },
-    y: { label: 'Ganancia garantizada', notes: ['seguro'] },
-  },
-  9: {
-    x: { label: 'Oscilación con sesgo alcista', notes: ['ganancia', 'pérdida'] },
-    y: { label: 'Oscilación con sesgo bajista', notes: ['ganancia', 'pérdida'] },
-  },
-  10: {
-    x: { label: 'Premio gordo improbable', notes: ['premio 1 de cada 20', 'la mayoría de los años'] },
-    y: { label: 'Predecible', notes: ['la mayoría de los años', 'mal año'] },
-  },
-}
-
-/** Round with display strings in the given language (scoring fields untouched). */
-export function localizeRound(round: AllocRound, lang: Lang): AllocRound {
-  if (lang !== 'es') return round
-  const es = ROUNDS_ES[round.id]
-  if (!es) return round
-  return {
-    ...round,
-    x: {
-      label: es.x.label,
-      scenarios: round.x.scenarios.map((s, i) => ({ ...s, note: es.x.notes[i] ?? s.note })),
-    },
-    y: {
-      label: es.y.label,
-      scenarios: round.y.scenarios.map((s, i) => ({ ...s, note: es.y.notes[i] ?? s.note })),
-    },
-  }
-}
-
 // ── Archetypes ───────────────────────────────────────────────────────────────
-const ARCHETYPES_ES: Record<ArchetypeKey, Archetype> = {
-  banker: {
-    name: 'El Banquero',
-    desc: 'Protegés el capital ante todo — cedés potencial de alza a cambio de certeza.',
-    traits: ['Preserva capital', 'Prefiere certeza', 'Conservador', 'Caídas acotadas'],
+// Seed Spanish copy — the fallback before the admin config loads, and the source
+// the config provider seeds each archetype's `es` fields from. Voseo (Paraguay).
+export const ARCHETYPES_ES: Record<ArchetypeKey, Archetype> = {
+  guardian: {
+    name: 'El Guardián',
+    desc: 'Protegés el capital ante todo y lo mantenés a mano — certeza y acceso por encima del potencial de alza.',
+    traits: ['Preserva capital', 'Valora la liquidez', 'Caídas acotadas', 'Conservador'],
     products: [
-      'Autocallables con capital protegido',
       'Bonos investment grade de corta duración',
-      'Escalera de bonos soberanos BVA',
-      'ETFs multiactivo con cobertura a la baja',
+      'Escalera de letras del Tesoro',
+      'Depósitos a plazo (CDA)',
+      'Fondos money market y líquidos',
     ],
   },
-  quant: {
-    name: 'El Cuantitativo',
-    desc: 'Seguís el valor esperado — modelos antes que narrativa, matemática antes que intuición.',
-    traits: ['Guiado por valor esperado', 'Indiferente a la forma del pago', 'Sistemático', 'Bajo sesgo conductual'],
+  income: {
+    name: 'El Rentista',
+    desc: 'Buscás renta estable y estás dispuesto a inmovilizar capital para obtenerla, mientras el riesgo se mantenga moderado.',
+    traits: ['Busca rendimiento', 'Acepta plazos', 'Riesgo moderado', 'Enfocado en renta'],
     products: [
-      'ETFs de factores de bajo costo',
-      'Escaleras de bonos simples',
-      'Notas soberanas BVA',
-      'Estrategias de rebalanceo sistemático',
+      'Bonos corporativos investment grade',
+      'Escalera de bonos soberanos',
+      'Notas estructuradas con cupón',
+      'Fondos de inversión plurianuales',
     ],
   },
-  venture: {
-    name: 'El Capitalista de Riesgo',
-    desc: 'Apostás fuerte por la chance de una ganancia extraordinaria.',
-    traits: [
-      'Orientado al alza',
-      'Tolerante al riesgo',
-      'Guiado por convicción',
-      'Resiliente a pérdidas',
-    ],
+  balanced: {
+    name: 'El Equilibrado',
+    desc: 'Buscás el punto medio — una mezcla diversificada que equilibra crecimiento con estabilidad y acceso.',
+    traits: ['Diversificado', 'Riesgo equilibrado', 'Flexible', 'Punto medio'],
     products: [
-      'Notas estructuradas sin tope de ganancia',
-      'Selección de acciones individuales',
-      'Opciones de largo plazo sobre acciones',
-      'Asignación satélite en notas de participación',
+      'ETFs multiactivo diversificados',
+      'Una mezcla de bonos y acciones',
+      'Fondos indexados de mercado amplio',
+      'Fondos mutuos balanceados',
     ],
   },
-  insurer: {
-    name: 'El Asegurador',
-    desc: 'Cobrás una prima constante por asumir el riesgo que otros evitan.',
-    traits: ['Cobra primas', 'Tolera asimetría negativa', 'Busca rendimiento', 'Suscribe riesgo'],
+  opportunist: {
+    name: 'El Oportunista',
+    desc: 'Asumís riesgo pero te mantenés líquido — posiciones ágiles que podés cerrar para aprovechar la próxima oportunidad.',
+    traits: ['Tolerante al riesgo', 'Valora la liquidez', 'Táctico', 'Oportunista'],
     products: [
-      'Reverse convertibles autocallables',
-      'ETFs con estrategia de covered calls',
-      'Corporativos BVA de alto rendimiento',
-      'Notas estructuradas con observación trimestral',
+      'ETFs de renta variable líquidos',
+      'Acciones individuales',
+      'ETFs sectoriales y temáticos',
+      'Notas de participación negociables',
     ],
   },
-  indexer: {
-    name: 'El Indexador',
-    desc: 'Preferís ser dueño del mercado antes que intentar ganarle.',
-    traits: ['Transparencia primero', 'Bajo costo', 'Mercado amplio', 'Baja complejidad'],
+  builder: {
+    name: 'El Constructor',
+    desc: 'Apostás al crecimiento de largo plazo y podés inmovilizar capital por años para capitalizarlo.',
+    traits: ['Orientado al crecimiento', 'Horizonte largo', 'Resiliente a pérdidas', 'Alta convicción'],
     products: [
-      'ETFs MSCI World / S&P 500',
-      'Bonos simples BVA investment grade',
-      'ETF multiactivo diversificado',
-      'Depósitos a plazo',
+      'Acciones de crecimiento y temáticas',
+      'Notas de participación sin tope',
+      'Fondos privados y de riesgo',
+      'Posiciones de renta variable de largo plazo',
     ],
   },
 }
 
-// Admin-editable display names, layered over the bundled copy. The config
-// provider pushes these in (mirroring setActiveShapeVectors) so every call site
-// picks an override up without threading config through the whole tree.
-export type ArchetypeNameOverrides = Partial<Record<ArchetypeKey, { en?: string; es?: string }>>
-let NAME_OVERRIDES: ArchetypeNameOverrides = {}
-export function setArchetypeNameOverrides(o: ArchetypeNameOverrides | undefined): void {
-  NAME_OVERRIDES = o ?? {}
+// The five risk bands are ADMIN-DEFINED presets (Bands page). The config
+// provider pushes the live, bilingual set in here so every call site resolves a
+// band's name/desc/color by LEVEL (1…5) without threading config through the
+// tree. Traits/products still come from the seed archetype copy (client result).
+type Bi = { en: string; es: string }
+export type ActiveBand = {
+  level: number
+  color: string
+  name: Bi
+  desc: Bi
+}
+let ACTIVE_BANDS: ActiveBand[] = []
+export function setActiveBands(list: ActiveBand[]): void {
+  ACTIVE_BANDS = list
 }
 
-/** Archetype copy in the given language, with any admin rename applied. */
-export function localizedArchetype(key: ArchetypeKey, lang: Lang): Archetype {
-  const base = lang === 'es' ? ARCHETYPES_ES[key] : ARCHETYPES[key]
-  const custom = (lang === 'es' ? NAME_OVERRIDES[key]?.es : NAME_OVERRIDES[key]?.en)?.trim()
-  return custom ? { ...base, name: custom } : base
+/** The seed archetype backing a band level, for fallback copy (name/desc/traits/products). */
+function seedForLevel(level: number): Archetype {
+  const id = (SEED_ARCHETYPE_IDS[level - 1] ?? SEED_ARCHETYPE_IDS[0]) as ArchetypeKey
+  return ARCHETYPES[id] ?? { name: `Nivel ${level}`, desc: '', traits: [], products: [] }
+}
+function seedForLevelEs(level: number): Archetype {
+  const id = (SEED_ARCHETYPE_IDS[level - 1] ?? SEED_ARCHETYPE_IDS[0]) as ArchetypeKey
+  return ARCHETYPES_ES[id] ?? seedForLevel(level)
+}
+
+/** Full band copy (name/desc/traits/products) in the given language. */
+export function localizedBand(level: number, lang: Lang): Archetype {
+  const b = ACTIVE_BANDS.find((x) => x.level === level)
+  const seed = lang === 'es' ? seedForLevelEs(level) : seedForLevel(level)
+  if (b) return { name: b.name[lang], desc: b.desc[lang], traits: seed.traits, products: seed.products }
+  return seed
+}
+
+/** Accent color for a band — admin-set, else the bundled seed color. */
+export function bandColor(level: number): string {
+  const b = ACTIVE_BANDS.find((x) => x.level === level)
+  if (b) return b.color
+  const id = SEED_ARCHETYPE_IDS[level - 1]
+  return (id && ARCHETYPE_COLORS[id]) || '#8A8D99'
 }
 
 // ── Asset classes ────────────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 import { fieldSpecsFor, resolveSubclassId, type ManagedInstrument } from './catalog'
 import type { Category, Region } from './instruments'
-import { deriveDefaults, deriveRiskVector } from './riskDerivation'
+import type { RiskLevel } from './scoring'
+import { deriveDefaults } from './riskDerivation'
 import { expandCountry, expandSector, stripEllipsis } from './bloombergDict'
 import { toCsv } from './csv'
 
@@ -65,9 +66,7 @@ const ALIASES: Record<string, string[]> = {
   avgVolume: ['avg volume', 'volume avg 30d', 'average volume'],
   expenseRatio: ['expense ratio', 'fund expense ratio', 'ter'],
   maturityMonths: ['tenor', 'term months', 'maturity months'],
-  sigmaLoad: ['sigma', 'σ', 'variance load'],
-  alphaLoad: ['alpha', 'α', 'skew load'],
-  lambdaLoad: ['lambda', 'λ', 'loss load'],
+  riskLevel: ['risk level', 'nivel', 'nivel de riesgo', 'risk'],
   liquidityTier: ['liquidity', 'liquidity tier'],
   lockupMonths: ['lockup', 'lock-up', 'lockup months'],
 }
@@ -80,9 +79,7 @@ function coreColumns(): ImportColumn[] {
     { key: 'isin', label: 'ISIN', aliases: ALIASES.isin },
     { key: 'ticker', label: 'Ticker', aliases: ALIASES.ticker },
     { key: 'currency', label: 'Currency', aliases: ALIASES.currency },
-    { key: 'sigmaLoad', label: 'σ (sigma)', aliases: ALIASES.sigmaLoad, derived: true },
-    { key: 'alphaLoad', label: 'α (alpha)', aliases: ALIASES.alphaLoad, derived: true },
-    { key: 'lambdaLoad', label: 'λ (lambda)', aliases: ALIASES.lambdaLoad, derived: true },
+    { key: 'riskLevel', label: 'Risk level (1-5)', aliases: ALIASES.riskLevel, derived: true },
     { key: 'liquidityTier', label: 'Liquidity tier (1-4)', aliases: ALIASES.liquidityTier, derived: true },
     { key: 'lockupMonths', label: 'Lock-up (months)', aliases: ALIASES.lockupMonths, derived: true },
     { key: 'visible', label: 'Visible', aliases: [] },
@@ -280,11 +277,8 @@ export function parseInstruments(region: Region, category: Category, rows: strin
     for (const k of detailKeys) if (v[k]) details[k] = v[k]
     if (v.currency) details.currency = v.currency
 
-    const derived = deriveRiskVector(region, category, details)
     const def = deriveDefaults(region, category)
-    const sigma = numOr(v.sigmaLoad)
-    const alpha = numOr(v.alphaLoad)
-    const lambda = numOr(v.lambdaLoad)
+    const rl = numOr(v.riskLevel)
     const lt = numOr(v.liquidityTier)
 
     let id = `imp-${region}-${slug(category)}-${slug(v.isin || name)}`
@@ -302,9 +296,9 @@ export function parseInstruments(region: Region, category: Category, rows: strin
       kind: resolveSubclassId(region, category, v.kind) ?? (v.kind?.trim() || undefined),
       region,
       assetClass: category,
-      sigmaLoad: sigma ?? derived.sigmaLoad,
-      alphaLoad: alpha ?? derived.alphaLoad,
-      lambdaLoad: lambda ?? derived.lambdaLoad,
+      // Only an explicit level override is stored; otherwise the level derives
+      // live from class + rating + vol (details.creditRating carries the rating).
+      riskLevelOverride: rl && rl >= 1 && rl <= 5 ? (Math.round(rl) as RiskLevel) : undefined,
       liquidityTier: (lt && lt >= 1 && lt <= 4 ? Math.round(lt) : def.liquidityTier) as 1 | 2 | 3 | 4,
       lockupMonths: numOr(v.lockupMonths) ?? def.lockupMonths,
       visible: truthy(v.visible, true),

@@ -21,6 +21,8 @@ import {
   type ManagedInstrument,
 } from '../lib/catalog'
 import { fetchInstrumentData } from '../lib/marketData'
+import { assignedLevel } from '../lib/portfolio'
+import type { RiskLevel } from '../lib/scoring'
 import { useLang, useT } from '../i18n/i18n'
 import { categoryLabel, regionLabel } from '../i18n/content'
 import AppNav from '../components/AppNav'
@@ -43,9 +45,6 @@ function newInstrument(): ManagedInstrument {
     ticker: '',
     region: 'global',
     assetClass: 'Equities',
-    sigmaLoad: 0,
-    alphaLoad: 0,
-    lambdaLoad: 0,
     liquidityTier: 1,
     lockupMonths: 0,
     visible: true,
@@ -228,9 +227,6 @@ function InstrumentForm({
       ticker: draft.ticker.trim(),
       kind: draft.kind?.trim() || undefined,
       isin: draft.isin?.trim() || undefined,
-      sigmaLoad: clamp(draft.sigmaLoad, -1, 1),
-      alphaLoad: clamp(draft.alphaLoad, -1, 1),
-      lambdaLoad: clamp(draft.lambdaLoad, -1, 1),
       lockupMonths: Math.max(0, Math.round(draft.lockupMonths)),
     })
   }
@@ -344,53 +340,40 @@ function InstrumentForm({
         )}
       </div>
 
-      {/* Risk vector — what the client's profile is matched against */}
+      {/* Risk level — derived from class + rating + vol; override for exceptions */}
       <h3 className="mt-8 font-mono text-xs uppercase tracking-[0.14em] text-muted">
-        {pick(lang, 'Risk vector', 'Vector de riesgo')}
+        {pick(lang, 'Risk level', 'Nivel de riesgo')}
       </h3>
       <p className="mt-1 text-xs leading-snug text-muted">
         {pick(
           lang,
-          'σ/α/λ run −1…1 and are matched against the client. Auto-derived on import — override here if needed.',
-          'σ/α/λ van de −1 a 1 y se comparan con el cliente. Se derivan al importar — ajustá acá si hace falta.',
+          'Derived (1–5) from asset class, credit rating and volatility via the Risk model rules. Override only for exceptions.',
+          'Se deriva (1–5) de la clase, la calificación y la volatilidad según las reglas del Modelo de riesgo. Ajustá solo por excepción.',
         )}
       </p>
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
-          <label className={labelCls}>{t.admin.sigma}</label>
-          <input
-            type="number"
-            step={0.05}
-            min={-1}
-            max={1}
-            className={inputCls}
-            value={draft.sigmaLoad}
-            onChange={(e) => set('sigmaLoad', num(e.target.value))}
-          />
+          <label className={labelCls}>{pick(lang, 'Derived level', 'Nivel derivado')}</label>
+          <p className="rounded-lg border border-border bg-surface2/40 px-3 py-2 font-mono text-sm text-text tnum">
+            {pick(lang, 'Level', 'Nivel')} {assignedLevel(draft)}
+          </p>
         </div>
         <div>
-          <label className={labelCls}>{t.admin.alpha}</label>
-          <input
-            type="number"
-            step={0.05}
-            min={-1}
-            max={1}
+          <label className={labelCls}>{pick(lang, 'Override (optional)', 'Ajuste (opcional)')}</label>
+          <select
             className={inputCls}
-            value={draft.alphaLoad}
-            onChange={(e) => set('alphaLoad', num(e.target.value))}
-          />
-        </div>
-        <div>
-          <label className={labelCls}>{t.admin.lambda}</label>
-          <input
-            type="number"
-            step={0.05}
-            min={-1}
-            max={1}
-            className={inputCls}
-            value={draft.lambdaLoad}
-            onChange={(e) => set('lambdaLoad', num(e.target.value))}
-          />
+            value={draft.riskLevelOverride ?? ''}
+            onChange={(e) =>
+              set('riskLevelOverride', e.target.value ? (Number(e.target.value) as RiskLevel) : undefined)
+            }
+          >
+            <option value="">{pick(lang, 'Auto', 'Automático')}</option>
+            {[1, 2, 3, 4, 5].map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
         </div>
         <div>
           <label className={labelCls}>{t.admin.liquidityTier}</label>
@@ -599,11 +582,10 @@ export default function AdminPage() {
     setAdding(false)
   }
 
-  const vec = (i: ManagedInstrument) =>
-    `σ ${i.sigmaLoad >= 0 ? '+' : ''}${i.sigmaLoad.toFixed(2)} · α ${i.alphaLoad >= 0 ? '+' : ''}${i.alphaLoad.toFixed(2)} · λ ${i.lambdaLoad >= 0 ? '+' : ''}${i.lambdaLoad.toFixed(2)}`
+  const vec = (i: ManagedInstrument) => `${pick(lang, 'Level', 'Nivel')} ${assignedLevel(i)}`
 
   // Category-appropriate quick facts for the list subtitle (local rows only);
-  // global rows fall back to the σ/α/λ vector.
+  // global rows fall back to the risk level.
   const factLabels = {
     common: t.admin.shareCommon,
     preferred: t.admin.sharePreferred,

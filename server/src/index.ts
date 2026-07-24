@@ -69,18 +69,29 @@ app.delete('/api/catalog/:id', async (c) => {
   return c.json({ ok: true })
 })
 
-// ── archetype config (single doc) ────────────────────────────────────────────
-app.get('/api/config/archetypes', async (c) => {
-  const doc = await configCol.doc('archetypes').get()
+// ── questionnaire config (single doc) ────────────────────────────────────────
+app.get('/api/config/questions', async (c) => {
+  const doc = await configCol.doc('questions').get()
   return c.json(doc.exists ? doc.data() : null)
 })
-app.put('/api/config/archetypes', async (c) => {
+app.put('/api/config/questions', async (c) => {
   const body = await c.req.json()
-  await configCol.doc('archetypes').set(body)
+  await configCol.doc('questions').set(body)
   return c.json(body)
 })
 
-// ── risk-derivation params (single doc) ──────────────────────────────────────
+// ── risk-band presets (single doc) ───────────────────────────────────────────
+app.get('/api/config/riskBands', async (c) => {
+  const doc = await configCol.doc('riskBands').get()
+  return c.json(doc.exists ? doc.data() : null)
+})
+app.put('/api/config/riskBands', async (c) => {
+  const body = await c.req.json()
+  await configCol.doc('riskBands').set(body)
+  return c.json(body)
+})
+
+// ── risk-derivation params (single doc, legacy σ/α/λ model) ───────────────────
 app.get('/api/config/riskParams', async (c) => {
   const doc = await configCol.doc('riskParams').get()
   return c.json(doc.exists ? doc.data() : null)
@@ -88,6 +99,28 @@ app.get('/api/config/riskParams', async (c) => {
 app.put('/api/config/riskParams', async (c) => {
   const body = await c.req.json()
   await configCol.doc('riskParams').set(body)
+  return c.json(body)
+})
+
+// ── risk-level rules (single doc) ─────────────────────────────────────────────
+app.get('/api/config/riskLevels', async (c) => {
+  const doc = await configCol.doc('riskLevels').get()
+  return c.json(doc.exists ? doc.data() : null)
+})
+app.put('/api/config/riskLevels', async (c) => {
+  const body = await c.req.json()
+  await configCol.doc('riskLevels').set(body)
+  return c.json(body)
+})
+
+// ── portfolio-construction model (single doc) ─────────────────────────────────
+app.get('/api/config/portfolioModel', async (c) => {
+  const doc = await configCol.doc('portfolioModel').get()
+  return c.json(doc.exists ? doc.data() : null)
+})
+app.put('/api/config/portfolioModel', async (c) => {
+  const body = await c.req.json()
+  await configCol.doc('portfolioModel').set(body)
   return c.json(body)
 })
 

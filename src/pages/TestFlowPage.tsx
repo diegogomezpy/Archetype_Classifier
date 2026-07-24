@@ -3,124 +3,79 @@ import IntroScreen, { type StartInfo } from '../components/IntroScreen'
 import AppNav from '../components/AppNav'
 import LanguageToggle from '../components/LanguageToggle'
 import ThemeToggle from '../components/ThemeToggle'
-import RoundScreen from '../components/RoundScreen'
-import HalfwayScreen from '../components/HalfwayScreen'
+import QuestionnaireScreen from '../components/QuestionnaireScreen'
 import ClientResult from '../components/ClientResult'
-import { ROUNDS } from '../data/rounds'
-import {
-  EMPTY_SCORES,
-  applyScore,
-  buildDashboardData,
-  normalizeScores,
-  type Answer,
-  type DashboardData,
-} from '../lib/scoring'
+import { reclassifyScores, type DashboardData } from '../lib/scoring'
+import { scoreAnswers, useQuestionnaire, type LikertValue } from '../lib/questionnaire'
 import { getSessionStore } from '../lib/storage'
 import { useDirectory } from '../lib/directory'
-import type { Scores } from '../types'
 
-type FlowState = 'intro' | 'playing' | 'interstitial' | 'result'
+type FlowState = 'intro' | 'questions' | 'result'
 
-// Index of the first round on screen 2 (round 6). Crossing it triggers the
-// halfway interstitial.
-const SCREEN2_START = ROUNDS.findIndex((r) => r.screen === 2)
-
-// The client-facing test flow: intro → rounds (with halfway break) → the
-// client's own profile. The advisor dashboard is NOT shown here — a completed
-// test is saved as a session and reviewed on the #/advisor route.
+// The client-facing flow: intro → questionnaire → the client's own profile. The
+// advisor portfolio is NOT shown here — a completed questionnaire is saved as a
+// session and reviewed on the #/advisor route.
 export default function TestFlowPage() {
   const { rememberClient } = useDirectory()
+  const { questions } = useQuestionnaire()
   const [state, setState] = useState<FlowState>('intro')
   const [clientLabel, setClientLabel] = useState<string | null>(null)
   const [advisorId, setAdvisorId] = useState<string | null>(null)
-  const [roundIndex, setRoundIndex] = useState(0)
-  const [rawScores, setRawScores] = useState<Scores>(EMPTY_SCORES)
-  // Per-round (round, allocX) answers — needed to derive λ from realized downside.
-  const [answers, setAnswers] = useState<Answer[]>([])
-  const [totalPnl, setTotalPnl] = useState(0) // cumulative drawn P&L across rounds
+  const [answers, setAnswers] = useState<Record<string, number>>({})
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null)
 
-  const total = ROUNDS.length
-
+  const answered = questions.filter((q) => answers[q.id] != null).length
   const progress =
-    state === 'intro' ? 0 : state === 'result' ? 100 : (roundIndex / total) * 100
+    state === 'intro' ? 0 : state === 'result' ? 100 : questions.length ? (answered / questions.length) * 100 : 0
 
   const start = (info: StartInfo) => {
     setClientLabel(info.name)
     setAdvisorId(info.advisorId)
-    setRawScores(EMPTY_SCORES)
-    setAnswers([])
-    setTotalPnl(0)
-    setRoundIndex(0)
+    setAnswers({})
     setDashboardData(null)
-    setState('playing')
+    setState('questions')
   }
 
-  // Called after the player has seen the round's draw reveal. `drawDelta` is the
-  // sampled P&L for the round, accumulated into the running total.
-  const handleNext = (allocX: number, drawDelta: number) => {
-    const round = ROUNDS[roundIndex]
-    const nextRaw = applyScore(rawScores, round, allocX)
-    const nextAnswers = [...answers, { round, allocX }]
-    setRawScores(nextRaw)
-    setAnswers(nextAnswers)
-    setTotalPnl((t) => t + drawDelta)
+  const answer = (id: string, value: LikertValue) => setAnswers((a) => ({ ...a, [id]: value }))
 
-    const nextIndex = roundIndex + 1
+  const submit = () => {
+    // Score the answers → two axes → risk band, persist for the advisor, and show
+    // the client their profile.
+    const scores = scoreAnswers(answers, questions)
+    const data = reclassifyScores(scores)
+    setDashboardData(data)
+    setState('result')
 
-    if (nextIndex >= total) {
-      // Final round complete — compute everything synchronously, persist the
-      // session for the advisor, and show the client their profile. The drawn
-      // game P&L is NOT saved — it's engagement-only, not profile data.
-      const data = buildDashboardData(normalizeScores(nextRaw), nextAnswers)
-      setDashboardData(data)
-      setState('result')
-
-      // Submit the session. The server finds-or-creates the client (advisor +
-      // name), so replays re-link to the same record; we then remember that
-      // client on this device from the record it returns.
-      getSessionStore()
-        .submitSession({
-          ...data,
-          advisorId,
-          clientName: clientLabel,
-          answers: nextAnswers.map((a) => ({ roundId: a.round.id, allocX: a.allocX })),
-        })
-        .then((record) => {
-          if (record.advisorId && record.clientId) {
-            rememberClient({
-              advisorId: record.advisorId,
-              clientId: record.clientId,
-              name: record.clientLabel ?? clientLabel ?? '',
-            })
-          }
-        })
-        .catch((err) => console.warn('Failed to save session:', err))
-    } else if (nextIndex === SCREEN2_START) {
-      // Crossing from screen 1 into screen 2 — show the halfway moment first.
-      setRoundIndex(nextIndex)
-      setState('interstitial')
-    } else {
-      setRoundIndex(nextIndex)
-    }
+    getSessionStore()
+      .submitSession({
+        ...data,
+        advisorId,
+        clientName: clientLabel,
+        answers: questions.map((q) => ({ questionId: q.id, value: answers[q.id] ?? 0 })),
+      })
+      .then((record) => {
+        if (record.advisorId && record.clientId) {
+          rememberClient({
+            advisorId: record.advisorId,
+            clientId: record.clientId,
+            name: record.clientLabel ?? clientLabel ?? '',
+          })
+        }
+      })
+      .catch((err) => console.warn('Failed to save session:', err))
   }
-
-  const continueToScreen2 = () => setState('playing')
 
   const retake = () => {
     setClientLabel(null)
     setAdvisorId(null)
-    setRawScores(EMPTY_SCORES)
-    setAnswers([])
-    setTotalPnl(0)
-    setRoundIndex(0)
+    setAnswers({})
     setDashboardData(null)
     setState('intro')
   }
 
   return (
     <div className="relative min-h-[100svh] w-full">
-      {/* Thin teal progress bar across the very top (spans all 10 rounds) */}
+      {/* Thin teal progress bar across the very top */}
       <div className="fixed inset-x-0 top-0 z-50 h-1 bg-black/[0.06]">
         <div
           className="h-full bg-teal transition-[width] duration-500 ease-out"
@@ -128,8 +83,6 @@ export default function TestFlowPage() {
         />
       </div>
 
-      {/* The nav shows on the intro only — once the game starts the client gets
-          a distraction-free screen. */}
       {state === 'intro' && (
         <>
           <AppNav />
@@ -137,25 +90,21 @@ export default function TestFlowPage() {
         </>
       )}
 
-      {state === 'playing' && (
-        <RoundScreen
-          key={ROUNDS[roundIndex].id}
-          round={ROUNDS[roundIndex]}
-          index={roundIndex + 1}
-          total={total}
-          runningPnl={totalPnl}
-          onNext={handleNext}
+      {state === 'questions' && (
+        <QuestionnaireScreen
+          questions={questions}
+          answers={answers}
+          onAnswer={answer}
+          onSubmit={submit}
         />
       )}
-
-      {state === 'interstitial' && <HalfwayScreen onContinue={continueToScreen2} />}
 
       {state === 'result' && dashboardData && (
         <ClientResult data={dashboardData} onRetake={retake} />
       )}
 
-      {/* Language + theme live in the masthead everywhere else, but this is the
-          one flow that hides it — float them so the client keeps both controls. */}
+      {/* Language + theme live in the masthead everywhere else, but this flow
+          hides it — float them so the client keeps both controls. */}
       {state !== 'intro' && (
         <>
           <LanguageToggle />

@@ -5,123 +5,94 @@ import {
   type AssetClass,
   type LocalCategory,
 } from '../lib/instruments'
-import { useRiskParams } from '../lib/riskParamsConfig'
-import { deriveRiskVector, ratingFactor, type RiskParams } from '../lib/riskDerivation'
+import { deriveRiskLevel, type RiskLevelParams } from '../lib/riskLevels'
+import { useRiskLevels } from '../lib/riskLevelsConfig'
+import type { RiskLevel } from '../lib/scoring'
 import { useLang, useT } from '../i18n/i18n'
 import { assetClassLabel, categoryLabel } from '../i18n/content'
 import AppNav from '../components/AppNav'
 import AdminNav from '../components/AdminNav'
-import InfoHint from '../components/InfoHint'
 
-type Axis = 's' | 'a' | 'l'
-const AXES: Axis[] = ['s', 'a', 'l']
-const AXIS_LABEL: Record<Axis, string> = { s: 'σ', a: 'α', l: 'λ' }
+const pick = (lang: 'en' | 'es', en: string, es: string) => (lang === 'es' ? es : en)
+const clone = (p: RiskLevelParams): RiskLevelParams => JSON.parse(JSON.stringify(p))
 
-// The rating used for the live worked example under each local category.
-const EXAMPLE_RATING = 'BBB'
-const EXAMPLE_BETA = 1.5
+const RATING_KEYS = [
+  'AAA', 'AA+', 'AA', 'AA-', 'A+', 'A', 'A-',
+  'BBB+', 'BBB', 'BBB-', 'BB+', 'BB', 'BB-', 'B+', 'B', 'B-', 'CCC', 'CC', 'C', 'D',
+]
 
-const clone = (p: RiskParams): RiskParams => JSON.parse(JSON.stringify(p))
-const parseNum = (v: string, d = 0) => {
-  const n = parseFloat(v)
-  return Number.isFinite(n) ? n : d
+const selCls =
+  'rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm text-text tnum shadow-soft outline-none focus:ring-2 focus:ring-teal/40'
+const numCls = `${selCls} w-16 text-right`
+const label = 'font-mono text-[10px] uppercase tracking-wider text-muted'
+const LEVEL_COLORS: Record<RiskLevel, string> = {
+  1: '#3FA97F', 2: '#8DBF5A', 3: '#E0B93C', 4: '#E08A3C', 5: '#E05C5C',
 }
-const signed = (n: number) => (n >= 0 ? '+' : '−') + Math.abs(n).toFixed(2)
-const numInput =
-  'w-16 rounded-lg border border-border bg-surface px-2 py-1.5 text-right text-sm text-text tnum shadow-soft outline-none focus:ring-2 focus:ring-teal/40'
-const sectionLabel = 'font-mono text-xs uppercase tracking-[0.14em] text-muted'
 
-// Small σ/α/λ triple editor.
-function VecRow({
-  label,
-  hint,
-  vec,
-  onChange,
-}: {
-  label: string
-  hint?: string
-  vec: { s: number; a: number; l: number }
-  onChange: (axis: Axis, value: string) => void
-}) {
+function LevelSelect({ value, onChange }: { value: RiskLevel; onChange: (v: RiskLevel) => void }) {
   return (
-    <div className="flex items-center gap-3">
-      <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate text-sm text-text">
-        {label}
-        {hint && <InfoHint text={hint} align="left" />}
-      </span>
-      {AXES.map((ax) => (
-        <label key={ax} className="flex items-center gap-1">
-          <span className="font-mono text-xs text-muted">{AXIS_LABEL[ax]}</span>
-          <input
-            type="number"
-            step={0.05}
-            className={numInput}
-            value={vec[ax]}
-            onChange={(e) => onChange(ax, e.target.value)}
-          />
-        </label>
+    <select className={`${selCls} w-16`} value={value} onChange={(e) => onChange(Number(e.target.value) as RiskLevel)}>
+      {[1, 2, 3, 4, 5].map((n) => (
+        <option key={n} value={n}>
+          {n}
+        </option>
       ))}
-    </div>
+    </select>
   )
 }
 
-// One live-computed derivation, rendered as the register: reuses the real
-// deriveRiskVector so the example can never drift from the implementation.
-function ExampleLine({ label, vec }: { label: string; vec: { sigmaLoad: number; alphaLoad: number; lambdaLoad: number } }) {
+function LevelChip({ level }: { level: RiskLevel }) {
   return (
-    <p className="mt-3 border-t border-hairline pt-3 font-mono text-[11px] text-muted tnum">
-      <span className="text-faint">{label}</span> → σ {signed(vec.sigmaLoad)} · α{' '}
-      {signed(vec.alphaLoad)} · λ {signed(vec.lambdaLoad)}
-    </p>
+    <span
+      className="inline-flex h-6 w-6 items-center justify-center rounded-md font-mono text-xs font-semibold"
+      style={{ backgroundColor: `${LEVEL_COLORS[level]}22`, color: LEVEL_COLORS[level] }}
+    >
+      {level}
+    </span>
   )
 }
 
 export default function AdminRiskPage() {
   const t = useT()
   const { lang } = useLang()
-  const { params, setParams, reset } = useRiskParams()
-  const [draft, setDraft] = useState<RiskParams>(() => clone(params))
-  const [saved, setSaved] = useState(false)
-
+  const { params, setParams, reset } = useRiskLevels()
+  const [draft, setDraft] = useState<RiskLevelParams>(() => clone(params))
   useEffect(() => setDraft(clone(params)), [params])
 
-  const setGlobal = (cls: AssetClass, ax: Axis, v: string) =>
-    setDraft((d) => ({ ...d, global: { ...d.global, [cls]: { ...d.global[cls], [ax]: parseNum(v) } } }))
-  const setLocalBase = (cat: LocalCategory, ax: Axis, v: string) =>
-    setDraft((d) => ({
-      ...d,
-      local: { ...d.local, [cat]: { ...d.local[cat], base: { ...d.local[cat].base, [ax]: parseNum(v) } } },
-    }))
-  const setLocalByRating = (cat: LocalCategory, ax: Axis, v: string) =>
-    setDraft((d) => ({
-      ...d,
-      local: {
-        ...d.local,
-        [cat]: { ...d.local[cat], byRating: { ...d.local[cat].byRating, [ax]: parseNum(v) } },
-      },
-    }))
-  const setRating = (r: string, v: string) =>
-    setDraft((d) => ({ ...d, ratingRisk: { ...d.ratingRisk, [r]: parseNum(v) } }))
+  const setBase = (cls: AssetClass, v: RiskLevel) =>
+    setDraft((d) => ({ ...d, baseLevel: { ...d.baseLevel, [cls]: v } }))
+  const setLocalBase = (cat: LocalCategory, v: RiskLevel) =>
+    setDraft((d) => ({ ...d, localBaseLevel: { ...d.localBaseLevel, [cat]: v } }))
+  const setRating = (k: string, v: number) =>
+    setDraft((d) => ({ ...d, ratingAdjust: { ...d.ratingAdjust, [k]: v } }))
+  const setVol = (i: number, v: number) =>
+    setDraft((d) => {
+      const vt = d.volThresholds.slice()
+      vt[i] = { ...vt[i], maxVol: v }
+      return { ...d, volThresholds: vt }
+    })
 
-  const save = () => {
-    setParams(draft)
-    setSaved(true)
-    window.setTimeout(() => setSaved(false), 1500)
-  }
-  const handleReset = () => {
-    if (window.confirm(t.adminRisk.resetConfirm)) reset()
-  }
-
-  const ratingKeys = Object.keys(draft.ratingRisk)
-  const exampleFactor = ratingFactor(EXAMPLE_RATING, draft)
-  // Live β example for equities, using the draft's sensitivity.
-  const betaExample = deriveRiskVector('global', 'Equities', { beta: String(EXAMPLE_BETA) }, draft)
-
-  const AXES_LEGEND: { name: string; help: string }[] = [
-    { name: t.adminRisk.sigmaName, help: t.adminRisk.sigmaHelp },
-    { name: t.adminRisk.alphaName, help: t.adminRisk.alphaHelp },
-    { name: t.adminRisk.lambdaName, help: t.adminRisk.lambdaHelp },
+  // Live preview — recomputed from the draft as the admin edits.
+  const examples: { label: string; level: RiskLevel }[] = [
+    {
+      label: pick(lang, 'Fixed income · AAA · short', 'Renta fija · AAA · corta'),
+      level: deriveRiskLevel('global', 'Fixed income', 'AAA', 0.03, draft),
+    },
+    {
+      label: pick(lang, 'Fixed income · BB · 5y', 'Renta fija · BB · 5a'),
+      level: deriveRiskLevel('global', 'Fixed income', 'BB', 0.09, draft),
+    },
+    {
+      label: pick(lang, 'Equity · vol 25%', 'Acción · vol 25%'),
+      level: deriveRiskLevel('global', 'Equities', undefined, 0.25, draft),
+    },
+    {
+      label: pick(lang, 'Investment fund (local)', 'Fondo de inversión (local)'),
+      level: deriveRiskLevel('local', 'Investment funds', undefined, undefined, draft),
+    },
   ]
+
+  const dirty = JSON.stringify(draft) !== JSON.stringify(params)
 
   return (
     <div>
@@ -136,148 +107,125 @@ export default function AdminRiskPage() {
           </div>
           <button
             type="button"
-            onClick={handleReset}
+            onClick={() => window.confirm(t.adminRisk.resetConfirm) && reset()}
             className="shrink-0 rounded-full border border-border bg-surface px-3.5 py-1.5 text-sm text-muted transition-colors hover:text-red"
           >
             {t.adminRisk.reset}
           </button>
         </div>
 
-        {/* How it works */}
-        <div className="mt-6 rounded-2xl border border-border bg-surface px-4 py-3 text-xs leading-relaxed text-muted shadow-soft">
-          {t.adminRisk.howBody}
-        </div>
-
-        {/* The three axes — the legend that makes every number below readable */}
-        <section className="mt-8">
-          <h2 className={sectionLabel}>{t.adminRisk.axesTitle}</h2>
-          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            {AXES_LEGEND.map((a) => (
-              <div key={a.name} className="rounded-xl border border-border bg-surface p-3.5 shadow-soft">
-                <p className="font-mono text-xs font-medium text-text">{a.name}</p>
-                <p className="mt-1.5 text-[11px] leading-relaxed text-muted">{a.help}</p>
+        {/* Live preview */}
+        <div className="mt-6 rounded-2xl border border-border bg-surface p-5 shadow-soft">
+          <p className={label}>{pick(lang, 'Preview', 'Vista previa')}</p>
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {examples.map((ex) => (
+              <div key={ex.label} className="flex items-center gap-2.5">
+                <LevelChip level={ex.level} />
+                <span className="text-sm text-text">{ex.label}</span>
               </div>
             ))}
           </div>
-          <p className="mt-3 text-[11px] leading-relaxed text-muted">{t.adminRisk.axesHint}</p>
-        </section>
+        </div>
 
-        {/* Global base vectors */}
-        <section className="mt-10">
-          <h2 className={`${sectionLabel} flex items-center gap-1.5`}>
-            {t.adminRisk.globalTitle}
-            <InfoHint text={t.adminRisk.globalHelp} align="left" />
-          </h2>
-          <div className="mt-4 space-y-2.5 rounded-2xl border border-border bg-surface p-5 shadow-soft">
-            {ASSET_CLASSES.map((cls) => (
-              <VecRow
-                key={cls}
-                label={assetClassLabel(cls, lang)}
-                vec={draft.global[cls]}
-                onChange={(ax, v) => setGlobal(cls, ax, v)}
-              />
-            ))}
-            <div className="flex items-center gap-3 border-t border-border/70 pt-3">
-              <span className="flex min-w-0 flex-1 items-center gap-1.5 text-sm text-text">
-                {t.adminRisk.betaSensitivity}
-                <InfoHint text={t.adminRisk.betaHelp} align="left" />
-              </span>
-              <input
-                type="number"
-                step={0.05}
-                className={numInput}
-                value={draft.equityBetaSensitivity}
-                onChange={(e) =>
-                  setDraft((d) => ({ ...d, equityBetaSensitivity: parseNum(e.target.value) }))
-                }
-              />
-            </div>
-            <p className="font-mono text-[11px] text-muted tnum">
-              <span className="text-faint">{t.adminRisk.exampleLabel}</span> ·{' '}
-              {t.adminRisk.exampleBeta(EXAMPLE_BETA.toFixed(1), signed(betaExample.sigmaLoad))}
-            </p>
-          </div>
-        </section>
-
-        {/* Local base + rating sensitivity */}
-        <section className="mt-10">
-          <h2 className={`${sectionLabel} flex items-center gap-1.5`}>
-            {t.adminRisk.localTitle}
-            <InfoHint text={t.adminRisk.localHelp} align="left" />
-          </h2>
-          <div className="mt-4 space-y-4">
-            {LOCAL_CATEGORIES.map((cat) => {
-              const ex = deriveRiskVector('local', cat, { rating: EXAMPLE_RATING }, draft)
-              const ignoresRating =
-                draft.local[cat].byRating.s === 0 &&
-                draft.local[cat].byRating.a === 0 &&
-                draft.local[cat].byRating.l === 0
-              return (
-                <div key={cat} className="rounded-2xl border border-border bg-surface p-5 shadow-soft">
-                  <h3 className="mb-3 text-sm font-semibold text-text">
-                    {categoryLabel(cat, 'local', lang)}
-                  </h3>
-                  <div className="space-y-2.5">
-                    <VecRow
-                      label={t.adminRisk.base}
-                      hint={t.adminRisk.baseHelp}
-                      vec={draft.local[cat].base}
-                      onChange={(ax, v) => setLocalBase(cat, ax, v)}
-                    />
-                    <VecRow
-                      label={t.adminRisk.byRating}
-                      hint={t.adminRisk.byRatingHelp}
-                      vec={draft.local[cat].byRating}
-                      onChange={(ax, v) => setLocalByRating(cat, ax, v)}
-                    />
-                  </div>
-                  <ExampleLine
-                    label={
-                      ignoresRating
-                        ? `${t.adminRisk.exampleLabel} · ${t.adminRisk.base}`
-                        : `${t.adminRisk.exampleLabel} · ${EXAMPLE_RATING} (${exampleFactor.toFixed(2)})`
-                    }
-                    vec={ex}
-                  />
+        {/* Base level per class */}
+        <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2">
+          <div className="rounded-2xl border border-border bg-surface p-5 shadow-soft">
+            <p className={label}>{pick(lang, 'Base level · global', 'Nivel base · global')}</p>
+            <div className="mt-3 space-y-2.5">
+              {ASSET_CLASSES.map((cls) => (
+                <div key={cls} className="flex items-center justify-between gap-3">
+                  <span className="text-sm text-text">{assetClassLabel(cls, lang)}</span>
+                  <LevelSelect value={draft.baseLevel[cls]} onChange={(v) => setBase(cls, v)} />
                 </div>
-              )
-            })}
+              ))}
+            </div>
           </div>
-        </section>
+          <div className="rounded-2xl border border-border bg-surface p-5 shadow-soft">
+            <p className={label}>{pick(lang, 'Base level · local', 'Nivel base · local')}</p>
+            <div className="mt-3 space-y-2.5">
+              {LOCAL_CATEGORIES.map((cat) => (
+                <div key={cat} className="flex items-center justify-between gap-3">
+                  <span className="text-sm text-text">{categoryLabel(cat, 'local', lang)}</span>
+                  <LevelSelect value={draft.localBaseLevel[cat]} onChange={(v) => setLocalBase(cat, v)} />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
 
-        {/* Rating → risk factor */}
-        <section className="mt-10">
-          <h2 className={`${sectionLabel} flex items-center gap-1.5`}>
-            {t.adminRisk.ratingTitle}
-            <InfoHint text={t.adminRisk.ratingHelp} align="left" />
-          </h2>
-          <div className="mt-4 grid grid-cols-2 gap-x-8 gap-y-2 rounded-2xl border border-border bg-surface p-5 shadow-soft sm:grid-cols-3">
-            {ratingKeys.map((r) => (
-              <label key={r} className="flex items-center gap-2">
-                <span className="min-w-0 flex-1 font-mono text-xs text-muted">{r}</span>
+        {/* Rating adjustment */}
+        <div className="mt-6 rounded-2xl border border-border bg-surface p-5 shadow-soft">
+          <p className={label}>{pick(lang, 'Credit rating → level delta', 'Calificación → ajuste de nivel')}</p>
+          <p className="mt-1 text-xs text-muted">
+            {pick(
+              lang,
+              'How many levels a bond moves up (+) or down (−) from its base for each rating.',
+              'Cuántos niveles sube (+) o baja (−) un bono desde su base según la calificación.',
+            )}
+          </p>
+          <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4">
+            {RATING_KEYS.map((k) => (
+              <label key={k} className="flex items-center justify-between gap-2">
+                <span className="font-mono text-sm text-text">{k}</span>
                 <input
                   type="number"
-                  step={0.05}
-                  min={0}
-                  max={1}
-                  className={numInput}
-                  value={draft.ratingRisk[r]}
-                  onChange={(e) => setRating(r, e.target.value)}
+                  step={1}
+                  min={-4}
+                  max={4}
+                  className={numCls}
+                  value={draft.ratingAdjust[k] ?? 0}
+                  onChange={(e) => setRating(k, Math.round(Number(e.target.value) || 0))}
                 />
               </label>
             ))}
           </div>
-        </section>
+        </div>
 
-        <div className="mt-8 flex items-center gap-3">
+        {/* Volatility ladder */}
+        <div className="mt-6 rounded-2xl border border-border bg-surface p-5 shadow-soft">
+          <p className={label}>{pick(lang, 'Volatility → level', 'Volatilidad → nivel')}</p>
+          <p className="mt-1 text-xs text-muted">
+            {pick(
+              lang,
+              'When market volatility is known it sets a floor on the level: the first band whose max vol ≥ the instrument’s vol wins (the riskier of this and the rating rule applies).',
+              'Cuando se conoce la volatilidad de mercado fija un piso del nivel: gana la primera banda cuyo máx. de vol ≥ la vol del instrumento (se aplica el mayor entre esto y la calificación).',
+            )}
+          </p>
+          <div className="mt-3 space-y-2.5">
+            {draft.volThresholds.map((v, i) => (
+              <div key={v.level} className="flex items-center gap-3">
+                <LevelChip level={v.level} />
+                <span className="text-sm text-muted">{pick(lang, 'up to vol', 'hasta vol')}</span>
+                {Number.isFinite(v.maxVol) ? (
+                  <>
+                    <input
+                      type="number"
+                      step={0.01}
+                      min={0}
+                      className={numCls}
+                      value={v.maxVol}
+                      onChange={(e) => setVol(i, Math.max(0, Number(e.target.value) || 0))}
+                    />
+                    <span className="text-sm text-muted">({Math.round(v.maxVol * 100)}%)</span>
+                  </>
+                ) : (
+                  <span className="font-mono text-sm text-muted">∞</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-6 flex items-center gap-3">
           <button
             type="button"
-            onClick={save}
-            className="rounded-xl bg-teal px-6 py-2.5 text-sm font-semibold text-white shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card"
+            onClick={() => setParams(clone(draft))}
+            disabled={!dirty}
+            className="rounded-xl bg-teal px-5 py-2 text-sm font-semibold text-white shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card disabled:cursor-not-allowed disabled:opacity-40"
           >
             {t.adminRisk.save}
           </button>
-          {saved && <span className="text-sm font-medium text-teal">{t.adminRisk.saved}</span>}
+          {dirty && <span className="text-xs text-muted">{pick(lang, 'Unsaved changes', 'Cambios sin guardar')}</span>}
         </div>
       </div>
     </div>

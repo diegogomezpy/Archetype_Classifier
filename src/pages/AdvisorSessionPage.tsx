@@ -3,7 +3,6 @@ import { Link, Navigate, useParams } from 'react-router-dom'
 import AdvisorDashboard from '../components/AdvisorDashboard'
 import { getSessionStore, type SessionRecord } from '../lib/storage'
 import { reclassifyScores } from '../lib/scoring'
-import { useArchetypeConfig } from '../lib/archetypeConfig'
 import { useDirectory } from '../lib/directory'
 import { dateLocale, useLang, useT } from '../i18n/i18n'
 import AppNav from '../components/AppNav'
@@ -19,7 +18,6 @@ function fmtDate(iso: string, locale: string): string {
 export default function AdvisorSessionPage() {
   const t = useT()
   const { lang } = useLang()
-  const { config } = useArchetypeConfig()
   const { loggedInAdvisorId } = useDirectory()
   const { id } = useParams<{ id: string }>()
   const [session, setSession] = useState<SessionRecord | null | 'loading'>('loading')
@@ -66,9 +64,10 @@ export default function AdvisorSessionPage() {
     )
   }
 
-  // Classification reflects the current admin vectors; the mix (inside the
-  // dashboard) reflects the current model portfolios. Any admin change shows here.
-  const live = reclassifyScores(session.scores, config.shapeVectors)
+  // The band is re-derived from the stored scores against the current thresholds;
+  // the preset mix (inside the dashboard) reflects the current admin config. Any
+  // admin change shows here.
+  const live = reclassifyScores(session.scores)
 
   return (
     <div>

@@ -53,11 +53,20 @@ export default function DonutChart({ data, size = 200, region = 'global' }: Prop
           ))}
         </g>
       </svg>
-      {/* Center label: the dominant class */}
+      {/* Center label: the dominant class. Sized relative to the donut so the
+          text stays inside the hole at any size. */}
       {top && (
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-          <span className="font-mono text-2xl font-medium text-text tnum">{top.pct}%</span>
-          <span className="mt-0.5 max-w-[6rem] text-[11px] leading-tight text-muted">
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-2 text-center">
+          <span
+            className="font-mono font-medium text-text tnum"
+            style={{ fontSize: Math.max(15, size * 0.15) }}
+          >
+            {top.pct}%
+          </span>
+          <span
+            className="mt-0.5 text-[10px] leading-tight text-muted"
+            style={{ maxWidth: size * 0.52 }}
+          >
             {categoryLabel(top.assetClass, region, lang)}
           </span>
         </div>
