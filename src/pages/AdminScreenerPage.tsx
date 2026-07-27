@@ -1,29 +1,20 @@
 import { useMemo, useState } from 'react'
 import { useCatalog, type ManagedInstrument } from '../lib/catalog'
-import {
-  EQUITY_TRAITS,
-  FI_TRAITS,
-  RATING_LADDER,
-  passes,
-  ratingRank,
-  type Bound,
-  type Trait,
-} from '../lib/traits'
+import { SCREENS, passes, ratingRank, type Bound, type Screen, type Trait } from '../lib/traits'
 import { useLang, useT } from '../i18n/i18n'
 import AppNav from '../components/AppNav'
 import AdminNav from '../components/AdminNav'
 
 // ---------------------------------------------------------------------------
-// Screener — narrow the global catalog by trait, then publish that subset
+// Screener — narrow an asset class by trait, then publish that subset
 // ---------------------------------------------------------------------------
 // Advisors only ever see instruments flagged `visible`, so "which of these
-// should advisors be offered" is exactly the visible flag. This page screens a
-// class on its numeric traits (analyst upside, yield, duration, rating…), lets
-// the admin confirm the selection, and writes visibility for the WHOLE class in
-// one go — so the advisor's universe for that class becomes precisely the
-// chosen subset.
-
-type Cls = 'Equities' | 'Fixed income'
+// should advisors be offered" is exactly the visible flag. This page screens one
+// class at a time on its own numeric traits (analyst upside, yield, duration,
+// barrier, estimated yield…), lets the admin confirm the selection, and writes
+// visibility across that class in one go — so the advisor's universe for that
+// class becomes precisely the chosen subset. Every class in both regions has a
+// screen; see SCREENS in lib/traits.
 
 const pick = (lang: 'en' | 'es', en: string, es: string) => (lang === 'es' ? es : en)
 const boundCls =
@@ -31,16 +22,41 @@ const boundCls =
 
 function TraitRow({ trait, bound, onChange, lang }: { trait: Trait; bound: Bound; onChange: (b: Bound) => void; lang: 'en' | 'es' }) {
   const parse = (s: string) => (s.trim() === '' ? undefined : Number(s))
+  const label = lang === 'es' ? trait.es : trait.en
+
+  // Ordinal traits rank rather than measure — "at least A" beats a pair of
+  // ladder indices nobody can reason about.
+  if (trait.ladder) {
+    return (
+      <div className="flex items-center justify-between gap-3 py-1.5">
+        <span className="min-w-0 text-sm leading-tight text-text">
+          {label} <span className="text-muted">{pick(lang, 'at least', 'mínima')}</span>
+        </span>
+        <select
+          aria-label={label}
+          value={bound.max ?? ''}
+          onChange={(e) => onChange(e.target.value === '' ? {} : { max: Number(e.target.value) })}
+          className="shrink-0 rounded-md border border-border bg-surface px-2 py-1 text-xs text-text outline-none focus:ring-2 focus:ring-teal/40"
+        >
+          <option value="">{pick(lang, 'Any', 'Cualquiera')}</option>
+          {trait.ladder.map((r, idx) => (
+            <option key={r} value={idx}>{r}</option>
+          ))}
+        </select>
+      </div>
+    )
+  }
+
   return (
     <div className="flex items-center justify-between gap-3 py-1.5">
       <span className="min-w-0 text-sm leading-tight text-text">
-        {lang === 'es' ? trait.es : trait.en}
+        {label}
         {trait.unit && <span className="ml-1 font-mono text-[10px] text-muted">{trait.unit}</span>}
       </span>
       <span className="flex shrink-0 items-center gap-1">
         <input
           type="number"
-          aria-label={`${lang === 'es' ? trait.es : trait.en} — min`}
+          aria-label={`${label} — min`}
           placeholder={pick(lang, 'min', 'mín')}
           value={bound.min ?? ''}
           onChange={(e) => onChange({ ...bound, min: parse(e.target.value) })}
@@ -49,7 +65,7 @@ function TraitRow({ trait, bound, onChange, lang }: { trait: Trait; bound: Bound
         <span className="text-xs text-muted">–</span>
         <input
           type="number"
-          aria-label={`${lang === 'es' ? trait.es : trait.en} — max`}
+          aria-label={`${label} — max`}
           placeholder={pick(lang, 'max', 'máx')}
           value={bound.max ?? ''}
           onChange={(e) => onChange({ ...bound, max: parse(e.target.value) })}
@@ -65,23 +81,24 @@ export default function AdminScreenerPage() {
   const { lang } = useLang()
   const { instruments, addMany } = useCatalog()
 
-  const [cls, setCls] = useState<Cls>('Equities')
-  const [bounds, setBounds] = useState<Record<Cls, Record<string, Bound>>>({ 'Equities': {}, 'Fixed income': {} })
+  const [screenId, setScreenId] = useState(SCREENS[0].id)
+  const [bounds, setBounds] = useState<Record<string, Record<string, Bound>>>({})
   const [sortKey, setSortKey] = useState<string>('')
   const [sortDesc, setSortDesc] = useState(true)
   const [msg, setMsg] = useState('')
   // Selection starts as whatever advisors can see today, so the page opens on
   // the current state rather than on an empty slate.
-  const [picked, setPicked] = useState<Record<Cls, Set<string> | null>>({ 'Equities': null, 'Fixed income': null })
+  const [picked, setPicked] = useState<Record<string, Set<string> | undefined>>({})
 
-  const traits = cls === 'Equities' ? EQUITY_TRAITS : FI_TRAITS
-  const classBounds = bounds[cls]
+  const screen = SCREENS.find((s) => s.id === screenId) as Screen
+  const traits = screen.traits
+  const classBounds = bounds[screen.id] ?? {}
 
   const pool = useMemo(
-    () => instruments.filter((i) => (i.region ?? 'global') === 'global' && i.assetClass === cls),
-    [instruments, cls],
+    () => instruments.filter((i) => (i.region ?? 'global') === screen.region && i.assetClass === screen.cls),
+    [instruments, screen.region, screen.cls],
   )
-  const selected = picked[cls] ?? new Set(pool.filter((i) => i.visible).map((i) => i.id))
+  const selected = picked[screen.id] ?? new Set(pool.filter((i) => i.visible).map((i) => i.id))
 
   const matches = useMemo(() => {
     const m = pool.filter((i) => passes(i, traits, classBounds))
@@ -98,8 +115,8 @@ export default function AdminScreenerPage() {
   }, [pool, traits, classBounds, sortKey, sortDesc])
 
   const setBound = (key: string, b: Bound) =>
-    setBounds((prev) => ({ ...prev, [cls]: { ...prev[cls], [key]: b } }))
-  const setPickedFor = (next: Set<string>) => setPicked((p) => ({ ...p, [cls]: next }))
+    setBounds((prev) => ({ ...prev, [screen.id]: { ...(prev[screen.id] ?? {}), [key]: b } }))
+  const setPickedFor = (next: Set<string>) => setPicked((p) => ({ ...p, [screen.id]: next }))
   const toggle = (id: string) => {
     const next = new Set(selected)
     if (next.has(id)) next.delete(id)
@@ -107,12 +124,8 @@ export default function AdminScreenerPage() {
     setPickedFor(next)
   }
 
-  // The rating filter is ordinal, not numeric — expose it as "at least X".
-  const ratingBound = classBounds.rating ?? {}
-  const minRating = ratingBound.max // ladder index: lower = better, so a cap = a floor on quality
-
   const clear = () => {
-    setBounds((prev) => ({ ...prev, [cls]: {} }))
+    setBounds((prev) => ({ ...prev, [screen.id]: {} }))
     setSortKey('')
     setMsg('')
   }
@@ -123,7 +136,7 @@ export default function AdminScreenerPage() {
       setMsg(pick(lang, 'Nothing to change — advisors already see exactly this set.', 'Nada que cambiar — los asesores ya ven exactamente este conjunto.'))
       return
     }
-    const label = cls === 'Equities' ? pick(lang, 'global equities', 'renta variable global') : pick(lang, 'global fixed income', 'renta fija global')
+    const label = (lang === 'es' ? screen.es : screen.en).toLowerCase()
     const confirmMsg = pick(
       lang,
       `Advisors will see ${selected.size} of ${pool.length} ${label} instruments. ${changed.length} will change. Continue?`,
@@ -140,24 +153,32 @@ export default function AdminScreenerPage() {
   return (
     <div>
       <AppNav />
-      <div className="mx-auto w-full max-w-6xl px-6 py-8">
+      <div className="mx-auto w-full max-w-7xl px-6 py-8">
         <AdminNav />
 
         <h1 className="mt-6 text-3xl font-semibold tracking-tight text-text">{t.adminScreener.title}</h1>
         <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted">{t.adminScreener.subtitle}</p>
 
-        {/* Class picker */}
-        <div className="mt-6 inline-flex rounded-full border border-border bg-surface p-0.5">
-          {(['Equities', 'Fixed income'] as Cls[]).map((c) => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => { setCls(c); setSortKey(''); setMsg('') }}
-              className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all ${cls === c ? 'bg-teal/15 text-teal shadow-soft' : 'text-muted hover:text-text'}`}
-            >
-              {c === 'Equities' ? pick(lang, 'Global equities', 'Renta variable global') : pick(lang, 'Global fixed income', 'Renta fija global')}
-            </button>
-          ))}
+        {/* Class picker — every screenable class in both regions */}
+        <div className="mt-6 flex flex-wrap gap-1.5">
+          {SCREENS.map((s) => {
+            const n = instruments.filter((i) => (i.region ?? 'global') === s.region && i.assetClass === s.cls).length
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => { setScreenId(s.id); setSortKey(''); setMsg('') }}
+                className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-all ${
+                  screen.id === s.id
+                    ? 'border-teal/40 bg-teal/15 text-teal shadow-soft'
+                    : 'border-border text-muted hover:text-text'
+                }`}
+              >
+                {lang === 'es' ? s.es : s.en}
+                <span className="ml-1.5 font-mono text-[11px] opacity-60 tnum">{n}</span>
+              </button>
+            )
+          })}
         </div>
 
         <div className="mt-5 grid grid-cols-1 gap-6 min-[1000px]:grid-cols-[352px_1fr]">
@@ -170,26 +191,9 @@ export default function AdminScreenerPage() {
               </button>
             </div>
             <div className="mt-2 divide-y divide-border/50">
-              {traits
-                .filter((tr) => tr.key !== 'rating')
-                .map((tr) => (
-                  <TraitRow key={tr.key} trait={tr} bound={classBounds[tr.key] ?? {}} onChange={(b) => setBound(tr.key, b)} lang={lang} />
-                ))}
-              {cls === 'Fixed income' && (
-                <div className="flex items-center justify-between gap-3 py-1.5">
-                  <span className="text-sm text-text">{pick(lang, 'Credit rating at least', 'Calificación mínima')}</span>
-                  <select
-                    value={minRating ?? ''}
-                    onChange={(e) => setBound('rating', e.target.value === '' ? {} : { max: Number(e.target.value) })}
-                    className="rounded-md border border-border bg-surface px-2 py-1 text-xs text-text outline-none focus:ring-2 focus:ring-teal/40"
-                  >
-                    <option value="">{pick(lang, 'Any', 'Cualquiera')}</option>
-                    {RATING_LADDER.map((r, idx) => (
-                      <option key={r} value={idx}>{r}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              {traits.map((tr) => (
+                <TraitRow key={tr.key} trait={tr} bound={classBounds[tr.key] ?? {}} onChange={(b) => setBound(tr.key, b)} lang={lang} />
+              ))}
             </div>
 
             <div className="mt-5 border-t border-hairline pt-4">
@@ -279,12 +283,13 @@ export default function AdminScreenerPage() {
                       </td>
                       {traits.map((tr) => {
                         const v = tr.get(i)
-                        const txt =
-                          tr.key === 'rating'
-                            ? (i.details.creditRating ?? i.details.rating ?? '—')
-                            : v == null
-                              ? '—'
-                              : v.toFixed(tr.dp ?? 1)
+                        // An ordinal trait shows its own label ("AA-"), not the
+                        // ladder index the comparison actually runs on.
+                        const txt = tr.ladder
+                          ? (tr.raw?.(i) || '—')
+                          : v == null
+                            ? '—'
+                            : v.toFixed(tr.dp ?? 1)
                         return (
                           <td key={tr.key} className="whitespace-nowrap px-2 py-1.5 text-right font-mono text-xs text-muted tnum">
                             {txt}

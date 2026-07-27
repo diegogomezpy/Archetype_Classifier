@@ -87,8 +87,8 @@ export default function AdminPortfolioPage() {
       'Volatility comes from implied vol / duration + credit. Correlation is NOT one number per class pair — each instrument is decomposed into four risk factors (see below), so what two names share decides how much they diversify. The portfolio’s 1–5 risk is its volatility bucket.',
       'La volatilidad sale de la vol. implícita / duración + crédito. La correlación NO es un número por par de clases — cada instrumento se descompone en cuatro factores de riesgo (ver abajo), así que lo que dos activos comparten decide cuánto diversifican. El riesgo 1–5 de la cartera es su banda de volatilidad.')],
     [pick(lang, '6 · Advisor control', '6 · Control del asesor'), pick(lang,
-      'The advisor drags instruments in from the master list, sets how many names per class the suggestion uses, edits weights, removes names, re-optimizes over whatever is left, and sizes the book to a capital amount.',
-      'El asesor arrastra instrumentos desde la lista maestra, define cuántos nombres por clase usa la sugerencia, edita pesos, quita nombres, reoptimiza sobre lo que queda y dimensiona la cartera a un monto de capital.')],
+      'The advisor drags instruments in from the master list, sets how many names the suggestion holds in total (split across classes by the band’s mix), edits weights, removes names, re-optimizes over whatever is left, and sizes the book to a capital amount.',
+      'El asesor arrastra instrumentos desde la lista maestra, define cuántos nombres tiene la sugerencia en total (se reparten entre clases según la mezcla de la banda), edita pesos, quita nombres, reoptimiza sobre lo que queda y dimensiona la cartera a un monto de capital.')],
   ]
 
   return (
@@ -138,7 +138,7 @@ export default function AdminPortfolioPage() {
           <div className="rounded-2xl border border-border bg-surface p-5 shadow-soft">
             <p className={label}>{pick(lang, 'Selection', 'Selección')}</p>
             <div className="mt-2 divide-y divide-border/50">
-              <Field name={pick(lang, 'Instruments per class', 'Instrumentos por clase')} value={draft.assetsPerClass} onChange={(v) => set({ assetsPerClass: Math.max(1, Math.round(v)) })} />
+              <Field name={pick(lang, 'Instruments in the portfolio', 'Instrumentos en la cartera')} hint={pick(lang, 'split across classes by the band’s mix', 'se reparten entre clases según la mezcla de la banda')} value={draft.totalAssets} onChange={(v) => set({ totalAssets: Math.max(1, Math.round(v)) })} />
               <Field name={pick(lang, 'Max single-name weight', 'Peso máx. por nombre')} value={draft.nameCap} onChange={(v) => set({ nameCap: Math.max(0.05, Math.min(1, v)) })} scale={100} step={1} suffix="%" />
               <Field name={pick(lang, 'Risk-level ceiling (band + N)', 'Techo de nivel (banda + N)')} value={draft.levelCeiling} onChange={(v) => set({ levelCeiling: Math.max(0, Math.round(v)) })} />
             </div>

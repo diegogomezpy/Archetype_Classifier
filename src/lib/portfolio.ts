@@ -47,7 +47,7 @@ export type PortfolioModel = {
   erp: number // equity risk premium (CAPM)
   analystBlend: number // weight on the analyst-target leg vs the CAPM leg (0..1)
   nameCap: number // max weight of a single name within its sleeve
-  assetsPerClass: number // default instruments considered per class
+  totalAssets: number // how many instruments the suggested book holds in total
   levelCeiling: number // exclude instruments more than this many levels above the client's band
   bandDuration: Record<RiskLevel, number> // target bond duration (years) per band
   correlation: CorrelationModel
@@ -58,7 +58,7 @@ export const DEFAULT_PORTFOLIO_MODEL: PortfolioModel = {
   erp: 0.05,
   analystBlend: 0.5,
   nameCap: 0.35,
-  assetsPerClass: 6,
+  totalAssets: 14,
   levelCeiling: 1,
   bandDuration: { 1: 2, 2: 3.5, 3: 5, 4: 6.5, 5: 8 },
   correlation: {
@@ -611,7 +611,7 @@ function selectSleeve(
   pool: ManagedInstrument[],
   scores: AxisScores,
   clientLevel: RiskLevel,
-  assetsPerClass: number,
+  count: number,
 ): Holding[] {
   const M = ACTIVE_MODEL
   const all = pool.map((i) => estimate(i, scores))
@@ -619,7 +619,7 @@ function selectSleeve(
   const est = (ceilinged.length ? ceilinged : all)
     .slice()
     .sort((a, b) => b.fit - a.fit)
-    .slice(0, Math.max(1, assetsPerClass))
+    .slice(0, Math.max(1, count))
   if (est.length === 0) return []
 
   let internal: number[]
@@ -632,20 +632,60 @@ function selectSleeve(
     .filter((h) => h.weight > 0.0005)
 }
 
+/**
+ * Split a TOTAL number of names across the classes the band allocates to.
+ *
+ * The advisor sets one number — how big the book should be — not a count per
+ * class, so the split has to follow the money: a band that puts 76% in bonds
+ * should hold more bonds than equities. Largest-remainder apportionment does
+ * that exactly, and every class in the mix keeps a floor of one name so a small
+ * sleeve is never silently dropped (which is why the realized total can exceed
+ * the request when the band spreads across more classes than names asked for —
+ * `minimumAssets` reports that floor so the UI can show it).
+ */
+export function apportionAssets(mix: MixSlice[], total: number): Map<Category, number> {
+  const active = mix.filter((m) => m.pct > 0)
+  const out = new Map<Category, number>()
+  if (active.length === 0) return out
+
+  const extra = Math.max(total, active.length) - active.length
+  const pctSum = active.reduce((a, m) => a + m.pct, 0) || 1
+  const shares = active.map((m) => ({ cls: m.assetClass, exact: (m.pct / pctSum) * extra }))
+  for (const s of shares) out.set(s.cls, 1 + Math.floor(s.exact))
+
+  let left = extra - shares.reduce((a, s) => a + Math.floor(s.exact), 0)
+  for (const s of [...shares].sort((a, b) => (b.exact % 1) - (a.exact % 1))) {
+    if (left <= 0) break
+    out.set(s.cls, (out.get(s.cls) ?? 1) + 1)
+    left--
+  }
+  return out
+}
+
+/** The smallest book a band can produce — one name per class it allocates to. */
+export const minimumAssets = (mix: MixSlice[]): number => mix.filter((m) => m.pct > 0).length
+
 export function buildPortfolio(
   region: Region,
   mix: MixSlice[],
   instruments: ManagedInstrument[],
   scores: AxisScores,
   level: RiskLevel,
-  opts: { assetsPerClass?: number } = {},
+  opts: { totalAssets?: number } = {},
 ): Portfolio {
-  const assetsPerClass = opts.assetsPerClass ?? ACTIVE_MODEL.assetsPerClass
+  const perClass = apportionAssets(mix, opts.totalAssets ?? ACTIVE_MODEL.totalAssets)
   const visible = instruments.filter((i) => (i.region ?? 'global') === region && i.visible)
   const holdings = mix
     .filter((m) => m.pct > 0)
     .flatMap((m) =>
-      selectSleeve(m.assetClass, m.pct, visible.filter((i) => i.assetClass === m.assetClass), scores, level, assetsPerClass),
+      selectSleeve(
+        m.assetClass,
+        m.pct,
+        visible.filter((i) => i.assetClass === m.assetClass),
+        scores,
+        level,
+        perClass.get(m.assetClass) ?? 1,
+      ),
     )
   return assemblePortfolio(holdings, region)
 }

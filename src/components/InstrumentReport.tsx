@@ -170,8 +170,11 @@ export default function InstrumentReport({ instrument: inst, region, onBack, fil
   return (
     <div
       className={
+        // `fill` = live inside a fixed-height box (the advisor's overlay): the
+        // header stays put and the body is the only scroller. Otherwise the card
+        // is as tall as its content and the page scrolls.
         fill
-          ? 'flex h-full min-h-0 flex-col overflow-hidden border-border bg-surface shadow-card'
+          ? 'flex h-full min-h-0 flex-col overflow-hidden rounded-3xl border border-border bg-surface shadow-card'
           : 'animate-fade-300 overflow-hidden rounded-3xl border border-border bg-surface shadow-card'
       }
     >

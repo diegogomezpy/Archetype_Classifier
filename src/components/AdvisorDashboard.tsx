@@ -11,13 +11,13 @@ import {
   buildPortfolio,
   estimate,
   holdingsFromWeights,
+  minimumAssets,
   reoptimize,
   type Estimate,
   type Portfolio,
 } from '../lib/portfolio'
 import { useLang, useT } from '../i18n/i18n'
 import { bandColor, categoryLabel, localizedBand, regionLabel } from '../i18n/content'
-import DonutChart from './DonutChart'
 import RiskReturnScatter from './RiskReturnScatter'
 import InstrumentReport from './InstrumentReport'
 
@@ -37,15 +37,19 @@ function LevelChip({ level }: { level: RiskLevel }) {
   )
 }
 
+// One headline metric. These sit in a single row, so the tile is sized to the
+// row rather than to its own content — hence the min-w-0 and the truncation.
 function StatTile({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: string }) {
   return (
-    <div className="rounded-xl border border-border bg-surface px-3.5 py-2.5 shadow-soft">
-      <p className="font-mono text-[9px] uppercase tracking-wider text-muted">{label}</p>
+    <div className="min-w-0 rounded-xl border border-border bg-surface px-3 py-2.5 shadow-soft">
+      <p className="truncate font-mono text-[9px] uppercase tracking-wider text-muted">{label}</p>
       <p className="mt-0.5 font-mono text-xl font-medium tnum" style={accent ? { color: accent } : undefined}>{value}</p>
-      {sub && <p className="text-[10px] text-muted">{sub}</p>}
+      {sub && <p className="truncate text-[10px] text-muted">{sub}</p>}
     </div>
   )
 }
+
+const colHead = 'px-2 py-2 font-mono text-[9px] font-normal uppercase tracking-wider text-muted'
 
 export default function AdvisorDashboard({ data, clientName }: Props) {
   const t = useT()
@@ -62,10 +66,11 @@ export default function AdvisorDashboard({ data, clientName }: Props) {
   const [search, setSearch] = useState('')
   const [dragOver, setDragOver] = useState(false)
   const [capital, setCapital] = useState(100_000)
-  // How many names per asset class the suggestion draws in. Seeded from the
-  // admin's default and re-seeded when the admin changes it.
-  const [perClass, setPerClass] = useState(model.assetsPerClass)
-  useEffect(() => setPerClass(model.assetsPerClass), [model.assetsPerClass])
+  // How many names the suggestion draws in ALTOGETHER — the band's mix decides
+  // how they split across classes. Seeded from the admin's default and re-seeded
+  // when the admin changes it.
+  const [assetCount, setAssetCount] = useState(model.totalAssets)
+  useEffect(() => setAssetCount(model.totalAssets), [model.totalAssets])
 
   // Esc closes the ficha; the page behind it must not scroll under the overlay.
   useEffect(() => {
@@ -90,9 +95,12 @@ export default function AdvisorDashboard({ data, clientName }: Props) {
 
   // Suggested portfolio (optimizer) — the starting point.
   const suggested = useMemo(
-    () => buildPortfolio(region, mix, instruments, data.scores, data.level, { assetsPerClass: perClass }),
-    [region, mix, instruments, data.scores, data.level, model, perClass],
+    () => buildPortfolio(region, mix, instruments, data.scores, data.level, { totalAssets: assetCount }),
+    [region, mix, instruments, data.scores, data.level, model, assetCount],
   )
+  // The band spreads across N classes and every class keeps at least one name,
+  // so the book can't be smaller than that — don't let the stepper pretend it can.
+  const minAssets = Math.max(1, minimumAssets(mix))
   // Working portfolio = suggested, or the advisor's edits.
   const portfolio: Portfolio = useMemo(
     () => (working ? assemblePortfolio(holdingsFromWeights(working, instruments, data.scores), region) : suggested),
@@ -140,12 +148,12 @@ export default function AdvisorDashboard({ data, clientName }: Props) {
     setWorking(null)
     setClassFilter('all')
   }
-  // A new per-class count only changes what the OPTIMIZER picks, so drop back to
-  // the suggested book — otherwise the control would look like it did nothing.
+  // A new asset count only changes what the OPTIMIZER picks, so drop back to the
+  // suggested book — otherwise the control would look like it did nothing.
   // Functional update: consecutive clicks must each count, not all read the same
   // render's value.
-  const stepPerClass = (delta: number) => {
-    setPerClass((p) => Math.max(1, Math.min(30, p + delta)))
+  const stepAssets = (delta: number) => {
+    setAssetCount((n) => Math.max(minAssets, Math.min(60, n + delta)))
     setWorking(null)
   }
   // Re-run the optimizer over exactly what's in the book right now: same names,
@@ -166,8 +174,9 @@ export default function AdvisorDashboard({ data, clientName }: Props) {
   const offTotal = Math.abs(rawTotal - 1) >= 0.005
 
   const plan = useMemo(() => allocateCapital(portfolio, capital), [portfolio, capital])
+  const ticketLines = plan.lines.filter((l) => l.units > 0)
   const hasHoldings = portfolio.holdings.length > 0
-  const classDonut = portfolio.classDist.map((c) => ({ assetClass: c.assetClass as Category, pct: c.weight }))
+  const classMix = portfolio.classDist.map((c) => ({ assetClass: c.assetClass as Category, pct: c.weight }))
   const scatterPoints = portfolio.holdings.map((h) => ({ id: h.inst.id, name: h.inst.name, assetClass: h.inst.assetClass, vol: h.vol, ret: h.expReturn }))
   const riskDistMax = Math.max(1, ...([1, 2, 3, 4, 5] as RiskLevel[]).map((l) => portfolio.riskDist[l]))
 
@@ -199,38 +208,47 @@ export default function AdvisorDashboard({ data, clientName }: Props) {
       <div className="grid grid-cols-1 gap-4 min-[1024px]:grid-cols-[1fr_400px]">
         {/* LEFT */}
         <div className="order-2 flex min-w-0 flex-col gap-4 min-[1024px]:order-1">
-          {/* Metrics */}
+          {/* Metrics — every headline number on one line. Duration only applies
+              when the book holds bonds, so it appears rather than reserving a
+              slot; the count of bonds is already visible in the holdings table. */}
           <div className={`p-4 ${cardCls}`}>
-            <div className="grid grid-cols-2 gap-2.5 min-[560px]:grid-cols-4">
+            <div className={`grid grid-cols-2 gap-2.5 min-[560px]:grid-cols-4 ${portfolio.bondStats ? 'min-[900px]:grid-cols-5' : ''}`}>
               <StatTile label={t.portfolioPanel.expReturn} value={pctFmt(portfolio.expReturn)} sub={t.portfolioPanel.annualized} accent="rgb(var(--c-accent))" />
               <StatTile label={t.portfolioPanel.volatility} value={pctFmt(portfolio.vol)} sub={t.portfolioPanel.annualized} />
               <StatTile label={t.portfolioPanel.returnRisk} value={portfolio.sharpe.toFixed(2)} />
               <StatTile label={t.portfolioPanel.portfolioRisk} value={`${portfolio.riskLevel}/5`} accent={RISK_COLORS[portfolio.riskLevel]} />
-            </div>
-            {portfolio.bondStats && (
-              <div className="mt-2.5 grid grid-cols-2 gap-2.5 min-[560px]:grid-cols-4">
+              {portfolio.bondStats && (
                 <StatTile label={t.portfolioPanel.avgDuration} value={portfolio.bondStats.avgDuration.toFixed(1)} sub={t.portfolioPanel.years} />
-                <StatTile label={t.portfolioPanel.bonds} value={String(portfolio.bondStats.count)} />
-              </div>
-            )}
+              )}
+            </div>
             {hasHoldings && (
               <div className="mt-4 grid grid-cols-1 gap-4 min-[720px]:grid-cols-[1.3fr_1fr]">
                 <RiskReturnScatter points={scatterPoints} region={region} title={t.portfolioPanel.scatterTitle} xLabel={t.portfolioPanel.scatterX} yLabel={t.portfolioPanel.scatterY} />
                 <div className="flex flex-col gap-3">
+                  {/* Class mix as one proportional bar + a readable ledger. A
+                      four-slice donut makes the reader estimate angles; a bar
+                      shares the axis the numbers are already on. */}
                   <div>
                     <p className="mb-2 text-xs font-semibold text-text">{t.portfolioPanel.byClass}</p>
-                    <div className="flex items-center gap-3">
-                      <DonutChart data={classDonut} size={110} region={region} />
-                      <ul className="flex-1 space-y-1">
-                        {classDonut.map((c) => (
-                          <li key={c.assetClass} className="flex items-center gap-1.5 text-xs">
-                            <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: colorForCategory(c.assetClass, region) }} />
-                            <span className="flex-1 truncate text-text">{categoryLabel(c.assetClass, region, lang)}</span>
-                            <span className="font-mono text-text tnum">{c.pct}%</span>
-                          </li>
-                        ))}
-                      </ul>
+                    <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-border">
+                      {classMix.map((c) => (
+                        <span
+                          key={c.assetClass}
+                          className="h-full first:rounded-l-full last:rounded-r-full"
+                          style={{ width: `${c.pct}%`, backgroundColor: colorForCategory(c.assetClass, region) }}
+                          title={`${categoryLabel(c.assetClass, region, lang)} ${c.pct}%`}
+                        />
+                      ))}
                     </div>
+                    <ul className="mt-2.5 space-y-1.5">
+                      {classMix.map((c) => (
+                        <li key={c.assetClass} className="flex items-baseline gap-2 text-xs">
+                          <span className="h-2 w-2 shrink-0 translate-y-[-1px] rounded-full" style={{ backgroundColor: colorForCategory(c.assetClass, region) }} />
+                          <span className="min-w-0 flex-1 truncate text-text">{categoryLabel(c.assetClass, region, lang)}</span>
+                          <span className="font-mono text-sm font-medium text-text tnum">{c.pct}%</span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                   <div>
                     <p className="mb-2 text-xs font-semibold text-text">{t.portfolioPanel.byRisk}</p>
@@ -264,12 +282,12 @@ export default function AdvisorDashboard({ data, clientName }: Props) {
                 {t.portfolioPanel.total}: {Math.round(rawTotal * 100)}%
               </span>
 
-              {/* Names per class — how many the suggestion pulls in. */}
-              <span className="flex items-center gap-1.5 rounded-lg border border-border px-2 py-0.5">
-                <span className="font-mono text-[10px] uppercase tracking-wider text-muted">{t.portfolioPanel.perClass}</span>
-                <button type="button" aria-label={t.portfolioPanel.fewer} onClick={() => stepPerClass(-1)} className="px-1 text-muted transition-colors hover:text-teal">−</button>
-                <span className="w-4 text-center font-mono text-xs font-medium text-text tnum">{perClass}</span>
-                <button type="button" aria-label={t.portfolioPanel.more} onClick={() => stepPerClass(1)} className="px-1 text-muted transition-colors hover:text-teal">+</button>
+              {/* How many names the suggestion pulls in, for the book as a whole. */}
+              <span className="flex items-center gap-1.5 rounded-lg border border-border px-2 py-0.5" title={t.portfolioPanel.assetCountHint}>
+                <span className="font-mono text-[10px] uppercase tracking-wider text-muted">{t.portfolioPanel.assetCount}</span>
+                <button type="button" aria-label={t.portfolioPanel.fewer} onClick={() => stepAssets(-1)} disabled={assetCount <= minAssets} className="px-1 text-muted transition-colors hover:text-teal disabled:opacity-30">−</button>
+                <span className="w-5 text-center font-mono text-xs font-medium text-text tnum">{assetCount}</span>
+                <button type="button" aria-label={t.portfolioPanel.more} onClick={() => stepAssets(1)} className="px-1 text-muted transition-colors hover:text-teal">+</button>
               </span>
 
               <div className="ml-auto flex flex-wrap items-center gap-2">
@@ -300,6 +318,16 @@ export default function AdvisorDashboard({ data, clientName }: Props) {
             ) : (
               <div className="overflow-hidden rounded-xl border border-border">
                 <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-bg/40">
+                      <th className={`${colHead} pl-3 text-left`}>{t.portfolioPanel.holding}</th>
+                      <th className={`${colHead} text-center`}>{t.portfolioPanel.risk}</th>
+                      <th className={`${colHead} hidden text-right sm:table-cell`}>{t.portfolioPanel.ret}</th>
+                      <th className={`${colHead} hidden text-right sm:table-cell`}>{t.portfolioPanel.vol}</th>
+                      <th className={`${colHead} text-right`}>{t.portfolioPanel.weight}</th>
+                      <th className="w-8" />
+                    </tr>
+                  </thead>
                   <tbody>
                     {portfolio.holdings.map((h) => (
                       <tr key={h.inst.id} className="border-b border-hairline last:border-0">
@@ -344,13 +372,40 @@ export default function AdvisorDashboard({ data, clientName }: Props) {
                   </span>
                   <span className="ml-auto font-mono text-xs text-muted">{t.portfolioPanel.invested} <span className="text-text">{money(plan.invested)}</span> · {t.portfolioPanel.residual} <span className="text-teal">{money(plan.residual)}</span></span>
                 </div>
-                {plan.lines.filter((l) => l.units > 0).length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {plan.lines.filter((l) => l.units > 0).map((l) => (
-                      <span key={l.holding.inst.id} className="rounded-md border border-border bg-bg/50 px-2 py-1 font-mono text-[11px] text-muted tnum">
-                        {l.units} <span className="text-text">{l.holding.inst.ticker && l.holding.inst.ticker !== 'OTC' ? l.holding.inst.ticker : l.holding.inst.name.slice(0, 14)}</span>
-                      </span>
-                    ))}
+                {/* The order itself — one row per line, so units, price and
+                    money line up in columns instead of running together. */}
+                {ticketLines.length > 0 && (
+                  <div className="mt-3 overflow-hidden rounded-xl border border-border">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border bg-bg/40">
+                          <th className={`${colHead} pl-3 text-left`}>{t.portfolioPanel.holding}</th>
+                          <th className={`${colHead} text-right`}>{t.portfolioPanel.units}</th>
+                          <th className={`${colHead} hidden text-right sm:table-cell`}>{t.portfolioPanel.unitPrice}</th>
+                          <th className={`${colHead} text-right`}>{t.portfolioPanel.amount}</th>
+                          <th className={`${colHead} pr-3 text-right`}>{t.portfolioPanel.ofBook}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ticketLines.map((l) => (
+                          <tr key={l.holding.inst.id} className="border-b border-hairline last:border-0">
+                            <td className="max-w-0 py-1.5 pl-3 pr-2">
+                              <span className="flex items-center gap-2">
+                                <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: colorForCategory(l.holding.inst.assetClass, region) }} />
+                                <span className="truncate text-text">{l.holding.inst.name}</span>
+                                {l.holding.inst.ticker && l.holding.inst.ticker !== 'OTC' && (
+                                  <span className="shrink-0 font-mono text-[10px] text-muted">{l.holding.inst.ticker}</span>
+                                )}
+                              </span>
+                            </td>
+                            <td className="whitespace-nowrap px-2 py-1.5 text-right font-mono text-xs text-text tnum">{l.units.toLocaleString('en-US')}</td>
+                            <td className="hidden whitespace-nowrap px-2 py-1.5 text-right font-mono text-xs text-muted tnum sm:table-cell">{money(l.holding.unitPrice ?? 0)}</td>
+                            <td className="whitespace-nowrap px-2 py-1.5 text-right font-mono text-xs text-text tnum">{money(l.cost)}</td>
+                            <td className="whitespace-nowrap py-1.5 pl-2 pr-3 text-right font-mono text-xs text-muted tnum">{pctFmt(l.actualWeight)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 )}
                 {plan.unpriced.length > 0 && <p className="mt-2 text-[11px] text-muted">{t.portfolioPanel.unpricedNote(plan.unpriced.length)}</p>}
@@ -414,21 +469,21 @@ export default function AdvisorDashboard({ data, clientName }: Props) {
       </div>
 
       {/* ── Ficha ─────────────────────────────────────────────────────────────
-          Full-bleed: flush to the top of the viewport and as wide as the screen
-          allows, with the green header pinned and only the body scrolling.
-          Portalled to <body> because this dashboard's fade animation uses
-          fill-mode `both`, which leaves a stacking context behind — rendered in
-          place, the overlay's z-50 would still sit under the nav's z-40. */}
+          An overlay, not a takeover: a large centred card with the workspace
+          still visible behind it, its green header pinned and only the body
+          scrolling. Portalled to <body> because this dashboard's fade animation
+          uses fill-mode `both`, which leaves a stacking context behind —
+          rendered in place, the overlay's z-50 would sit under the nav's z-40. */}
       {ficha &&
         createPortal(
           <div
             role="dialog"
             aria-modal="true"
             aria-label={ficha.name}
-            className="fixed inset-0 z-50 flex justify-center bg-black/50"
+            className="animate-fade-300 fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 min-[900px]:p-8"
             onClick={() => setFicha(null)}
           >
-            <div className="h-[100dvh] w-full max-w-[1800px]" onClick={(e) => e.stopPropagation()}>
+            <div className="h-full max-h-[860px] w-full max-w-[1180px]" onClick={(e) => e.stopPropagation()}>
               <InstrumentReport fill instrument={ficha} region={region} onBack={() => setFicha(null)} />
             </div>
           </div>,

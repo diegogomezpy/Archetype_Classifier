@@ -57,11 +57,15 @@ app.post('/api/catalog/reset', async (c) => {
   existing.docs.forEach((d) => batch.delete(d.ref))
   for (const it of items) batch.set(catalogCol.doc(it.id), it)
   await batch.commit()
+  scheduleTranslationSweep()
   return c.json({ items })
 })
 app.put('/api/catalog/:id', async (c) => {
   const body = (await c.req.json()) as { id: string }
   await catalogCol.doc(c.req.param('id')).set(body)
+  // A write may have brought in English text the feed couldn't translate (see
+  // the Spanish backfill below). Coalesced, so a bulk import fires one sweep.
+  scheduleTranslationSweep()
   return c.json(body)
 })
 app.delete('/api/catalog/:id', async (c) => {
@@ -397,38 +401,24 @@ app.post('/api/market-data', async (c) => {
  * Fill in the cached Spanish (`<key>Es`) for catalog rows that have the English
  * text but no translation yet.
  *
- * This exists because the free translation engine is rate-limited by the DAY:
- * importing 50 instruments at once translates the first handful and then quietly
- * runs out, leaving the rest English forever (a fetch is only re-attempted when
- * the source text changes, and company boilerplate never changes). So the
- * backfill is a separate, resumable pass — run it, see how many are left, run it
- * again tomorrow if the quota cut it short. It never re-translates a row that
- * already has a translation, so repeat runs are cheap.
+ * This has to exist because the free translation engine is rate-limited by the
+ * DAY: importing 50 instruments at once translates the first handful and then
+ * quietly runs out, leaving the rest English forever (a fetch only re-translates
+ * when the source text CHANGES, and company boilerplate never changes). So the
+ * gap can't heal itself at fetch time — it needs a separate resumable pass.
  *
- * GET reports coverage without spending any quota; POST does the work.
+ * Nobody should have to press a button for that, so the sweep runs itself: at
+ * boot, shortly after any catalog write, and at the end of the daily refresh
+ * (which is the one that guarantees convergence, since it lands on a fresh
+ * quota every morning). It never re-translates a row that already has a
+ * translation, so repeat runs are nearly free.
  */
 const translatableGaps = (details: Record<string, string>): string[] =>
   TRANSLATABLE.filter((k) => (details[k] ?? '').trim() && !(details[`${k}Es`] ?? '').trim())
 
-app.get('/api/market-data/translate', async (c) => {
-  const snap = await catalogCol.get()
-  let translated = 0
-  let missing = 0
-  for (const doc of snap.docs) {
-    const details = ((docData(doc) as Record<string, unknown>).details as Record<string, string>) ?? {}
-    for (const k of TRANSLATABLE) {
-      if (!(details[k] ?? '').trim()) continue
-      if ((details[`${k}Es`] ?? '').trim()) translated++
-      else missing++
-    }
-  }
-  return c.json({ ok: true, translated, missing })
-})
+type SweepResult = { updated: number; failed: number; remaining: number; quotaExhausted: boolean }
 
-app.post('/api/market-data/translate', async (c) => {
-  // Bounded per call so one request can't outlive the Cloud Run timeout; the
-  // admin can click again to continue where it left off.
-  const limit = Math.max(1, Math.min(200, Number(c.req.query('limit')) || 40))
+async function sweepTranslations(limit = 40): Promise<SweepResult> {
   const snap = await catalogCol.get()
   const pending = snap.docs
     .map((d) => docData(d) as Record<string, unknown>)
@@ -460,11 +450,55 @@ app.post('/api/market-data/translate', async (c) => {
       await catalogCol.doc(String(inst.id)).set({ ...inst, details }, { merge: true })
       updated++
     }
+    // A daily cap won't lift within this pass — stop rather than burn minutes
+    // on calls that can only fail.
     if (quotaExhausted) break
   }
 
-  const remaining = pending.length - updated
-  return c.json({ ok: true, updated, failed, remaining, quotaExhausted })
+  return { updated, failed, remaining: pending.length - updated, quotaExhausted }
+}
+
+// Background trigger. Coalesced so a 50-row import fires one sweep, not fifty,
+// and spaced so a quota-exhausted pass doesn't immediately retry. Deliberately
+// not awaited by the caller — an admin saving an instrument must not wait on a
+// translation service.
+const SWEEP_MIN_GAP_MS = 10 * 60 * 1000
+let sweepRunning = false
+let lastSweepAt = 0
+
+function scheduleTranslationSweep(delayMs = 5_000): void {
+  if (sweepRunning || Date.now() - lastSweepAt < SWEEP_MIN_GAP_MS) return
+  sweepRunning = true
+  setTimeout(() => {
+    void (async () => {
+      try {
+        const r = await sweepTranslations(60)
+        if (r.updated || r.remaining) console.log(`translation sweep: ${JSON.stringify(r)}`)
+      } catch (e) {
+        console.warn('translation sweep failed:', e)
+      } finally {
+        lastSweepAt = Date.now()
+        sweepRunning = false
+      }
+    })()
+  }, delayMs).unref?.()
+}
+
+// Coverage report — spends no quota, so it stays available for checking that the
+// automatic sweeps are in fact keeping up.
+app.get('/api/market-data/translate', async (c) => {
+  const snap = await catalogCol.get()
+  let translated = 0
+  let missing = 0
+  for (const doc of snap.docs) {
+    const details = ((docData(doc) as Record<string, unknown>).details as Record<string, string>) ?? {}
+    for (const k of TRANSLATABLE) {
+      if (!(details[k] ?? '').trim()) continue
+      if ((details[`${k}Es`] ?? '').trim()) translated++
+      else missing++
+    }
+  }
+  return c.json({ ok: true, translated, missing })
 })
 
 // Fields the market-data feed owns. Anything NOT in here is either the research
@@ -579,7 +613,18 @@ app.post('/api/market-data/refresh', async (c) => {
   }
 
   console.log(`market-data refresh: ${updated} updated, ${failed} failed, ${skipped} skipped`)
-  return c.json({ ok: true, considered: rows.length, updated, failed })
+
+  // The one pass that guarantees Spanish converges: it runs inside a real
+  // request (so Cloud Run has actually allocated CPU) and lands each morning on
+  // a fresh daily quota, so whatever a bulk import couldn't translate yesterday
+  // gets picked up today — and the day after, until nothing is left.
+  const translation = await sweepTranslations(80).catch((e) => {
+    console.warn('translation sweep failed:', e)
+    return null
+  })
+  if (translation) console.log(`translation sweep: ${JSON.stringify(translation)}`)
+
+  return c.json({ ok: true, considered: rows.length, updated, failed, translation })
 })
 
 // ── static frontend + SPA fallback ───────────────────────────────────────────
@@ -611,3 +656,7 @@ app.get('*', serveShell)
 const port = Number(process.env.PORT) || 8080
 serve({ fetch: app.fetch, port })
 console.log(`server listening on :${port} (web root: ${WEB_ROOT})`)
+
+// Catch up on any Spanish the feed couldn't translate before this instance
+// started. Delayed so it never competes with serving the first request.
+scheduleTranslationSweep(20_000)

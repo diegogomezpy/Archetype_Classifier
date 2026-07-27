@@ -12,9 +12,11 @@ import { api } from './api'
 
 const clone = (m: PortfolioModel): PortfolioModel => JSON.parse(JSON.stringify(m))
 
-// Params the factor-correlation model replaced. A doc written before that change
-// still carries them; drop them rather than spreading dead keys forward forever.
-const RETIRED = ['rhoWithin', 'rhoAcross'] as const
+// Params later refactors replaced: rhoWithin/rhoAcross by the factor-correlation
+// model, assetsPerClass by a single portfolio-wide totalAssets. A doc written
+// before those changes still carries them; drop them rather than spreading dead
+// keys forward forever.
+const RETIRED = ['rhoWithin', 'rhoAcross', 'assetsPerClass'] as const
 
 export function mergeModel(loaded: Partial<PortfolioModel> | null): PortfolioModel {
   const seed = clone(DEFAULT_PORTFOLIO_MODEL)
