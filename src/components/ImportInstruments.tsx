@@ -36,6 +36,7 @@ export default function ImportInstruments() {
   const [region, setRegion] = useState<Region>('global')
   const [category, setCategory] = useState<Category>('Equities')
   const [result, setResult] = useState<ImportResult | null>(null)
+  const [fetchFailed, setFetchFailed] = useState<string[]>([])
   const [done, setDone] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -47,6 +48,7 @@ export default function ImportInstruments() {
 
   const reset = () => {
     setResult(null)
+    setFetchFailed([])
     setDone(null)
     setError(null)
   }
@@ -80,7 +82,8 @@ export default function ImportInstruments() {
     let done = 0
     const filled = await autofillAll(parsed.instruments, () => setBusy(t.admin.importFetching(++done, fetchCount)))
     setBusy(null)
-    setResult({ ...parsed, instruments: filled })
+    setFetchFailed(filled.failed)
+    setResult({ ...parsed, instruments: filled.instruments })
   }
 
   const onPdf = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -191,6 +194,11 @@ export default function ImportInstruments() {
               {!pdfMode && result.unmatched.length > 0 &&
                 ` · ${t.admin.importUnmatched(result.unmatched.join(', '))}`}
             </p>
+            {fetchFailed.length > 0 && (
+              <p className="mt-2 text-xs font-medium text-amber">
+                {t.admin.importFetchFailed(fetchFailed.join(', '))}
+              </p>
+            )}
             {result.instruments.length > 0 && (
               <ul className="mt-3 max-h-44 space-y-1 overflow-y-auto pr-2 font-mono text-[11px] text-muted tnum">
                 {result.instruments.slice(0, 12).map((i) => (
@@ -225,9 +233,13 @@ export default function ImportInstruments() {
 async function autofillAll(
   items: ManagedInstrument[],
   onFetched: () => void,
-): Promise<ManagedInstrument[]> {
+): Promise<{ instruments: ManagedInstrument[]; failed: string[] }> {
   const queue = items.map((inst, i) => ({ inst, i }))
   const out: ManagedInstrument[] = new Array(items.length)
+  // Tickers the feed had nothing for — a delisted or renamed symbol imports as
+  // a bare name with no data, which is invisible until someone opens its report
+  // months later. Collect them so the admin sees it at import time.
+  const failed: string[] = []
 
   const worker = async () => {
     for (;;) {
@@ -245,8 +257,9 @@ async function autofillAll(
           assetClass: inst.assetClass as AssetClass,
         })
         if (res.ok) fields = res.fields
+        else failed.push(inst.ticker)
       } catch {
-        /* leave the row as the file gave it */
+        failed.push(inst.ticker) // leave the row as the file gave it
       }
       const allowed = fetchableFields(inst.assetClass, inst.region ?? 'global', inst.kind)
       const rest: Record<string, string> = {}
@@ -264,5 +277,5 @@ async function autofillAll(
     }
   }
   await Promise.all([worker(), worker(), worker()])
-  return out.filter(Boolean)
+  return { instruments: out.filter(Boolean), failed }
 }

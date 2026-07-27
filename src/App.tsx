@@ -16,6 +16,7 @@ import AdminBandsPage from './pages/AdminBandsPage'
 import AdminQuestionsPage from './pages/AdminQuestionsPage'
 import AdminRiskPage from './pages/AdminRiskPage'
 import AdminPortfolioPage from './pages/AdminPortfolioPage'
+import AdminScreenerPage from './pages/AdminScreenerPage'
 import AdminAdvisorsPage from './pages/AdminAdvisorsPage'
 
 // Route shell. Hash routing keeps every route working on static hosting with no
@@ -27,6 +28,7 @@ import AdminAdvisorsPage from './pages/AdminAdvisorsPage'
 //   #/advisor/client/:id    one client's session history
 //   #/advisor/session/:id   one session's portfolio
 //   #/admin                 instrument catalog
+//   #/admin/screener        trait screener → which instruments advisors see
 //   #/admin/questions       questionnaire editor
 //   #/admin/bands           risk bands (1–5 presets)
 //   #/admin/risk            instrument risk model
@@ -49,6 +51,7 @@ export default function App() {
                   <Route path="/advisor/client/:clientId" element={<AdvisorClientPage />} />
                   <Route path="/advisor/session/:id" element={<AdvisorSessionPage />} />
                   <Route path="/admin" element={<AdminPage />} />
+                  <Route path="/admin/screener" element={<AdminScreenerPage />} />
                   <Route path="/admin/questions" element={<AdminQuestionsPage />} />
                   <Route path="/admin/bands" element={<AdminBandsPage />} />
                   <Route path="/admin/risk" element={<AdminRiskPage />} />

@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { type DashboardData, type RiskLevel } from '../lib/scoring'
 import { colorForCategory, type Category, type Region } from '../lib/instruments'
 import { bandForLevel, useRiskBands } from '../lib/bandConfig'
@@ -10,8 +11,8 @@ import {
   buildPortfolio,
   estimate,
   holdingsFromWeights,
+  reoptimize,
   type Estimate,
-  type Holding,
   type Portfolio,
 } from '../lib/portfolio'
 import { useLang, useT } from '../i18n/i18n'
@@ -61,6 +62,23 @@ export default function AdvisorDashboard({ data, clientName }: Props) {
   const [search, setSearch] = useState('')
   const [dragOver, setDragOver] = useState(false)
   const [capital, setCapital] = useState(100_000)
+  // How many names per asset class the suggestion draws in. Seeded from the
+  // admin's default and re-seeded when the admin changes it.
+  const [perClass, setPerClass] = useState(model.assetsPerClass)
+  useEffect(() => setPerClass(model.assetsPerClass), [model.assetsPerClass])
+
+  // Esc closes the ficha; the page behind it must not scroll under the overlay.
+  useEffect(() => {
+    if (!ficha) return
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setFicha(null)
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = prevOverflow
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [ficha])
 
   const band = localizedBand(data.level, lang)
   const preset = bandForLevel(config, data.level)
@@ -72,8 +90,8 @@ export default function AdvisorDashboard({ data, clientName }: Props) {
 
   // Suggested portfolio (optimizer) — the starting point.
   const suggested = useMemo(
-    () => buildPortfolio(region, mix, instruments, data.scores, data.level),
-    [region, mix, instruments, data.scores, data.level, model],
+    () => buildPortfolio(region, mix, instruments, data.scores, data.level, { assetsPerClass: perClass }),
+    [region, mix, instruments, data.scores, data.level, model, perClass],
   )
   // Working portfolio = suggested, or the advisor's edits.
   const portfolio: Portfolio = useMemo(
@@ -122,6 +140,30 @@ export default function AdvisorDashboard({ data, clientName }: Props) {
     setWorking(null)
     setClassFilter('all')
   }
+  // A new per-class count only changes what the OPTIMIZER picks, so drop back to
+  // the suggested book — otherwise the control would look like it did nothing.
+  // Functional update: consecutive clicks must each count, not all read the same
+  // render's value.
+  const stepPerClass = (delta: number) => {
+    setPerClass((p) => Math.max(1, Math.min(30, p + delta)))
+    setWorking(null)
+  }
+  // Re-run the optimizer over exactly what's in the book right now: same names,
+  // fresh weights, summing to 100%.
+  const reoptimizeBook = () =>
+    setWorking(
+      reoptimize(portfolio.holdings.map((h) => h.inst.id), region, mix, instruments, data.scores, data.level).map((h) => ({
+        instId: h.inst.id,
+        weight: h.weight,
+      })),
+    )
+  // Keep the advisor's relative sizing, just scale it back onto 100%.
+  const normalizeBook = () => {
+    const base = ensure()
+    const sum = base.reduce((a, x) => a + x.weight, 0)
+    if (sum > 0) setWorking(base.map((x) => ({ ...x, weight: x.weight / sum })))
+  }
+  const offTotal = Math.abs(rawTotal - 1) >= 0.005
 
   const plan = useMemo(() => allocateCapital(portfolio, capital), [portfolio, capital])
   const hasHoldings = portfolio.holdings.length > 0
@@ -216,12 +258,42 @@ export default function AdvisorDashboard({ data, clientName }: Props) {
             onDragLeave={() => setDragOver(false)}
             onDrop={(e) => { e.preventDefault(); setDragOver(false); const id = e.dataTransfer.getData('text/plain'); if (id) addInstrument(id) }}
           >
-            <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
               <h2 className="text-sm font-semibold text-text">{t.portfolioPanel.holdingsTitle}</h2>
-              <span className={`font-mono text-xs tnum ${Math.abs(rawTotal - 1) < 0.005 ? 'text-muted' : 'text-amber'}`}>{t.portfolioPanel.total}: {Math.round(rawTotal * 100)}%</span>
-              {working && (
-                <button type="button" onClick={resetSuggested} className="ml-auto text-xs font-medium text-muted transition-colors hover:text-teal">{t.portfolioPanel.resetSuggested}</button>
-              )}
+              <span className={`font-mono text-xs tnum ${offTotal ? 'text-amber' : 'text-muted'}`}>
+                {t.portfolioPanel.total}: {Math.round(rawTotal * 100)}%
+              </span>
+
+              {/* Names per class — how many the suggestion pulls in. */}
+              <span className="flex items-center gap-1.5 rounded-lg border border-border px-2 py-0.5">
+                <span className="font-mono text-[10px] uppercase tracking-wider text-muted">{t.portfolioPanel.perClass}</span>
+                <button type="button" aria-label={t.portfolioPanel.fewer} onClick={() => stepPerClass(-1)} className="px-1 text-muted transition-colors hover:text-teal">−</button>
+                <span className="w-4 text-center font-mono text-xs font-medium text-text tnum">{perClass}</span>
+                <button type="button" aria-label={t.portfolioPanel.more} onClick={() => stepPerClass(1)} className="px-1 text-muted transition-colors hover:text-teal">+</button>
+              </span>
+
+              <div className="ml-auto flex flex-wrap items-center gap-2">
+                {hasHoldings && (
+                  <button
+                    type="button"
+                    onClick={reoptimizeBook}
+                    title={t.portfolioPanel.reoptimizeHint}
+                    className="rounded-lg border border-teal/40 bg-teal/10 px-2.5 py-1 text-xs font-medium text-teal transition-colors hover:bg-teal/20"
+                  >
+                    {t.portfolioPanel.reoptimize}
+                  </button>
+                )}
+                {offTotal && (
+                  <button type="button" onClick={normalizeBook} className="rounded-lg border border-border px-2.5 py-1 text-xs font-medium text-muted transition-colors hover:text-text">
+                    {t.portfolioPanel.normalize}
+                  </button>
+                )}
+                {working && (
+                  <button type="button" onClick={resetSuggested} className="text-xs font-medium text-muted transition-colors hover:text-teal">
+                    {t.portfolioPanel.resetSuggested}
+                  </button>
+                )}
+              </div>
             </div>
             {!hasHoldings ? (
               <p className="rounded-xl border border-dashed border-border py-8 text-center text-sm text-muted">{t.portfolioPanel.dropHere}</p>
@@ -341,14 +413,27 @@ export default function AdvisorDashboard({ data, clientName }: Props) {
         </div>
       </div>
 
-      {/* ── Ficha modal ───────────────────────────────────────────────────────── */}
-      {ficha && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 sm:p-8" onClick={() => setFicha(null)}>
-          <div className="w-full max-w-3xl" onClick={(e) => e.stopPropagation()}>
-            <InstrumentReport instrument={ficha} region={region} onBack={() => setFicha(null)} />
-          </div>
-        </div>
-      )}
+      {/* ── Ficha ─────────────────────────────────────────────────────────────
+          Full-bleed: flush to the top of the viewport and as wide as the screen
+          allows, with the green header pinned and only the body scrolling.
+          Portalled to <body> because this dashboard's fade animation uses
+          fill-mode `both`, which leaves a stacking context behind — rendered in
+          place, the overlay's z-50 would still sit under the nav's z-40. */}
+      {ficha &&
+        createPortal(
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={ficha.name}
+            className="fixed inset-0 z-50 flex justify-center bg-black/50"
+            onClick={() => setFicha(null)}
+          >
+            <div className="h-[100dvh] w-full max-w-[1800px]" onClick={(e) => e.stopPropagation()}>
+              <InstrumentReport fill instrument={ficha} region={region} onBack={() => setFicha(null)} />
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   )
 }

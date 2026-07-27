@@ -19,6 +19,12 @@ type Props = {
   instrument: ManagedInstrument
   region: Region
   onBack: () => void
+  /**
+   * Fill the parent box instead of sizing to content: the green header stays
+   * put and only the body scrolls. Used by the advisor's full-screen ficha;
+   * InstrumentList renders the same report inline, where content height is right.
+   */
+  fill?: boolean
 }
 
 const HEADER_GREEN = '#12463a'
@@ -99,7 +105,7 @@ function RiskLevelGauge({ level }: { level: number }) {
   )
 }
 
-export default function InstrumentReport({ instrument: inst, region, onBack }: Props) {
+export default function InstrumentReport({ instrument: inst, region, onBack, fill = false }: Props) {
   const t = useT()
   const { lang } = useLang()
   const td = t.instrumentDetail
@@ -162,9 +168,15 @@ export default function InstrumentReport({ instrument: inst, region, onBack }: P
   const showConsensus = buy != null && has('recBuyPct')
 
   return (
-    <div className="animate-fade-300 overflow-hidden rounded-3xl border border-border bg-surface shadow-card">
+    <div
+      className={
+        fill
+          ? 'flex h-full min-h-0 flex-col overflow-hidden border-border bg-surface shadow-card'
+          : 'animate-fade-300 overflow-hidden rounded-3xl border border-border bg-surface shadow-card'
+      }
+    >
       {/* ── Green header band ─────────────────────────────────────────────────── */}
-      <div className="relative px-6 py-6 text-white sm:px-8" style={{ backgroundColor: HEADER_GREEN }}>
+      <div className="relative shrink-0 px-6 py-6 text-white sm:px-8" style={{ backgroundColor: HEADER_GREEN }}>
         <button
           type="button"
           onClick={onBack}
@@ -189,7 +201,13 @@ export default function InstrumentReport({ instrument: inst, region, onBack }: P
       </div>
 
       {/* ── Body: narrative (left) + metrics/data (right) ─────────────────────── */}
-      <div className="grid grid-cols-1 gap-6 p-6 sm:p-8 min-[820px]:grid-cols-[1.5fr_1fr]">
+      {/* When filling the viewport the body is the scroller, and the wider box
+          earns a third column for the metric cards instead of one long one. */}
+      <div
+        className={`grid grid-cols-1 gap-6 p-6 sm:p-8 min-[820px]:grid-cols-[1.5fr_1fr] ${
+          fill ? 'min-h-0 flex-1 overflow-y-auto min-[1280px]:grid-cols-[1.35fr_1fr]' : ''
+        }`}
+      >
         {/* LEFT */}
         <div className="min-w-0 space-y-7">
           {description && (
@@ -255,10 +273,11 @@ export default function InstrumentReport({ instrument: inst, region, onBack }: P
           <InstrumentDocs instrumentId={inst.id} editable={false} />
         </div>
 
-        {/* RIGHT */}
-        <div className="space-y-4">
+        {/* RIGHT — on a wide full-screen ficha the rail splits into two columns
+            so the metrics sit beside the fund data instead of far below it. */}
+        <div className={fill ? 'grid content-start gap-4 min-[1280px]:grid-cols-2' : 'space-y-4'}>
           {/* Risk indicator */}
-          <div className="rounded-2xl border border-border bg-surface p-5 shadow-soft">
+          <div className={`rounded-2xl border border-border bg-surface p-5 shadow-soft ${fill ? 'min-[1280px]:col-span-2' : ''}`}>
             <SectionTitle>{td.riskIndicator}</SectionTitle>
             <div className="mt-4">
               <RiskLevelGauge level={assignedLevel(inst)} />
@@ -284,7 +303,9 @@ export default function InstrumentReport({ instrument: inst, region, onBack }: P
             </div>
           </div>
 
-          {asOf && <p className="px-1 font-mono text-[11px] text-faint">{td.asOf(asOf)}</p>}
+          {asOf && (
+            <p className={`px-1 font-mono text-[11px] text-faint ${fill ? 'min-[1280px]:col-span-2' : ''}`}>{td.asOf(asOf)}</p>
+          )}
         </div>
       </div>
     </div>

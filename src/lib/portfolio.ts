@@ -13,6 +13,35 @@ import type { ManagedInstrument } from './catalog'
 // Everything downstream (advisor edits, manual weights) reuses assemblePortfolio.
 
 // ── Tunable model (admin-editable, see lib/portfolioModelConfig) ─────────────
+
+// Correlation is NOT one number per class pair. Every instrument is decomposed
+// into exposures to four common risk factors — global equity, rates, credit and
+// the local (Guaraní) market — plus an idiosyncratic remainder. Two instruments
+// correlate because they load on the same factors, so an A-rated 3-year bond and
+// a 20-year Treasury are correctly *less* correlated than two 20-year bonds, and
+// a high-beta name correlates more with the market than a defensive one. The
+// loadings come from data the catalog already holds (β, duration, credit rating,
+// sector, issuer, region). See `pairCorrelation` below.
+export type FactorRho = {
+  mktRates: number // global equity ↔ rates
+  mktCredit: number // global equity ↔ credit spread
+  mktLocal: number // global equity ↔ local market
+  ratesCredit: number // rates ↔ credit spread
+  ratesLocal: number // rates ↔ local market
+  creditLocal: number // credit spread ↔ local market
+}
+
+export type CorrelationModel = {
+  marketVol: number // σ of the global-equity factor (also the β→vol bridge)
+  rateVol: number // σ per year of duration (the rates factor)
+  factorRho: FactorRho
+  sameSector: number // extra correlation between two equities in the same sector
+  sameIssuer: number // extra correlation between two instruments from one issuer
+  noteEquityShare: number // share of a structured note's vol driven by equity
+  fundEquityShare: number // same, for funds/ETFs with no β of their own
+  localShare: number // share of a local instrument's vol on the local factor
+}
+
 export type PortfolioModel = {
   rf: number // risk-free rate
   erp: number // equity risk premium (CAPM)
@@ -20,9 +49,8 @@ export type PortfolioModel = {
   nameCap: number // max weight of a single name within its sleeve
   assetsPerClass: number // default instruments considered per class
   levelCeiling: number // exclude instruments more than this many levels above the client's band
-  rhoWithin: number // correlation within an asset class
-  rhoAcross: number // correlation across asset classes
   bandDuration: Record<RiskLevel, number> // target bond duration (years) per band
+  correlation: CorrelationModel
 }
 
 export const DEFAULT_PORTFOLIO_MODEL: PortfolioModel = {
@@ -32,20 +60,35 @@ export const DEFAULT_PORTFOLIO_MODEL: PortfolioModel = {
   nameCap: 0.35,
   assetsPerClass: 6,
   levelCeiling: 1,
-  rhoWithin: 0.7,
-  rhoAcross: 0.2,
   bandDuration: { 1: 2, 2: 3.5, 3: 5, 4: 6.5, 5: 8 },
+  correlation: {
+    marketVol: 0.16,
+    rateVol: 0.009,
+    factorRho: {
+      mktRates: -0.15,
+      mktCredit: 0.45,
+      mktLocal: 0.15,
+      ratesCredit: -0.1,
+      ratesLocal: 0.05,
+      creditLocal: 0.3,
+    },
+    sameSector: 0.3,
+    sameIssuer: 0.85,
+    noteEquityShare: 0.55,
+    fundEquityShare: 0.7,
+    localShare: 0.7,
+  },
 }
 
 let ACTIVE_MODEL: PortfolioModel = DEFAULT_PORTFOLIO_MODEL
 export const setActivePortfolioModel = (m: PortfolioModel): void => {
   ACTIVE_MODEL = m
+  FACTOR_CACHE = new WeakMap()
 }
 export const getPortfolioModel = (): PortfolioModel => ACTIVE_MODEL
 
-// Vol inputs (not exposed — these describe the market, not the strategy).
-const MARKET_VOL = 0.16 // broad-equity annualized vol, for beta fallback
-const RATE_VOL = 0.009 // annualized vol per year of duration (rates)
+const marketVolParam = () => ACTIVE_MODEL.correlation.marketVol
+const rateVolParam = () => ACTIVE_MODEL.correlation.rateVol
 
 // Class capital-market assumptions — the fallback expected return when an
 // instrument carries no yield/target field of its own.
@@ -70,7 +113,15 @@ const RATING_VOL: { re: RegExp; v: number }[] = [
 ]
 
 // ── Parsing ──────────────────────────────────────────────────────────────────
-export function parseNum(v: string | undefined): number | null {
+/**
+ * Read a number out of a display-formatted string ("+37.1%", "₲500.000", "1,234.56").
+ *
+ * `thousands` controls the one genuinely ambiguous case: "2.950". For a Guaraní
+ * price that is 2,950; for a coupon it is 2.95%. Format alone can't tell them
+ * apart, so the CALLER decides — money keeps the European-thousands reading,
+ * rates and durations turn it off (see parseRate).
+ */
+export function parseNum(v: string | undefined, thousands = true): number | null {
   if (v == null) return null
   const m = String(v).replace(/\s/g, '').match(/-?[\d.,]+/)
   if (!m) return null
@@ -82,14 +133,18 @@ export function parseNum(v: string | undefined): number | null {
     else s = s.replace(/,/g, '') // 1,234.56 (US)
   } else if (lastComma !== -1) {
     s = s.replace(',', '.') // 5,43 → 5.43
-  } else if (/^-?\d{1,3}(\.\d{3})+$/.test(s)) {
+  } else if (thousands && /^-?\d{1,3}(\.\d{3})+$/.test(s)) {
     s = s.replace(/\./g, '') // 500.000 / 1.050 → European thousands
   }
   const n = parseFloat(s)
   return Number.isFinite(n) ? n : null
 }
+
+/** For rates, yields, durations and ratios — never thousands-separated. */
+export const parseRate = (v: string | undefined): number | null => parseNum(v, false)
+
 function pct(v: string | undefined): number | null {
-  const n = parseNum(v)
+  const n = parseRate(v)
   return n == null ? null : n / 100
 }
 
@@ -111,7 +166,7 @@ function ratingVol(rating: string | undefined): number {
 }
 
 function bondDuration(inst: ManagedInstrument): number | null {
-  return parseNum(inst.details.duration) ?? parseNum(inst.details.residualYears)
+  return parseRate(inst.details.duration) ?? parseRate(inst.details.residualYears)
 }
 
 // Market-implied annualized vol — ONLY the data-backed paths (undefined when the
@@ -123,12 +178,12 @@ function marketVol(inst: ManagedInstrument): number | undefined {
     const iv = pct(d.impliedVol3m)
     if (iv && iv > 0) return iv
     const beta = parseNum(d.beta)
-    if (beta && beta > 0) return beta * MARKET_VOL
+    if (beta && beta > 0) return beta * marketVolParam()
     return undefined
   }
   if (cls === 'Fixed income') {
     const dur = bondDuration(inst)
-    if (dur && dur > 0) return dur * RATE_VOL + ratingVol(d.creditRating ?? d.rating)
+    if (dur && dur > 0) return dur * rateVolParam() + ratingVol(d.creditRating ?? d.rating)
     return undefined
   }
   return undefined
@@ -226,6 +281,183 @@ export function estimate(inst: ManagedInstrument, scores: AxisScores): Estimate 
   }
 }
 
+// ── Correlation: a four-factor decomposition ─────────────────────────────────
+// Instead of "same class → 0.7, different class → 0.2", each instrument's
+// volatility is split across four common factors and an idiosyncratic residual:
+//
+//   mkt    global equity      β × σ_market for a listed equity; a share of vol
+//                             for notes and funds (they are equity-linked but we
+//                             don't know the underlying's β).
+//   rates  duration exposure  years of modified duration × σ_rates.
+//   credit spread exposure    the rating's vol component.
+//   local  Guaraní market     local-region instruments sit here, not on the
+//                             global factors — Paraguayan rates are their own.
+//
+// Two instruments then correlate through the factors they share, and only
+// through those. Residual (single-name) risk is uncorrelated EXCEPT between two
+// equities in the same sector, or two instruments from the same issuer.
+//
+// Because the covariance is built as LΦLᵀ + diagonal + non-negative block terms,
+// it is positive semi-definite by construction (Φ is force-fed through a
+// Sylvester check below), which is what keeps the mean-variance solve stable.
+
+const FACTORS = ['mkt', 'rates', 'credit', 'local'] as const
+type Factor = (typeof FACTORS)[number]
+type Loads = Record<Factor, number>
+type Decomp = { loads: Loads; idio: number; sector: string; issuer: string; equity: boolean }
+
+const zeroLoads = (): Loads => ({ mkt: 0, rates: 0, credit: 0, local: 0 })
+
+// Factor correlation matrix Φ, shrunk toward the identity until it is positive
+// definite — an admin can type any six numbers, and an indefinite Φ would let
+// the optimizer chase a "risk-free" combination that doesn't exist.
+function phiMatrix(): number[][] {
+  const r = ACTIVE_MODEL.correlation.factorRho
+  const c = (x: number) => Math.max(-0.95, Math.min(0.95, Number.isFinite(x) ? x : 0))
+  let off = [c(r.mktRates), c(r.mktCredit), c(r.mktLocal), c(r.ratesCredit), c(r.ratesLocal), c(r.creditLocal)]
+  for (let attempt = 0; attempt < 24; attempt++) {
+    const [mr, mc, ml, rc, rl, cl] = off
+    const m = [
+      [1, mr, mc, ml],
+      [mr, 1, rc, rl],
+      [mc, rc, 1, cl],
+      [ml, rl, cl, 1],
+    ]
+    if (isPositiveDefinite(m)) return m
+    off = off.map((x) => x * 0.85) // shrink toward the identity and retry
+  }
+  return [
+    [1, 0, 0, 0],
+    [0, 1, 0, 0],
+    [0, 0, 1, 0],
+    [0, 0, 0, 1],
+  ]
+}
+
+// Sylvester's criterion: every leading principal minor must be positive.
+function isPositiveDefinite(m: number[][]): boolean {
+  for (let k = 1; k <= m.length; k++) {
+    if (determinant(m.slice(0, k).map((row) => row.slice(0, k))) <= 1e-9) return false
+  }
+  return true
+}
+
+function determinant(m: number[][]): number {
+  const n = m.length
+  const a = m.map((r) => r.slice())
+  let det = 1
+  for (let i = 0; i < n; i++) {
+    let piv = i
+    for (let r = i + 1; r < n; r++) if (Math.abs(a[r][i]) > Math.abs(a[piv][i])) piv = r
+    if (Math.abs(a[piv][i]) < 1e-12) return 0
+    if (piv !== i) {
+      ;[a[i], a[piv]] = [a[piv], a[i]]
+      det = -det
+    }
+    det *= a[i][i]
+    for (let r = i + 1; r < n; r++) {
+      const f = a[r][i] / a[i][i]
+      for (let cIdx = i; cIdx < n; cIdx++) a[r][cIdx] -= f * a[i][cIdx]
+    }
+  }
+  return det
+}
+
+// The quadratic form Lᵀ Φ L' — the covariance explained by the common factors.
+function factorCov(a: Loads, b: Loads, phi: number[][]): number {
+  let s = 0
+  for (let i = 0; i < FACTORS.length; i++) {
+    for (let j = 0; j < FACTORS.length; j++) s += a[FACTORS[i]] * b[FACTORS[j]] * phi[i][j]
+  }
+  return s
+}
+
+const normKey = (s: string | undefined): string =>
+  (s ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]/g, '')
+
+// Cached per instrument object — the decomposition only changes when the model
+// changes, and setActivePortfolioModel clears the cache.
+let FACTOR_CACHE = new WeakMap<ManagedInstrument, Decomp>()
+
+function decompose(inst: ManagedInstrument, vol: number): Decomp {
+  const cached = FACTOR_CACHE.get(inst)
+  if (cached) return cached
+
+  const C = ACTIVE_MODEL.correlation
+  const d = inst.details
+  const cls = inst.assetClass
+  const region = inst.region ?? 'global'
+  const loads = zeroLoads()
+
+  if (region === 'local') {
+    // The local market is its own factor: Guaraní rates, local credit, local
+    // liquidity. Global β and US duration say nothing about it.
+    loads.local = C.localShare * vol
+  } else if (cls === 'Equities') {
+    const beta = parseNum(d.beta)
+    loads.mkt = Math.min(vol, (beta && beta > 0 ? beta : 1) * C.marketVol)
+  } else if (cls === 'Fixed income') {
+    const dur = bondDuration(inst)
+    loads.rates = Math.min(vol, (dur && dur > 0 ? dur : 0) * C.rateVol)
+    loads.credit = Math.min(Math.max(0, vol - loads.rates), ratingVol(d.creditRating ?? d.rating))
+  } else if (cls === 'Structured notes') {
+    loads.mkt = C.noteEquityShare * vol // equity-linked payoff, unknown underlying β
+  } else if (cls === 'CDs') {
+    loads.rates = 0.5 * vol
+  } else {
+    loads.mkt = C.fundEquityShare * vol // mutual / investment funds
+  }
+
+  // Force the decomposition to reproduce the instrument's own volatility, so
+  // cov(i,i) === vol² exactly and the correlation matrix has a unit diagonal.
+  const phi = phiMatrix()
+  let explained = factorCov(loads, loads, phi)
+  if (explained > vol * vol) {
+    const k = vol / Math.sqrt(explained)
+    for (const f of FACTORS) loads[f] *= k
+    explained = vol * vol
+  }
+  const idio = Math.sqrt(Math.max(0, vol * vol - explained))
+
+  const out: Decomp = {
+    loads,
+    idio,
+    sector: normKey(d.sectorIndex || d.sector),
+    issuer: normKey(d.issuer) || normKey(inst.ticker),
+    equity: cls === 'Equities',
+  }
+  FACTOR_CACHE.set(inst, out)
+  return out
+}
+
+/** Covariance between two estimated instruments, from the factor model. */
+export function pairCovariance(a: Estimate, b: Estimate): number {
+  if (a.inst.id === b.inst.id) return a.vol * a.vol
+  const C = ACTIVE_MODEL.correlation
+  const da = decompose(a.inst, a.vol)
+  const db = decompose(b.inst, b.vol)
+  let cov = factorCov(da.loads, db.loads, phiMatrix())
+  // Residual co-movement: same issuer first (a company's bond and its stock),
+  // then same sector for two equities.
+  let residual = 0
+  if (da.issuer && da.issuer === db.issuer) residual = C.sameIssuer
+  else if (da.equity && db.equity && da.sector && da.sector === db.sector) residual = C.sameSector
+  if (residual > 0) cov += Math.max(0, Math.min(1, residual)) * da.idio * db.idio
+  // A correlation above 1 is not meaningful; clamp on the covariance scale.
+  const cap = a.vol * b.vol
+  return Math.max(-cap, Math.min(cap, cov))
+}
+
+/** The implied pairwise correlation — used by the UI and the tutorial. */
+export function pairCorrelation(a: Estimate, b: Estimate): number {
+  const denom = a.vol * b.vol
+  return denom > 0 ? pairCovariance(a, b) / denom : 0
+}
+
 // ── Sleeve optimizers (internal weights sum to 1) ────────────────────────────
 function capWeights(w: number[], cap: number): number[] {
   let out = w.map((x) => Math.max(0, x))
@@ -251,18 +483,46 @@ function capWeights(w: number[], cap: number): number[] {
   return out.map((x) => x / t)
 }
 
-function mvoWeights(mu: number[], sig: number[]): number[] {
+// Solve A x = b by Gaussian elimination with partial pivoting. Returns null if
+// the system is singular (the caller falls back to inverse-volatility weights).
+function solve(A: number[][], b: number[]): number[] | null {
+  const n = b.length
+  const m = A.map((row, i) => [...row, b[i]])
+  for (let i = 0; i < n; i++) {
+    let piv = i
+    for (let r = i + 1; r < n; r++) if (Math.abs(m[r][i]) > Math.abs(m[piv][i])) piv = r
+    if (Math.abs(m[piv][i]) < 1e-12) return null
+    ;[m[i], m[piv]] = [m[piv], m[i]]
+    for (let r = 0; r < n; r++) {
+      if (r === i) continue
+      const f = m[r][i] / m[i][i]
+      for (let c = i; c <= n; c++) m[r][c] -= f * m[i][c]
+    }
+  }
+  const x = m.map((row, i) => row[n] / row[i])
+  return x.every((v) => Number.isFinite(v)) ? x : null
+}
+
+// Max-Sharpe (tangency) weights: w ∝ Σ⁻¹(μ − rf), long-only, per-name capped.
+// Σ is the FULL factor covariance matrix, so two names that genuinely move
+// together get penalized against each other instead of every pair sharing one
+// blanket correlation. A small ridge keeps a near-singular Σ solvable.
+function mvoWeights(est: Estimate[]): number[] {
   const M = ACTIVE_MODEL
-  const n = mu.length
+  const n = est.length
   if (n === 1) return [1]
-  const rho = M.rhoWithin
-  const y = mu.map((m, i) => (m - M.rf) / sig[i])
-  const sumY = y.reduce((a, b) => a + b, 0)
-  const c = rho / (1 + (n - 1) * rho)
-  const z = y.map((yi) => (yi - c * sumY) / (1 - rho))
-  const raw = z.map((zi, i) => zi / sig[i])
-  if (raw.every((x) => x <= 0)) return capWeights(sig.map((s) => 1 / s), M.nameCap)
-  return capWeights(raw, M.nameCap)
+
+  const cov: number[][] = est.map((a) => est.map((b) => pairCovariance(a, b)))
+  const ridge = (cov.reduce((s, row, i) => s + row[i], 0) / n) * 1e-4
+  for (let i = 0; i < n; i++) cov[i][i] += ridge
+
+  const excess = est.map((e) => e.expReturn - M.rf)
+  const raw = solve(cov, excess)
+  const invVol = () => capWeights(est.map((e) => 1 / Math.max(e.vol, 1e-6)), M.nameCap)
+  if (!raw) return invVol()
+  const long = raw.map((x) => Math.max(0, x))
+  if (long.every((x) => x <= 1e-12)) return invVol()
+  return capWeights(long, M.nameCap)
 }
 
 function bondWeights(est: Estimate[], level: RiskLevel): number[] {
@@ -322,11 +582,7 @@ export function assemblePortfolio(rawHoldings: Holding[], region: Region): Portf
   const expReturn = holdings.reduce((a, h) => a + h.weight * h.expReturn, 0)
 
   let variance = 0
-  for (const a of holdings)
-    for (const b of holdings) {
-      const rho = a === b ? 1 : a.inst.assetClass === b.inst.assetClass ? M.rhoWithin : M.rhoAcross
-      variance += a.weight * b.weight * rho * a.vol * b.vol
-    }
+  for (const a of holdings) for (const b of holdings) variance += a.weight * b.weight * pairCovariance(a, b)
   const vol = Math.sqrt(Math.max(0, variance))
   const sharpe = vol > 0 ? (expReturn - M.rf) / vol : 0
 
@@ -367,7 +623,7 @@ function selectSleeve(
   if (est.length === 0) return []
 
   let internal: number[]
-  if (assetClass === 'Equities') internal = mvoWeights(est.map((e) => e.expReturn), est.map((e) => e.vol))
+  if (assetClass === 'Equities') internal = mvoWeights(est)
   else if (assetClass === 'Fixed income' || assetClass === 'CDs') internal = bondWeights(est, clientLevel)
   else internal = levelWeights(est)
 
@@ -392,6 +648,55 @@ export function buildPortfolio(
       selectSleeve(m.assetClass, m.pct, visible.filter((i) => i.assetClass === m.assetClass), scores, level, assetsPerClass),
     )
   return assemblePortfolio(holdings, region)
+}
+
+/**
+ * Re-run the optimizer over EXACTLY the instruments the advisor has kept, so the
+ * book adds back up to 100%. Unlike buildPortfolio this never adds or drops a
+ * name and never applies the risk-level ceiling — the advisor picked these on
+ * purpose. What it does re-derive is the weights: the band's asset-class split
+ * is applied to the classes actually present (renormalized), and inside each
+ * class the same optimizer runs as for the suggested book. A class the advisor
+ * added that the band gives 0% keeps an equal-weight share rather than
+ * silently vanishing.
+ */
+export function reoptimize(
+  instIds: string[],
+  region: Region,
+  mix: MixSlice[],
+  instruments: ManagedInstrument[],
+  scores: AxisScores,
+  level: RiskLevel,
+): Holding[] {
+  const byId = new Map(instruments.map((i) => [i.id, i]))
+  const picked = instIds.map((id) => byId.get(id)).filter((i): i is ManagedInstrument => !!i)
+  if (picked.length === 0) return []
+
+  const byClass = new Map<Category, ManagedInstrument[]>()
+  for (const inst of picked) {
+    const arr = byClass.get(inst.assetClass) ?? []
+    arr.push(inst)
+    byClass.set(inst.assetClass, arr)
+  }
+
+  const mixPct = new Map(mix.map((m) => [m.assetClass, m.pct]))
+  const targets = [...byClass.entries()].map(([assetClass, members]) => ({
+    assetClass,
+    members,
+    // The band's share, or an equal-weight fallback for a class the band ignores.
+    pct: mixPct.get(assetClass) || (members.length / picked.length) * 100,
+  }))
+  const totalPct = targets.reduce((a, t) => a + t.pct, 0) || 1
+
+  return targets.flatMap((t) => {
+    const est = t.members.map((i) => estimate(i, scores))
+    let internal: number[]
+    if (t.assetClass === 'Equities') internal = mvoWeights(est)
+    else if (t.assetClass === 'Fixed income' || t.assetClass === 'CDs') internal = bondWeights(est, level)
+    else internal = levelWeights(est)
+    const classWeight = t.pct / totalPct
+    return est.map((e, i) => ({ ...e, weight: classWeight * internal[i] }))
+  })
 }
 
 // Build holdings from an explicit (advisor-edited) weight list.

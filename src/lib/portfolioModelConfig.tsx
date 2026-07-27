@@ -12,13 +12,26 @@ import { api } from './api'
 
 const clone = (m: PortfolioModel): PortfolioModel => JSON.parse(JSON.stringify(m))
 
+// Params the factor-correlation model replaced. A doc written before that change
+// still carries them; drop them rather than spreading dead keys forward forever.
+const RETIRED = ['rhoWithin', 'rhoAcross'] as const
+
 export function mergeModel(loaded: Partial<PortfolioModel> | null): PortfolioModel {
   const seed = clone(DEFAULT_PORTFOLIO_MODEL)
   if (!loaded) return seed
+  const kept = { ...loaded } as Record<string, unknown>
+  for (const k of RETIRED) delete kept[k]
   return {
     ...seed,
-    ...loaded,
+    ...(kept as Partial<PortfolioModel>),
     bandDuration: { ...seed.bandDuration, ...(loaded.bandDuration ?? {}) } as PortfolioModel['bandDuration'],
+    // Nested, and added after the first configs were written — merge key by key
+    // so a stored doc from before the factor model still loads with defaults.
+    correlation: {
+      ...seed.correlation,
+      ...(loaded.correlation ?? {}),
+      factorRho: { ...seed.correlation.factorRho, ...(loaded.correlation?.factorRho ?? {}) },
+    },
   }
 }
 

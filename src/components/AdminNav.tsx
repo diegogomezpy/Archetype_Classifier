@@ -15,6 +15,9 @@ export default function AdminNav() {
       <NavLink to="/admin" end className={tab}>
         {t.adminNav.instruments}
       </NavLink>
+      <NavLink to="/admin/screener" className={tab}>
+        {t.adminNav.screener}
+      </NavLink>
       <NavLink to="/admin/questions" className={tab}>
         {t.adminNav.questions}
       </NavLink>

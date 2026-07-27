@@ -29,6 +29,7 @@ import AppNav from '../components/AppNav'
 import AdminNav from '../components/AdminNav'
 import CompanyLogo from '../components/CompanyLogo'
 import ImportInstruments from '../components/ImportInstruments'
+import TranslationBackfill from '../components/TranslationBackfill'
 import InstrumentDocs from '../components/InstrumentDocs'
 
 const REGIONS: Region[] = ['global', 'local']
@@ -759,6 +760,9 @@ export default function AdminPage() {
 
       {/* Bulk import from a spreadsheet */}
       <ImportInstruments />
+
+      {/* Fill in Spanish for anything the feed brought in as English */}
+      <TranslationBackfill />
 
       {/* New-instrument form */}
       {adding && (

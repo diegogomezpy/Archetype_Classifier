@@ -165,6 +165,12 @@ const en = {
     add: 'Add to portfolio',
     remove: 'Remove',
     resetSuggested: 'Reset to suggested',
+    perClass: 'Per class',
+    more: 'One more per class',
+    fewer: 'One fewer per class',
+    reoptimize: 'Re-optimize',
+    reoptimizeHint: 'Re-weight the instruments in the book so it adds back up to 100%.',
+    normalize: 'Scale to 100%',
     total: 'Total',
     dropHere: 'Drag instruments here, or use ＋ on the list.',
     capitalTitle: 'Build the ticket',
@@ -260,6 +266,8 @@ const en = {
       `${n} ready${skipped ? ` · ${skipped} skipped (no name)` : ''}`,
     importMatched: (n: number) => `${n} column${n === 1 ? '' : 's'} matched`,
     importUnmatched: (cols: string) => `ignored: ${cols}`,
+    importFetchFailed: (tickers: string) =>
+      `No market data for ${tickers} — check the symbol is still listed. These rows import with no price, description or metrics.`,
     importBulletin: 'Upload boletín (PDF)',
     importBulletinHint:
       'Local only: upload the Cadiem bulletin PDF and it auto-parses the bond, CDA, fund and equity tables. Best-effort — review the preview before adding. σ/α/λ are auto-derived.',
@@ -302,11 +310,28 @@ const en = {
   },
   adminNav: {
     instruments: 'Instruments',
+    screener: 'Screener',
     questions: 'Questions',
     bands: 'Risk bands',
     risk: 'Risk model',
     portfolio: 'Portfolio model',
     advisors: 'Advisors',
+  },
+  adminScreener: {
+    title: 'Screener',
+    subtitle:
+      'Narrow a global asset class by its own traits — analyst upside, yield, duration, credit — then publish that subset. Advisors only ever see the instruments selected here for that class.',
+    filters: 'Filters',
+    clear: 'Clear',
+    instrument: 'Instrument',
+    matchCount: (n: number, total: number) => `${n} of ${total} match the filters`,
+    selectedCount: (n: number) => `${n} selected`,
+    visibleNow: (n: number) => `${n} live for advisors`,
+    selectMatches: 'Select only the matches',
+    addMatches: 'Add the matches',
+    selectAll: 'Select all',
+    apply: 'Show only these to advisors',
+    noMatches: 'Nothing matches these filters.',
   },
   adminBands: {
     title: 'Risk bands',
@@ -351,6 +376,19 @@ const en = {
     save: 'Save model',
     reset: 'Reset to defaults',
     resetConfirm: 'Reset the whole portfolio model to the built-in defaults?',
+  },
+  adminTranslate: {
+    title: 'Spanish descriptions',
+    body: 'Company descriptions and sectors arrive from the market feed in English and are translated once, then cached. The free translation service has a daily limit, so a large import can run out partway and leave the rest in English. This fills in whatever is still missing — run it again tomorrow if the limit cuts it short.',
+    coverage: (done: number, missing: number) =>
+      `${done} translated · ${missing} still in English`,
+    allDone: 'Everything is translated.',
+    run: 'Translate what’s missing',
+    running: 'Translating…',
+    done: (n: number) => `Translated ${n} ${n === 1 ? 'instrument' : 'instruments'}.`,
+    quota: (n: number) =>
+      `Daily limit reached — ${n} left. Run this again tomorrow to finish.`,
+    failed: 'Could not reach the translation service.',
   },
   adminAdvisors: {
     title: 'Advisors',
@@ -551,6 +589,12 @@ const es: UIStrings = {
     add: 'Agregar a la cartera',
     remove: 'Quitar',
     resetSuggested: 'Volver a la sugerida',
+    perClass: 'Por clase',
+    more: 'Uno más por clase',
+    fewer: 'Uno menos por clase',
+    reoptimize: 'Reoptimizar',
+    reoptimizeHint: 'Recalcula los pesos de los instrumentos de la cartera para que vuelva a sumar 100%.',
+    normalize: 'Escalar a 100%',
     total: 'Total',
     dropHere: 'Arrastrá instrumentos acá, o usá ＋ en la lista.',
     capitalTitle: 'Armar la orden',
@@ -648,6 +692,8 @@ const es: UIStrings = {
       `${n} listos${skipped ? ` · ${skipped} omitidos (sin nombre)` : ''}`,
     importMatched: (n: number) => `${n} columna${n === 1 ? '' : 's'} reconocida${n === 1 ? '' : 's'}`,
     importUnmatched: (cols: string) => `ignoradas: ${cols}`,
+    importFetchFailed: (tickers: string) =>
+      `Sin datos de mercado para ${tickers} — verificá que el símbolo siga listado. Esas filas se importan sin precio, descripción ni métricas.`,
     importBulletin: 'Subir boletín (PDF)',
     importBulletinHint:
       'Solo local: subí el PDF del boletín de Cadiem y se parsean automáticamente las tablas de bonos, CDA, fondos y renta variable. Es una aproximación — revisá la vista previa antes de agregar. σ/α/λ se derivan solos.',
@@ -690,11 +736,28 @@ const es: UIStrings = {
   },
   adminNav: {
     instruments: 'Instrumentos',
+    screener: 'Selección',
     questions: 'Preguntas',
     bands: 'Bandas de riesgo',
     risk: 'Modelo de riesgo',
     portfolio: 'Modelo de cartera',
     advisors: 'Asesores',
+  },
+  adminScreener: {
+    title: 'Selección por criterios',
+    subtitle:
+      'Filtrá una clase de activo global por sus propios atributos — potencial del analista, rendimiento, duración, crédito — y publicá ese subconjunto. Los asesores solo ven los instrumentos seleccionados acá para esa clase.',
+    filters: 'Filtros',
+    clear: 'Limpiar',
+    instrument: 'Instrumento',
+    matchCount: (n: number, total: number) => `${n} de ${total} cumplen los filtros`,
+    selectedCount: (n: number) => `${n} seleccionados`,
+    visibleNow: (n: number) => `${n} activos para asesores`,
+    selectMatches: 'Seleccionar solo los que cumplen',
+    addMatches: 'Agregar los que cumplen',
+    selectAll: 'Seleccionar todos',
+    apply: 'Mostrar solo estos a los asesores',
+    noMatches: 'Ningún instrumento cumple estos filtros.',
   },
   adminBands: {
     title: 'Bandas de riesgo',
@@ -739,6 +802,19 @@ const es: UIStrings = {
     save: 'Guardar modelo',
     reset: 'Restaurar por defecto',
     resetConfirm: '¿Restaurar todo el modelo de cartera a los valores por defecto?',
+  },
+  adminTranslate: {
+    title: 'Descripciones en español',
+    body: 'Las descripciones de empresa y los sectores llegan del proveedor de mercado en inglés y se traducen una sola vez, quedando cacheadas. El servicio gratuito de traducción tiene un límite diario, así que una importación grande puede agotarlo a mitad de camino y dejar el resto en inglés. Esto completa lo que falta — si el límite lo corta, volvé a ejecutarlo mañana.',
+    coverage: (done: number, missing: number) =>
+      `${done} traducidos · ${missing} todavía en inglés`,
+    allDone: 'Está todo traducido.',
+    run: 'Traducir lo que falta',
+    running: 'Traduciendo…',
+    done: (n: number) => `Se ${n === 1 ? 'tradujo' : 'tradujeron'} ${n} instrumento${n === 1 ? '' : 's'}.`,
+    quota: (n: number) =>
+      `Se alcanzó el límite diario — quedan ${n}. Volvé a ejecutarlo mañana para terminar.`,
+    failed: 'No se pudo conectar con el servicio de traducción.',
   },
   adminAdvisors: {
     title: 'Asesores',

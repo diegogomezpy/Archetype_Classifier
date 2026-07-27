@@ -17,7 +17,7 @@ import {
   sessionsCol,
 } from './db.js'
 import { fetchInstrumentData, fetchIssuerProfile } from './marketData.js'
-import { withEsFields } from './translate.js'
+import { QuotaExhausted, TRANSLATABLE, translateToEs, withEsFields } from './translate.js'
 
 const app = new Hono()
 
@@ -390,6 +390,81 @@ app.post('/api/market-data', async (c) => {
   // language toggle is instant. No `prev` here — a one-off fetch always translates.
   if (res.ok) res.fields = await withEsFields(res.fields)
   return c.json(res)
+})
+
+// ── Spanish backfill ─────────────────────────────────────────────────────────
+/**
+ * Fill in the cached Spanish (`<key>Es`) for catalog rows that have the English
+ * text but no translation yet.
+ *
+ * This exists because the free translation engine is rate-limited by the DAY:
+ * importing 50 instruments at once translates the first handful and then quietly
+ * runs out, leaving the rest English forever (a fetch is only re-attempted when
+ * the source text changes, and company boilerplate never changes). So the
+ * backfill is a separate, resumable pass — run it, see how many are left, run it
+ * again tomorrow if the quota cut it short. It never re-translates a row that
+ * already has a translation, so repeat runs are cheap.
+ *
+ * GET reports coverage without spending any quota; POST does the work.
+ */
+const translatableGaps = (details: Record<string, string>): string[] =>
+  TRANSLATABLE.filter((k) => (details[k] ?? '').trim() && !(details[`${k}Es`] ?? '').trim())
+
+app.get('/api/market-data/translate', async (c) => {
+  const snap = await catalogCol.get()
+  let translated = 0
+  let missing = 0
+  for (const doc of snap.docs) {
+    const details = ((docData(doc) as Record<string, unknown>).details as Record<string, string>) ?? {}
+    for (const k of TRANSLATABLE) {
+      if (!(details[k] ?? '').trim()) continue
+      if ((details[`${k}Es`] ?? '').trim()) translated++
+      else missing++
+    }
+  }
+  return c.json({ ok: true, translated, missing })
+})
+
+app.post('/api/market-data/translate', async (c) => {
+  // Bounded per call so one request can't outlive the Cloud Run timeout; the
+  // admin can click again to continue where it left off.
+  const limit = Math.max(1, Math.min(200, Number(c.req.query('limit')) || 40))
+  const snap = await catalogCol.get()
+  const pending = snap.docs
+    .map((d) => docData(d) as Record<string, unknown>)
+    .map((inst) => ({ inst, gaps: translatableGaps((inst.details as Record<string, string>) ?? {}) }))
+    .filter((x) => x.gaps.length > 0)
+
+  let updated = 0
+  let failed = 0
+  let quotaExhausted = false
+
+  for (const { inst, gaps } of pending.slice(0, limit)) {
+    const details = { ...((inst.details as Record<string, string>) ?? {}) }
+    let touched = false
+    try {
+      for (const key of gaps) {
+        const es = await translateToEs(details[key])
+        if (es) {
+          details[`${key}Es`] = es
+          touched = true
+        } else {
+          failed++
+        }
+      }
+    } catch (e) {
+      if (e instanceof QuotaExhausted) quotaExhausted = true
+      else failed++
+    }
+    if (touched) {
+      await catalogCol.doc(String(inst.id)).set({ ...inst, details }, { merge: true })
+      updated++
+    }
+    if (quotaExhausted) break
+  }
+
+  const remaining = pending.length - updated
+  return c.json({ ok: true, updated, failed, remaining, quotaExhausted })
 })
 
 // Fields the market-data feed owns. Anything NOT in here is either the research
