@@ -192,7 +192,9 @@ export default function InstrumentReport({ instrument: inst, region, onBack, fil
           <CompanyLogo ticker={logoTicker} name={logoName} uploadKey={logoUploadKey} canUpload size={52} />
           <div className="min-w-0">
             <p className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-white/60">{breadcrumb}</p>
-            <h3 className="mt-1.5 font-serif text-3xl font-semibold leading-tight">{inst.name}</h3>
+            {/* A fixed text-3xl serif over ~195px of measure wrapped to four
+                lines inside the phone overlay, pushing the data below the fold. */}
+            <h3 className="mt-1.5 font-serif text-xl font-semibold leading-tight sm:text-2xl min-[820px]:text-3xl">{inst.name}</h3>
             <p className="mt-1.5 flex flex-wrap items-center gap-x-2 font-mono text-xs text-white/70">
               {idLine}
               {inst.emphasized && (

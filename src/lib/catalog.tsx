@@ -7,24 +7,21 @@ import {
   type ReactNode,
 } from 'react'
 import {
-  INSTRUMENTS,
   type AssetClass,
   type Category,
   type Instrument,
   type LocalCategory,
   type Region,
 } from './instruments'
-import { SEED_DETAILS } from '../data/instrumentDetails'
 import type { Lang } from '../i18n/i18n'
 import { api } from './api'
 
 // ---------------------------------------------------------------------------
 // Managed instrument catalog
 // ---------------------------------------------------------------------------
-// The admin-curated universe of offerable instruments. The bundled INSTRUMENTS
-// list seeds the catalog on first run; every edit (risk vectors, visibility,
-// emphasis, per-class details) persists behind an async store interface so the
-// Firestore backend can swap in later without touching UI code.
+// The admin-curated universe of offerable instruments. The catalog starts empty
+// and is built up by CSV/bulletin import; every edit (visibility, emphasis,
+// per-class details) persists to Firestore through the API.
 
 export type ManagedInstrument = Instrument & {
   id: string
@@ -265,7 +262,7 @@ const NOTE_COMMON = ['underlying', 'maturityMonths', 'issuer', 'issuerRating', '
 
 const GLOBAL_SUBCLASSES: Partial<Record<AssetClass, Subclass[]>> = {
   Equities: [
-    { id: 'Acción Ordinaria', en: 'Common stock', es: 'Acción Ordinaria', keys: [...EQ_MARKET, 'peRatio', 'peForward', 'beta', 'impliedVol3m', ...EQ_ANALYST], fetch: EQ_FETCH, aliases: ['common', 'ordinaria', 'single stock', 'single', 'stock', 'accion', 'acción'] },
+    { id: 'Acción Ordinaria', en: 'Common stock', es: 'Acción Ordinaria', keys: [...EQ_MARKET, 'peRatio', 'peForward', 'beta', 'impliedVol3m', ...EQ_ANALYST], fetch: EQ_FETCH, aliases: ['common', 'comun', 'común', 'ordinaria', 'single stock', 'single', 'stock', 'accion', 'acción'] },
     { id: 'Acción Preferida', en: 'Preferred stock', es: 'Acción preferida', keys: [...EQ_MARKET, 'beta'], fetch: PREF_FETCH, aliases: ['preferred', 'preferida', 'preferente', 'preferid'] },
     { id: 'ETF', en: 'Equity ETF', es: 'ETF de acciones', keys: [...EQ_MARKET, 'expenseRatio', 'beta'], fetch: ETF_FETCH, aliases: ['etf', 'fund', 'index'] },
   ],
@@ -292,7 +289,7 @@ const GLOBAL_SUBCLASSES: Partial<Record<AssetClass, Subclass[]>> = {
 
 const LOCAL_SUBCLASSES: Partial<Record<LocalCategory, Subclass[]>> = {
   Equities: [
-    { id: 'Acción Ordinaria', en: 'Common stock', es: 'Acción Ordinaria', keys: ['issuer', 'rating', 'shareClass', 'estYield', 'price', 'available', 'currency'], aliases: ['common', 'ordinaria'] },
+    { id: 'Acción Ordinaria', en: 'Common stock', es: 'Acción Ordinaria', keys: ['issuer', 'rating', 'shareClass', 'estYield', 'price', 'available', 'currency'], aliases: ['common', 'comun', 'común', 'ordinaria'] },
     { id: 'Acción Preferida', en: 'Preferred stock', es: 'Acción preferida', keys: ['issuer', 'rating', 'shareClass', 'estYield', 'price', 'available', 'currency'], aliases: ['preferred', 'preferida', 'preferente', 'prefer'] },
   ],
   'Fixed income': [
@@ -553,34 +550,19 @@ export function localQuickFacts(inst: ManagedInstrument, labels: QuickFactLabels
   return parts.join(' · ')
 }
 
-// ── Seeding ──────────────────────────────────────────────────────────────────
-
-// Stable id for a bundled instrument (ticker alone isn't unique — OTC repeats).
-function slugId(inst: Instrument): string {
-  return (inst.ticker + '-' + inst.name)
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-}
-
-export function seedCatalog(): ManagedInstrument[] {
-  return INSTRUMENTS.map((inst) => {
-    const id = slugId(inst)
-    return {
-      ...inst,
-      id,
-      visible: true,
-      emphasized: false,
-      details: SEED_DETAILS[id] ?? {},
-    }
-  })
-}
-
 // ── React context (backend-API backed) ──────────────────────────────────────
 
 type CatalogContextValue = {
   instruments: ManagedInstrument[]
   loading: boolean
+  /**
+   * The catalog fetch failed. Distinct from an empty catalog: without this the
+   * UI confidently tells the advisor there are no instruments when the backend
+   * is simply unreachable.
+   */
+  failed: boolean
+  /** Re-run the fetch after a failure. */
+  reload: () => void
   /** Insert or replace by id, then persist. */
   upsert: (item: ManagedInstrument) => void
   remove: (id: string) => void
@@ -593,6 +575,8 @@ type CatalogContextValue = {
 const CatalogContext = createContext<CatalogContextValue>({
   instruments: [],
   loading: true,
+  failed: false,
+  reload: () => {},
   upsert: () => {},
   remove: () => {},
   removeMany: () => {},
@@ -602,18 +586,29 @@ const CatalogContext = createContext<CatalogContextValue>({
 export function CatalogProvider({ children }: { children: ReactNode }) {
   const [instruments, setInstruments] = useState<ManagedInstrument[]>([])
   const [loading, setLoading] = useState(true)
+  const [failed, setFailed] = useState(false)
+  const [attempt, setAttempt] = useState(0)
 
   // Load whatever's in the catalog. No auto-seeding: the catalog starts empty
-  // and the admin builds it up (a fresh start, by request). On a backend error
-  // we also show nothing rather than resurrecting the bundled sample set.
+  // and the admin builds it up (a fresh start, by request). A backend error is
+  // recorded rather than swallowed — "we couldn't reach the server" and "there
+  // are no instruments" look identical otherwise, and the second is a lie the
+  // advisor would act on.
   useEffect(() => {
     let alive = true
+    setLoading(true)
     ;(async () => {
       try {
         const items = await api.get<ManagedInstrument[]>('/catalog')
-        if (alive) setInstruments(items ?? [])
+        if (alive) {
+          setInstruments(items ?? [])
+          setFailed(false)
+        }
       } catch {
-        if (alive) setInstruments([])
+        if (alive) {
+          setInstruments([])
+          setFailed(true)
+        }
       } finally {
         if (alive) setLoading(false)
       }
@@ -621,12 +616,14 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
     return () => {
       alive = false
     }
-  }, [])
+  }, [attempt])
 
   const value = useMemo<CatalogContextValue>(
     () => ({
       instruments,
       loading,
+      failed,
+      reload: () => setAttempt((n) => n + 1),
       upsert: (item) => {
         const stamped = { ...item, updatedAt: new Date().toISOString() }
         setInstruments((prev) => {
@@ -648,14 +645,23 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
       },
       addMany: (items) => {
         const stamped = items.map((it) => ({ ...it, updatedAt: new Date().toISOString() }))
-        const ids = new Set(stamped.map((it) => it.id))
-        setInstruments((prev) => [...prev.filter((i) => !ids.has(i.id)), ...stamped])
+        const byId = new Map(stamped.map((it) => [it.id, it]))
+        // Replace in place and append only what's genuinely new. Filtering the
+        // updated rows out and re-appending them sent whatever the admin just
+        // edited to the bottom of the table they were working in.
+        setInstruments((prev) => {
+          const seen = new Set(prev.map((i) => i.id))
+          return [
+            ...prev.map((i) => byId.get(i.id) ?? i),
+            ...stamped.filter((it) => !seen.has(it.id)),
+          ]
+        })
         void Promise.all(
           stamped.map((it) => api.put(`/catalog/${it.id}`, it).catch((e) => console.warn('catalog add:', it.id, e))),
         )
       },
     }),
-    [instruments, loading],
+    [instruments, loading, failed],
   )
 
   return <CatalogContext.Provider value={value}>{children}</CatalogContext.Provider>

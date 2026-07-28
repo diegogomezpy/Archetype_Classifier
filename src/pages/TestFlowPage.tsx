@@ -76,7 +76,9 @@ export default function TestFlowPage() {
   return (
     <div className="relative min-h-[100svh] w-full">
       {/* Thin teal progress bar across the very top */}
-      <div className="fixed inset-x-0 top-0 z-50 h-1 bg-black/[0.06]">
+      {/* bg-border, not a black wash — a 6% black track composites to ~1:1 on
+          the dark ground and the progress bar had no visible rail at all. */}
+      <div className="fixed inset-x-0 top-0 z-50 h-1 bg-border">
         <div
           className="h-full bg-teal transition-[width] duration-500 ease-out"
           style={{ width: `${progress}%` }}

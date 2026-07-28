@@ -54,7 +54,7 @@ function newInstrument(): ManagedInstrument {
 }
 
 const inputCls =
-  'w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm text-text shadow-soft outline-none transition-shadow placeholder:text-muted/60 focus:ring-2 focus:ring-teal/40'
+  'w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm text-text shadow-soft outline-none transition-shadow placeholder:text-muted focus:ring-2 focus:ring-teal/40'
 const labelCls = 'mb-1.5 block text-xs font-medium text-muted'
 
 // Filter-panel styling shared by the Market / Visibility / Category controls.
@@ -487,7 +487,7 @@ function InstrumentForm({
           type="button"
           onClick={save}
           disabled={!draft.name.trim()}
-          className="rounded-xl bg-teal px-6 py-2.5 text-sm font-semibold text-white shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded-xl bg-teal px-6 py-2.5 text-sm font-semibold text-onAccent shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card disabled:cursor-not-allowed disabled:opacity-40"
         >
           {t.admin.save}
         </button>
@@ -614,7 +614,7 @@ export default function AdminPage() {
             setAdding(true)
             setEditingId(null)
           }}
-          className="rounded-full bg-teal px-4 py-1.5 text-sm font-semibold text-white shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card"
+          className="rounded-full bg-teal px-4 py-1.5 text-sm font-semibold text-onAccent shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card"
         >
           + {t.admin.add}
         </button>
@@ -748,7 +748,7 @@ export default function AdminPage() {
                 type="button"
                 onClick={runBulkDelete}
                 disabled={!confirmWordOk || shown.length === 0}
-                className="rounded-xl bg-red px-5 py-2 text-sm font-semibold text-white shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-xl bg-red px-5 py-2 text-sm font-semibold text-onAccent shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {t.admin.bulkConfirm(shown.length)}
               </button>
@@ -849,7 +849,7 @@ export default function AdminPage() {
               <button
                 type="button"
                 onClick={() => handleDelete(inst)}
-                className="shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted/60 transition-colors hover:bg-red/10 hover:text-red"
+                className="shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-red/10 hover:text-red"
               >
                 {t.admin.delete}
               </button>

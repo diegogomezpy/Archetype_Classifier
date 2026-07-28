@@ -43,7 +43,9 @@ export default function App() {
           <RiskLevelsProvider>
           <PortfolioModelProvider>
           <CatalogProvider>
-            <div className="relative min-h-[100svh] w-full ground text-text">
+            {/* overflow-x-clip is the backstop: no page may hand the phone a
+                horizontal scrollbar, whatever a wide table inside it does. */}
+            <div className="relative min-h-[100svh] w-full overflow-x-clip ground text-text">
               <HashRouter>
                 <Routes>
                   <Route path="/" element={<TestFlowPage />} />

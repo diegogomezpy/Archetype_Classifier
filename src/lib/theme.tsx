@@ -12,6 +12,11 @@ function readInitial(): Theme {
     const attr = document.documentElement.getAttribute('data-theme')
     if (attr === 'dark' || attr === 'light') return attr
   }
+  // Match the pre-paint bootstrap in index.html: with no stored preference,
+  // follow the OS rather than assuming light.
+  if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches) {
+    return 'dark'
+  }
   return 'light'
 }
 

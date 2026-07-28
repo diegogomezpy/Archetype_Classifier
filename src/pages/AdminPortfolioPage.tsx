@@ -19,6 +19,13 @@ function Field({
 }: {
   name: string; hint?: string; value: number; onChange: (v: number) => void; scale?: number; step?: number; suffix?: string
 }) {
+  // The committed value is the source of truth, but keystrokes live locally
+  // while the field has focus. `Number(e.target.value) || 0` wrote 0 for the
+  // intermediate "-" and React then rewrote the box — so a negative correlation
+  // (two of the factor rhos default negative) could not be typed at all.
+  const shown = Math.round(value * scale * 1000) / 1000
+  const [draft, setDraft] = useState<string | null>(null)
+
   return (
     <label className="flex items-center justify-between gap-3 py-1.5">
       <span className="min-w-0">
@@ -30,8 +37,13 @@ function Field({
           type="number"
           step={step}
           className={numCls}
-          value={Math.round(value * scale * 1000) / 1000}
-          onChange={(e) => onChange((Number(e.target.value) || 0) / scale)}
+          value={draft ?? String(shown)}
+          onChange={(e) => {
+            setDraft(e.target.value)
+            const n = parseFloat(e.target.value)
+            if (Number.isFinite(n)) onChange(n / scale)
+          }}
+          onBlur={() => setDraft(null)}
         />
         {suffix && <span className="w-4 text-xs text-muted">{suffix}</span>}
       </span>
@@ -215,7 +227,7 @@ export default function AdminPortfolioPage() {
             type="button"
             onClick={() => setModel(clone(draft))}
             disabled={!dirty}
-            className="rounded-xl bg-teal px-5 py-2 text-sm font-semibold text-white shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-xl bg-teal px-5 py-2 text-sm font-semibold text-onAccent shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card disabled:cursor-not-allowed disabled:opacity-40"
           >
             {t.adminPortfolio.save}
           </button>

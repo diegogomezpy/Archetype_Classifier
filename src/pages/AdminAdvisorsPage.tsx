@@ -6,7 +6,7 @@ import AppNav from '../components/AppNav'
 import AdminNav from '../components/AdminNav'
 
 const inputCls =
-  'w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm text-text shadow-soft outline-none transition-shadow placeholder:text-muted/60 focus:ring-2 focus:ring-teal/40'
+  'w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm text-text shadow-soft outline-none transition-shadow placeholder:text-muted focus:ring-2 focus:ring-teal/40'
 const labelCls = 'mb-1.5 block text-xs font-medium text-muted'
 
 export default function AdminAdvisorsPage() {
@@ -87,7 +87,7 @@ export default function AdminAdvisorsPage() {
               type="button"
               onClick={submitAdd}
               disabled={!name.trim()}
-              className="rounded-xl bg-teal px-5 py-2.5 text-sm font-semibold text-white shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-xl bg-teal px-5 py-2.5 text-sm font-semibold text-onAccent shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card disabled:cursor-not-allowed disabled:opacity-40"
             >
               + {t.adminAdvisors.add}
             </button>
@@ -125,7 +125,7 @@ export default function AdminAdvisorsPage() {
                   <button
                     type="button"
                     onClick={() => saveEdit(a)}
-                    className="rounded-lg bg-teal px-4 py-1.5 text-sm font-semibold text-white shadow-soft"
+                    className="rounded-lg bg-teal px-4 py-1.5 text-sm font-semibold text-onAccent shadow-soft"
                   >
                     {t.adminAdvisors.save}
                   </button>
@@ -148,7 +148,7 @@ export default function AdminAdvisorsPage() {
                   <button
                     type="button"
                     onClick={() => handleDelete(a)}
-                    className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted/60 transition-colors hover:bg-red/10 hover:text-red"
+                    className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-red/10 hover:text-red"
                   >
                     {t.adminAdvisors.delete}
                   </button>

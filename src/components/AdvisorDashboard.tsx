@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { type DashboardData, type RiskLevel } from '../lib/scoring'
 import { colorForCategory, type Category, type Region } from '../lib/instruments'
@@ -16,6 +16,7 @@ import {
   type Estimate,
   type Portfolio,
 } from '../lib/portfolio'
+import { LEVEL_FILL, LEVEL_INK, LEVEL_WASH, LEVELS } from '../lib/riskPalette'
 import { useLang, useT } from '../i18n/i18n'
 import { bandColor, categoryLabel, localizedBand, regionLabel } from '../i18n/content'
 import RiskReturnScatter from './RiskReturnScatter'
@@ -25,13 +26,15 @@ type Props = { data: DashboardData; clientName: string | null }
 type Weight = { instId: string; weight: number }
 type SortKey = 'level' | 'return' | 'vol' | 'name'
 
-const RISK_COLORS: Record<RiskLevel, string> = { 1: '#3FA97F', 2: '#8DBF5A', 3: '#E0B93C', 4: '#E08A3C', 5: '#E05C5C' }
 const pctFmt = (x: number, dp = 1) => `${(x * 100).toFixed(dp)}%`
 const cardCls = 'rounded-2xl border border-border bg-surface shadow-soft'
 
-function LevelChip({ level }: { level: RiskLevel }) {
+function LevelChip({ level, label }: { level: RiskLevel; label: string }) {
   return (
-    <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md font-mono text-[11px] font-semibold" style={{ backgroundColor: `${RISK_COLORS[level]}22`, color: RISK_COLORS[level] }}>
+    <span
+      title={label}
+      className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md font-mono text-[11px] font-semibold ${LEVEL_WASH[level]} ${LEVEL_INK[level]}`}
+    >
       {level}
     </span>
   )
@@ -39,11 +42,11 @@ function LevelChip({ level }: { level: RiskLevel }) {
 
 // One headline metric. These sit in a single row, so the tile is sized to the
 // row rather than to its own content — hence the min-w-0 and the truncation.
-function StatTile({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: string }) {
+function StatTile({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: string }) {
   return (
     <div className="min-w-0 rounded-xl border border-border bg-surface px-3 py-2.5 shadow-soft">
       <p className="truncate font-mono text-[9px] uppercase tracking-wider text-muted">{label}</p>
-      <p className="mt-0.5 font-mono text-xl font-medium tnum" style={accent ? { color: accent } : undefined}>{value}</p>
+      <p className={`mt-0.5 font-mono text-xl font-medium tnum ${tone ?? ''}`}>{value}</p>
       {sub && <p className="truncate text-[10px] text-muted">{sub}</p>}
     </div>
   )
@@ -51,11 +54,49 @@ function StatTile({ label, value, sub, accent }: { label: string; value: string;
 
 const colHead = 'px-2 py-2 font-mono text-[9px] font-normal uppercase tracking-wider text-muted'
 
+/**
+ * The per-holding weight box.
+ *
+ * It keeps the keystrokes in local state and only reports a finite parse, which
+ * fixes three things at once: typing "12.5" no longer stores 5% (the old
+ * `Number(e.target.value) || 0` read the intermediate "12." as 0 and the browser
+ * then rewrote the field), the box no longer fights the caret while you type,
+ * and clearing it leaves an empty box instead of instantly writing 0 — which
+ * dropped the holding out of the table. External changes (re-optimize, reset)
+ * still flow in, because the committed value re-seeds the draft.
+ */
+function WeightInput({ weight, label, onCommit }: { weight: number; label: string; onCommit: (pct: number) => void }) {
+  const shown = Math.round(weight * 1000) / 10
+  const [draft, setDraft] = useState<string | null>(null)
+  const value = draft ?? String(shown)
+
+  const commit = (raw: string) => {
+    setDraft(raw)
+    const n = parseFloat(raw.replace(',', '.'))
+    if (Number.isFinite(n)) onCommit(Math.max(0, Math.min(100, n)))
+  }
+
+  return (
+    <input
+      type="number"
+      inputMode="decimal"
+      min={0}
+      max={100}
+      step={0.1}
+      aria-label={label}
+      value={value}
+      onChange={(e) => commit(e.target.value)}
+      onBlur={() => setDraft(null)}
+      className="w-16 rounded-md border border-border bg-surface px-1.5 py-1 text-right font-mono text-xs text-text tnum outline-none focus:ring-2 focus:ring-teal/40"
+    />
+  )
+}
+
 export default function AdvisorDashboard({ data, clientName }: Props) {
   const t = useT()
   const { lang } = useLang()
   const { config } = useRiskBands()
-  const { instruments } = useCatalog()
+  const { instruments, loading: catalogLoading, failed: catalogFailed, reload: reloadCatalog } = useCatalog()
   const { model } = usePortfolioModel()
 
   const [region, setRegion] = useState<Region>('global')
@@ -65,19 +106,64 @@ export default function AdvisorDashboard({ data, clientName }: Props) {
   const [classFilter, setClassFilter] = useState<Category | 'all'>('all')
   const [search, setSearch] = useState('')
   const [dragOver, setDragOver] = useState(false)
-  const [capital, setCapital] = useState(100_000)
+  // Capital is per region, because the currencies are not comparable: one
+  // shared number meant switching to Local reinterpreted $100,000 as ₲100.000
+  // (about USD 13), every line floored to zero units and the ticket vanished.
+  // No FX conversion — the app has no rate source, so each side keeps its own
+  // sensible starting figure.
+  const [capitalByRegion, setCapitalByRegion] = useState<Record<Region, number>>({
+    global: 100_000,
+    local: 500_000_000,
+  })
   // How many names the suggestion draws in ALTOGETHER — the band's mix decides
   // how they split across classes. Seeded from the admin's default and re-seeded
   // when the admin changes it.
   const [assetCount, setAssetCount] = useState(model.totalAssets)
   useEffect(() => setAssetCount(model.totalAssets), [model.totalAssets])
 
-  // Esc closes the ficha; the page behind it must not scroll under the overlay.
+  // Modal plumbing: Esc closes, the page behind must not scroll, focus moves
+  // into the dialog and Tab stays inside it, and on close focus returns to the
+  // row that opened it. Without the restore, closing a ficha opened from row 60
+  // dropped focus to <body> and a keyboard advisor restarted at the top.
+  const dialogRef = useRef<HTMLDivElement | null>(null)
+  const returnFocusRef = useRef<HTMLElement | null>(null)
   useEffect(() => {
-    if (!ficha) return
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setFicha(null)
+    if (!ficha) {
+      returnFocusRef.current?.focus?.()
+      returnFocusRef.current = null
+      return
+    }
+    returnFocusRef.current = document.activeElement as HTMLElement | null
     const prevOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
+
+    const focusables = () =>
+      Array.from(
+        dialogRef.current?.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      ).filter((el) => el.offsetParent !== null)
+
+    dialogRef.current?.focus()
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setFicha(null)
+        return
+      }
+      if (e.key !== 'Tab') return
+      const els = focusables()
+      if (els.length === 0) return
+      const first = els[0]
+      const last = els[els.length - 1]
+      const active = document.activeElement
+      if (e.shiftKey && (active === first || active === dialogRef.current)) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
     window.addEventListener('keydown', onKey)
     return () => {
       document.body.style.overflow = prevOverflow
@@ -91,7 +177,14 @@ export default function AdvisorDashboard({ data, clientName }: Props) {
   const mix = region === 'global' ? preset.mix : preset.localMix
   const isLocal = region === 'local'
   const currency = isLocal ? '₲' : '$'
-  const money = (n: number) => `${currency}${Math.round(n).toLocaleString('en-US')}`
+  const capital = capitalByRegion[region]
+  const setCapital = (n: number) => setCapitalByRegion((c) => ({ ...c, [region]: n }))
+  // Guaraní groups with periods (₲1.050), dollars with commas — the catalog's
+  // own local instrument names already print the local convention, so formatting
+  // both with en-US made one row contradict the next.
+  const locale = isLocal ? 'es-PY' : 'en-US'
+  const num = (n: number) => Math.round(n).toLocaleString(locale)
+  const money = (n: number) => `${currency}${num(n)}`
 
   // Suggested portfolio (optimizer) — the starting point.
   const suggested = useMemo(
@@ -134,8 +227,17 @@ export default function AdvisorDashboard({ data, clientName }: Props) {
   const addInstrument = (id: string) => {
     setWorking((w) => {
       const base = w ?? suggested.holdings.map((h) => ({ instId: h.inst.id, weight: h.weight }))
-      if (base.some((x) => x.instId === id)) return base
       const avg = base.length ? base.reduce((a, x) => a + x.weight, 0) / base.length : 0.1
+      const existing = base.find((x) => x.instId === id)
+      // A zero-weight entry is still in `working` but no longer rendered as a
+      // holding, so re-adding it has to REVIVE it. Returning `base` unchanged
+      // meant the master-list ＋ looked enabled and did nothing, and the only
+      // way back was "Reset to suggested".
+      if (existing) {
+        return existing.weight > 0
+          ? base
+          : base.map((x) => (x.instId === id ? { ...x, weight: avg || 0.05 } : x))
+      }
       return [...base, { instId: id, weight: avg || 0.05 }]
     })
   }
@@ -143,7 +245,12 @@ export default function AdvisorDashboard({ data, clientName }: Props) {
   const setWeight = (id: string, pct: number) =>
     setWorking(() => ensure().map((x) => (x.instId === id ? { ...x, weight: Math.max(0, pct / 100) } : x)))
   const resetSuggested = () => setWorking(null)
+  // Both of these throw away the advisor's edits, so both have to ask. Silently
+  // discarding hand-built weights from a control that reads as a view toggle is
+  // the single easiest way to lose real work in this screen.
+  const confirmDiscard = () => working === null || window.confirm(t.portfolioPanel.discardEdits)
   const switchRegion = (r: Region) => {
+    if (r === region || !confirmDiscard()) return
     setRegion(r)
     setWorking(null)
     setClassFilter('all')
@@ -153,6 +260,7 @@ export default function AdvisorDashboard({ data, clientName }: Props) {
   // Functional update: consecutive clicks must each count, not all read the same
   // render's value.
   const stepAssets = (delta: number) => {
+    if (!confirmDiscard()) return
     setAssetCount((n) => Math.max(minAssets, Math.min(60, n + delta)))
     setWorking(null)
   }
@@ -172,13 +280,20 @@ export default function AdvisorDashboard({ data, clientName }: Props) {
     if (sum > 0) setWorking(base.map((x) => ({ ...x, weight: x.weight / sum })))
   }
   const offTotal = Math.abs(rawTotal - 1) >= 0.005
+  // The weight box must show what the advisor TYPED, not the renormalized share
+  // assemblePortfolio derives. Otherwise typing 40 into a book that sums to 120
+  // redisplays as 33 — a number nobody entered — and the "Total: 120%" badge
+  // then contradicts rows that visibly add to 100.
+  const workingWeights = working && new Map(working.map((w) => [w.instId, w.weight]))
+  const weightOf = (id: string, fallback: number) => workingWeights?.get(id) ?? fallback
 
   const plan = useMemo(() => allocateCapital(portfolio, capital), [portfolio, capital])
   const ticketLines = plan.lines.filter((l) => l.units > 0)
   const hasHoldings = portfolio.holdings.length > 0
   const classMix = portfolio.classDist.map((c) => ({ assetClass: c.assetClass as Category, pct: c.weight }))
   const scatterPoints = portfolio.holdings.map((h) => ({ id: h.inst.id, name: h.inst.name, assetClass: h.inst.assetClass, vol: h.vol, ret: h.expReturn }))
-  const riskDistMax = Math.max(1, ...([1, 2, 3, 4, 5] as RiskLevel[]).map((l) => portfolio.riskDist[l]))
+  const riskDistMax = Math.max(1, ...LEVELS.map((l) => portfolio.riskDist[l]))
+  const levelName = (l: RiskLevel) => `${t.portfolioPanel.risk} ${l}/5`
 
   return (
     <div className="animate-fade-300 mx-auto w-full max-w-[1400px] px-4 pb-12 pt-4 min-[900px]:px-6">
@@ -206,17 +321,17 @@ export default function AdvisorDashboard({ data, clientName }: Props) {
 
       {/* ── Workspace: left (metrics + portfolio) · right (master list) ───────── */}
       <div className="grid grid-cols-1 gap-4 min-[1024px]:grid-cols-[1fr_400px]">
-        {/* LEFT */}
-        <div className="order-2 flex min-w-0 flex-col gap-4 min-[1024px]:order-1">
+        {/* LEFT — the workspace itself, first at every width. */}
+        <div className="order-1 flex min-w-0 flex-col gap-4">
           {/* Metrics — every headline number on one line. Duration only applies
               when the book holds bonds, so it appears rather than reserving a
               slot; the count of bonds is already visible in the holdings table. */}
           <div className={`p-4 ${cardCls}`}>
             <div className={`grid grid-cols-2 gap-2.5 min-[560px]:grid-cols-4 ${portfolio.bondStats ? 'min-[900px]:grid-cols-5' : ''}`}>
-              <StatTile label={t.portfolioPanel.expReturn} value={pctFmt(portfolio.expReturn)} sub={t.portfolioPanel.annualized} accent="rgb(var(--c-accent))" />
+              <StatTile label={t.portfolioPanel.expReturn} value={pctFmt(portfolio.expReturn)} sub={t.portfolioPanel.annualized} tone="text-teal" />
               <StatTile label={t.portfolioPanel.volatility} value={pctFmt(portfolio.vol)} sub={t.portfolioPanel.annualized} />
               <StatTile label={t.portfolioPanel.returnRisk} value={portfolio.sharpe.toFixed(2)} />
-              <StatTile label={t.portfolioPanel.portfolioRisk} value={`${portfolio.riskLevel}/5`} accent={RISK_COLORS[portfolio.riskLevel]} />
+              <StatTile label={t.portfolioPanel.portfolioRisk} value={`${portfolio.riskLevel}/5`} tone={LEVEL_INK[portfolio.riskLevel]} />
               {portfolio.bondStats && (
                 <StatTile label={t.portfolioPanel.avgDuration} value={portfolio.bondStats.avgDuration.toFixed(1)} sub={t.portfolioPanel.years} />
               )}
@@ -253,11 +368,11 @@ export default function AdvisorDashboard({ data, clientName }: Props) {
                   <div>
                     <p className="mb-2 text-xs font-semibold text-text">{t.portfolioPanel.byRisk}</p>
                     <div className="space-y-1.5">
-                      {([1, 2, 3, 4, 5] as RiskLevel[]).map((l) => (
+                      {LEVELS.map((l) => (
                         <div key={l} className="flex items-center gap-2">
-                          <LevelChip level={l} />
+                          <LevelChip level={l} label={levelName(l)} />
                           <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-border">
-                            <div className="h-full rounded-full" style={{ width: `${(portfolio.riskDist[l] / riskDistMax) * 100}%`, backgroundColor: RISK_COLORS[l] }} />
+                            <div className={`h-full rounded-full ${LEVEL_FILL[l]}`} style={{ width: `${(portfolio.riskDist[l] / riskDistMax) * 100}%` }} />
                           </div>
                           <span className="w-4 text-right font-mono text-xs text-muted tnum">{portfolio.riskDist[l]}</span>
                         </div>
@@ -277,7 +392,7 @@ export default function AdvisorDashboard({ data, clientName }: Props) {
             onDrop={(e) => { e.preventDefault(); setDragOver(false); const id = e.dataTransfer.getData('text/plain'); if (id) addInstrument(id) }}
           >
             <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
-              <h2 className="text-sm font-semibold text-text">{t.portfolioPanel.holdingsTitle}</h2>
+              <h2 className="font-sans text-sm font-semibold text-text">{t.portfolioPanel.holdingsTitle}</h2>
               <span className={`font-mono text-xs tnum ${offTotal ? 'text-amber' : 'text-muted'}`}>
                 {t.portfolioPanel.total}: {Math.round(rawTotal * 100)}%
               </span>
@@ -285,8 +400,14 @@ export default function AdvisorDashboard({ data, clientName }: Props) {
               {/* How many names the suggestion pulls in, for the book as a whole. */}
               <span className="flex items-center gap-1.5 rounded-lg border border-border px-2 py-0.5" title={t.portfolioPanel.assetCountHint}>
                 <span className="font-mono text-[10px] uppercase tracking-wider text-muted">{t.portfolioPanel.assetCount}</span>
-                <button type="button" aria-label={t.portfolioPanel.fewer} onClick={() => stepAssets(-1)} disabled={assetCount <= minAssets} className="px-1 text-muted transition-colors hover:text-teal disabled:opacity-30">−</button>
-                <span className="w-5 text-center font-mono text-xs font-medium text-text tnum">{assetCount}</span>
+                <button type="button" aria-label={t.portfolioPanel.fewer} onClick={() => stepAssets(-1)} disabled={assetCount <= minAssets} className="px-1 text-muted transition-colors hover:text-teal disabled:opacity-40">−</button>
+                {/* Realized / requested. The optimizer can zero a name out, so
+                    the book is often smaller than the number asked for — showing
+                    only the request made the control look broken. */}
+                <span className="text-center font-mono text-xs font-medium text-text tnum">
+                  {portfolio.holdings.length}
+                  <span className="text-muted">/{assetCount}</span>
+                </span>
                 <button type="button" aria-label={t.portfolioPanel.more} onClick={() => stepAssets(1)} className="px-1 text-muted transition-colors hover:text-teal">+</button>
               </span>
 
@@ -331,28 +452,31 @@ export default function AdvisorDashboard({ data, clientName }: Props) {
                   <tbody>
                     {portfolio.holdings.map((h) => (
                       <tr key={h.inst.id} className="border-b border-hairline last:border-0">
-                        <td className="py-2 pl-3 pr-2">
-                          <button type="button" onClick={() => setFicha(h.inst)} className="flex items-center gap-2 text-left">
+                        {/* max-w-0 is what makes `truncate` bind: without it the
+                            cell sizes to the longest instrument name, pushing the
+                            weight input and ✕ outside the overflow-hidden card
+                            where a phone can never reach them. */}
+                        <td className="max-w-0 py-2 pl-3 pr-2">
+                          <button type="button" onClick={() => setFicha(h.inst)} className="flex w-full min-w-0 items-center gap-2 text-left">
                             <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: colorForCategory(h.inst.assetClass, region) }} />
                             <span className="truncate font-medium text-text hover:text-teal">{h.inst.name}</span>
                           </button>
                         </td>
-                        <td className="px-1 py-2 text-center"><LevelChip level={h.riskLevel} /></td>
+                        <td className="px-1 py-2 text-center"><LevelChip level={h.riskLevel} label={levelName(h.riskLevel)} /></td>
                         <td className="hidden px-2 py-2 text-right font-mono text-xs text-muted tnum sm:table-cell">{pctFmt(h.expReturn)}</td>
                         <td className="hidden px-2 py-2 text-right font-mono text-xs text-muted tnum sm:table-cell">{pctFmt(h.vol)}</td>
                         <td className="px-2 py-2 text-right">
                           <span className="inline-flex items-center gap-1">
-                            <input
-                              type="number" min={0} max={100} step={1}
-                              value={Math.round(h.weight * 100)}
-                              onChange={(e) => setWeight(h.inst.id, Number(e.target.value) || 0)}
-                              className="w-14 rounded-md border border-border bg-surface px-1.5 py-1 text-right font-mono text-xs text-text tnum outline-none focus:ring-2 focus:ring-teal/40"
+                            <WeightInput
+                              weight={weightOf(h.inst.id, h.weight)}
+                              label={`${t.portfolioPanel.weight} — ${h.inst.name}`}
+                              onCommit={(pct) => setWeight(h.inst.id, pct)}
                             />
                             <span className="text-xs text-muted">%</span>
                           </span>
                         </td>
                         <td className="pl-1 pr-2 text-right">
-                          <button type="button" aria-label={t.portfolioPanel.remove} onClick={() => removeInstrument(h.inst.id)} className="rounded px-1.5 py-1 text-muted/60 transition-colors hover:bg-red/10 hover:text-red">✕</button>
+                          <button type="button" aria-label={`${t.portfolioPanel.remove} — ${h.inst.name}`} onClick={() => removeInstrument(h.inst.id)} className="rounded px-1.5 py-1 text-muted transition-colors hover:bg-red/10 hover:text-red">✕</button>
                         </td>
                       </tr>
                     ))}
@@ -370,11 +494,17 @@ export default function AdvisorDashboard({ data, clientName }: Props) {
                     <span className="font-mono text-muted">{currency}</span>
                     <input type="number" min={0} step={isLocal ? 1_000_000 : 1000} value={capital} onChange={(e) => setCapital(Math.max(0, Number(e.target.value) || 0))} className="w-36 rounded-lg border border-border bg-surface px-3 py-1.5 font-mono text-sm text-text tnum outline-none focus:ring-2 focus:ring-teal/40" aria-label={t.portfolioPanel.capitalLabel} />
                   </span>
-                  <span className="ml-auto font-mono text-xs text-muted">{t.portfolioPanel.invested} <span className="text-text">{money(plan.invested)}</span> · {t.portfolioPanel.residual} <span className="text-teal">{money(plan.residual)}</span></span>
+                  <span className="ml-auto font-mono text-xs text-muted">
+                    {t.portfolioPanel.invested} <span className="text-text">{money(plan.invested)}</span>
+                    {plan.manualTotal > 0 && (
+                      <> · {t.portfolioPanel.toPlace} <span className="text-amber">{money(plan.manualTotal)}</span></>
+                    )}
+                    {' · '}{t.portfolioPanel.residual} <span className="text-teal">{money(plan.residual)}</span>
+                  </span>
                 </div>
                 {/* The order itself — one row per line, so units, price and
                     money line up in columns instead of running together. */}
-                {ticketLines.length > 0 && (
+                {(ticketLines.length > 0 || plan.manual.length > 0) && (
                   <div className="mt-3 overflow-hidden rounded-xl border border-border">
                     <table className="w-full text-sm">
                       <thead>
@@ -398,35 +528,59 @@ export default function AdvisorDashboard({ data, clientName }: Props) {
                                 )}
                               </span>
                             </td>
-                            <td className="whitespace-nowrap px-2 py-1.5 text-right font-mono text-xs text-text tnum">{l.units.toLocaleString('en-US')}</td>
+                            <td className="whitespace-nowrap px-2 py-1.5 text-right font-mono text-xs text-text tnum">{num(l.units)}</td>
                             <td className="hidden whitespace-nowrap px-2 py-1.5 text-right font-mono text-xs text-muted tnum sm:table-cell">{money(l.holding.unitPrice ?? 0)}</td>
                             <td className="whitespace-nowrap px-2 py-1.5 text-right font-mono text-xs text-text tnum">{money(l.cost)}</td>
                             <td className="whitespace-nowrap py-1.5 pl-2 pr-3 text-right font-mono text-xs text-muted tnum">{pctFmt(l.actualWeight)}</td>
+                          </tr>
+                        ))}
+                        {/* Holdings with no unit price still belong in the order:
+                            they keep their share of the capital and are placed by
+                            hand. Omitting them is what let their money get handed
+                            to whichever line happened to have a price. */}
+                        {plan.manual.map((l) => (
+                          <tr key={l.holding.inst.id} className="border-b border-hairline bg-amber/[0.04] last:border-0">
+                            <td className="max-w-0 py-1.5 pl-3 pr-2">
+                              <span className="flex items-center gap-2">
+                                <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: colorForCategory(l.holding.inst.assetClass, region) }} />
+                                <span className="truncate text-text">{l.holding.inst.name}</span>
+                              </span>
+                            </td>
+                            <td className="whitespace-nowrap px-2 py-1.5 text-right font-mono text-[10px] uppercase tracking-wide text-amber">{t.portfolioPanel.byHand}</td>
+                            <td className="hidden whitespace-nowrap px-2 py-1.5 text-right font-mono text-xs text-muted tnum sm:table-cell">—</td>
+                            <td className="whitespace-nowrap px-2 py-1.5 text-right font-mono text-xs text-text tnum">{money(l.targetAmount)}</td>
+                            <td className="whitespace-nowrap py-1.5 pl-2 pr-3 text-right font-mono text-xs text-muted tnum">{pctFmt(l.holding.weight)}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
                 )}
-                {plan.unpriced.length > 0 && <p className="mt-2 text-[11px] text-muted">{t.portfolioPanel.unpricedNote(plan.unpriced.length)}</p>}
+                {plan.manual.length > 0 && <p className="mt-2 text-[11px] text-muted">{t.portfolioPanel.unpricedNote(plan.manual.length)}</p>}
               </div>
             )}
           </div>
         </div>
 
-        {/* RIGHT: master list */}
-        <div className="order-1 min-[1024px]:order-2">
-          <div className={`flex flex-col p-4 min-[1024px]:sticky min-[1024px]:top-4 min-[1024px]:max-h-[calc(100vh-2rem)] ${cardCls}`}>
+        {/* RIGHT: master list.
+            Below 1024px it drops BELOW the workspace — stacking a 200-row
+            catalog above the portfolio meant the advisor scrolled past ~2,600px
+            of list to reach the thing they came for. It also needs its own
+            height cap there, since `sticky` (and the max-height that comes with
+            it) only applies at the wide breakpoint. `top` clears the z-40
+            masthead rather than sliding under it. */}
+        <div className="order-2">
+          <div className={`flex max-h-[60vh] flex-col p-4 min-[1024px]:sticky min-[1024px]:top-[68px] min-[1024px]:max-h-[calc(100vh-84px)] ${cardCls}`}>
             <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold text-text">{t.portfolioPanel.masterList}</h2>
-              <select value={sortKey} onChange={(e) => setSortKey(e.target.value as SortKey)} className="rounded-lg border border-border bg-surface px-2 py-1 text-xs text-muted outline-none focus:ring-2 focus:ring-teal/40">
+              <h2 className="font-sans text-sm font-semibold text-text">{t.portfolioPanel.masterList}</h2>
+              <select aria-label={t.portfolioPanel.sortBy} value={sortKey} onChange={(e) => setSortKey(e.target.value as SortKey)} className="rounded-lg border border-border bg-surface px-2 py-1 text-xs text-muted outline-none focus:ring-2 focus:ring-teal/40">
                 <option value="level">{t.portfolioPanel.byLevel}</option>
                 <option value="return">{t.portfolioPanel.byReturn}</option>
                 <option value="vol">{t.portfolioPanel.byVol}</option>
                 <option value="name">{t.portfolioPanel.byName}</option>
               </select>
             </div>
-            <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t.portfolioPanel.searchPlaceholder} className="mb-2 w-full rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-text outline-none placeholder:text-muted/60 focus:ring-2 focus:ring-teal/40" />
+            <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t.portfolioPanel.searchPlaceholder} className="mb-2 w-full rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-text outline-none placeholder:text-muted focus:ring-2 focus:ring-teal/40" />
             <div className="mb-2 flex flex-wrap gap-1">
               {(['all', ...classes] as (Category | 'all')[]).map((c) => (
                 <button key={c} type="button" onClick={() => setClassFilter(c)} className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors ${classFilter === c ? 'bg-teal/15 text-teal' : 'text-muted hover:text-text'}`}>
@@ -449,20 +603,37 @@ export default function AdvisorDashboard({ data, clientName }: Props) {
                       <span className="block truncate text-sm text-text group-hover:text-teal">{e.inst.name}</span>
                       <span className="font-mono text-[10px] text-muted tnum">{t.portfolioPanel.ret} {pctFmt(e.expReturn)} · {t.portfolioPanel.vol} {pctFmt(e.vol)}</span>
                     </button>
-                    <LevelChip level={e.riskLevel} />
+                    <LevelChip level={e.riskLevel} label={levelName(e.riskLevel)} />
                     <button
                       type="button"
-                      aria-label={t.portfolioPanel.add}
+                      aria-label={`${held ? t.portfolioPanel.alreadyHeld : t.portfolioPanel.add} — ${e.inst.name}`}
                       onClick={() => addInstrument(e.inst.id)}
                       disabled={held}
-                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-border text-muted transition-colors hover:border-teal hover:text-teal disabled:opacity-30"
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-border text-muted transition-colors hover:border-teal hover:text-teal disabled:opacity-40"
                     >
                       {held ? '✓' : '＋'}
                     </button>
                   </div>
                 )
               })}
-              {master.length === 0 && <p className="py-6 text-center text-sm text-muted">{t.instruments.noneInClass}</p>}
+              {/* "Still loading", "we couldn't reach the server" and "there is
+                  genuinely nothing here" are three different things, and only
+                  the last one should read as a statement of fact. */}
+              {master.length === 0 &&
+                (catalogLoading ? (
+                  <p className="py-6 text-center text-sm text-muted">{t.common.loading}</p>
+                ) : catalogFailed ? (
+                  <div className="py-6 text-center">
+                    <p className="text-sm text-amber">{t.common.loadFailed}</p>
+                    <button type="button" onClick={reloadCatalog} className="mt-2 rounded-lg border border-border px-3 py-1 text-xs font-medium text-muted transition-colors hover:text-teal">
+                      {t.common.retry}
+                    </button>
+                  </div>
+                ) : (
+                  <p className="py-6 text-center text-sm text-muted">
+                    {instruments.length === 0 ? t.portfolioPanel.empty : t.instruments.noneInClass}
+                  </p>
+                ))}
             </div>
           </div>
         </div>
@@ -483,7 +654,12 @@ export default function AdvisorDashboard({ data, clientName }: Props) {
             className="animate-fade-300 fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 min-[900px]:p-8"
             onClick={() => setFicha(null)}
           >
-            <div className="h-full max-h-[860px] w-full max-w-[1180px]" onClick={(e) => e.stopPropagation()}>
+            <div
+              ref={dialogRef}
+              tabIndex={-1}
+              className="h-full max-h-[860px] w-full max-w-[1180px] outline-none"
+              onClick={(e) => e.stopPropagation()}
+            >
               <InstrumentReport fill instrument={ficha} region={region} onBack={() => setFicha(null)} />
             </div>
           </div>,

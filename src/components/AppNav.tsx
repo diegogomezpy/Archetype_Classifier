@@ -29,16 +29,20 @@ export default function AppNav({ title, meta }: Props) {
 
   return (
     <nav className="no-print sticky top-0 z-40 border-b border-border bg-bg/90 backdrop-blur">
-      <div className="mx-auto flex w-full max-w-6xl items-center gap-3 px-4 py-2.5 sm:gap-4 sm:px-6">
+      {/* One row on a laptop; the control cluster wraps to its own line on a
+          phone. Previously both ends were shrink-0 with nowrap links, so the row
+          measured ~600px intrinsic and every phone got a horizontal document
+          scrollbar with the language and theme toggles pushed off-screen. */}
+      <div className="mx-auto flex w-full max-w-[1440px] flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2.5 sm:gap-x-4 sm:px-6">
         {/* Brand */}
-        <NavLink to="/" end className="flex shrink-0 items-center gap-2.5">
+        <NavLink to="/" end className="flex min-w-0 shrink-0 items-center gap-2.5">
           <span
-            className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal text-[#fffefb]"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-teal text-onAccent"
             aria-hidden="true"
           >
             <BrandMark size={19} />
           </span>
-          <span className="font-serif text-xl font-semibold tracking-tight text-text">
+          <span className="truncate font-serif text-xl font-semibold tracking-tight text-text">
             {t.nav.brand}
           </span>
         </NavLink>
@@ -63,7 +67,11 @@ export default function AppNav({ title, meta }: Props) {
           </NavLink>
           <NavLink to="/advisor" className={link}>
             {t.nav.advisor}
-            {advisor && <span className="ml-1 opacity-70">· {advisor.name.split(' ')[0]}</span>}
+            {advisor && (
+              <span className="ml-1 hidden opacity-70 min-[420px]:inline">
+                · {advisor.name.split(' ')[0]}
+              </span>
+            )}
           </NavLink>
           <NavLink to="/admin" className={link}>
             {t.nav.admin}

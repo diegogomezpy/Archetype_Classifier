@@ -87,7 +87,7 @@ export default function InstrumentDocs({
                 aria-label={t.docs.remove}
                 title={t.docs.remove}
                 onClick={() => remove(d.id)}
-                className="shrink-0 rounded-lg px-1.5 py-1 text-xs text-muted/60 transition-colors hover:bg-red/10 hover:text-red"
+                className="shrink-0 rounded-lg px-1.5 py-1 text-xs text-muted transition-colors hover:bg-red/10 hover:text-red"
               >
                 ✕
               </button>

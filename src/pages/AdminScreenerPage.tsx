@@ -51,7 +51,11 @@ function TraitRow({ trait, bound, onChange, lang }: { trait: Trait; bound: Bound
     <div className="flex items-center justify-between gap-3 py-1.5">
       <span className="min-w-0 text-sm leading-tight text-text">
         {label}
-        {trait.unit && <span className="ml-1 font-mono text-[10px] text-muted">{trait.unit}</span>}
+        {trait.unit && (
+          <span className="ml-1 font-mono text-[10px] text-muted">
+            {(lang === 'es' && trait.unitEs) || trait.unit}
+          </span>
+        )}
       </span>
       <span className="flex shrink-0 items-center gap-1">
         <input
@@ -230,7 +234,7 @@ export default function AdminScreenerPage() {
                 type="button"
                 onClick={apply}
                 disabled={!dirty}
-                className="mt-4 w-full rounded-xl bg-teal px-5 py-2 text-sm font-semibold text-white shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card disabled:cursor-not-allowed disabled:opacity-40"
+                className="mt-4 w-full rounded-xl bg-teal px-5 py-2 text-sm font-semibold text-onAccent shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {t.adminScreener.apply}
               </button>

@@ -7,6 +7,7 @@ import {
 } from '../lib/instruments'
 import { deriveRiskLevel, type RiskLevelParams } from '../lib/riskLevels'
 import { useRiskLevels } from '../lib/riskLevelsConfig'
+import { LEVEL_INK, LEVEL_WASH } from '../lib/riskPalette'
 import type { RiskLevel } from '../lib/scoring'
 import { useLang, useT } from '../i18n/i18n'
 import { assetClassLabel, categoryLabel } from '../i18n/content'
@@ -25,9 +26,6 @@ const selCls =
   'rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm text-text tnum shadow-soft outline-none focus:ring-2 focus:ring-teal/40'
 const numCls = `${selCls} w-16 text-right`
 const label = 'font-mono text-[10px] uppercase tracking-wider text-muted'
-const LEVEL_COLORS: Record<RiskLevel, string> = {
-  1: '#3FA97F', 2: '#8DBF5A', 3: '#E0B93C', 4: '#E08A3C', 5: '#E05C5C',
-}
 
 function LevelSelect({ value, onChange }: { value: RiskLevel; onChange: (v: RiskLevel) => void }) {
   return (
@@ -44,8 +42,7 @@ function LevelSelect({ value, onChange }: { value: RiskLevel; onChange: (v: Risk
 function LevelChip({ level }: { level: RiskLevel }) {
   return (
     <span
-      className="inline-flex h-6 w-6 items-center justify-center rounded-md font-mono text-xs font-semibold"
-      style={{ backgroundColor: `${LEVEL_COLORS[level]}22`, color: LEVEL_COLORS[level] }}
+      className={`inline-flex h-6 w-6 items-center justify-center rounded-md font-mono text-xs font-semibold ${LEVEL_WASH[level]} ${LEVEL_INK[level]}`}
     >
       {level}
     </span>
@@ -221,7 +218,7 @@ export default function AdminRiskPage() {
             type="button"
             onClick={() => setParams(clone(draft))}
             disabled={!dirty}
-            className="rounded-xl bg-teal px-5 py-2 text-sm font-semibold text-white shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-xl bg-teal px-5 py-2 text-sm font-semibold text-onAccent shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card disabled:cursor-not-allowed disabled:opacity-40"
           >
             {t.adminRisk.save}
           </button>

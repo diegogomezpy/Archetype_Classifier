@@ -67,6 +67,9 @@ function remove(key: string): void {
 type DirectoryContextValue = {
   advisors: Advisor[]
   loading: boolean
+  /** The advisor fetch failed — not the same as "no advisors exist yet". */
+  failed: boolean
+  reload: () => void
   // admin (optimistic + persisted via API)
   addAdvisor: (name: string) => void
   updateAdvisor: (advisor: Advisor) => void
@@ -84,6 +87,8 @@ type DirectoryContextValue = {
 const DirectoryContext = createContext<DirectoryContextValue>({
   advisors: [],
   loading: true,
+  failed: false,
+  reload: () => {},
   addAdvisor: () => {},
   updateAdvisor: () => {},
   removeAdvisor: () => {},
@@ -98,6 +103,8 @@ const DirectoryContext = createContext<DirectoryContextValue>({
 export function DirectoryProvider({ children }: { children: ReactNode }) {
   const [advisors, setAdvisors] = useState<Advisor[]>([])
   const [loading, setLoading] = useState(true)
+  const [failed, setFailed] = useState(false)
+  const [attempt, setAttempt] = useState(0)
   const [loggedInAdvisorId, setLoggedIn] = useState<string | null>(() =>
     readJSON<string | null>(SESSION_KEY, null),
   )
@@ -107,20 +114,34 @@ export function DirectoryProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let alive = true
+    setLoading(true)
     api
       .get<Advisor[]>('/advisors')
-      .then((list) => alive && setAdvisors(list ?? []))
-      .catch(() => alive && setAdvisors([]))
+      .then((list) => {
+        if (!alive) return
+        setAdvisors(list ?? [])
+        setFailed(false)
+      })
+      // An unreachable backend must not render as "no advisors yet — create one
+      // in the admin console", which would send the advisor off to re-create
+      // accounts that already exist.
+      .catch(() => {
+        if (!alive) return
+        setAdvisors([])
+        setFailed(true)
+      })
       .finally(() => alive && setLoading(false))
     return () => {
       alive = false
     }
-  }, [])
+  }, [attempt])
 
   const value = useMemo<DirectoryContextValue>(() => {
     return {
       advisors,
       loading,
+      failed,
+      reload: () => setAttempt((n) => n + 1),
       addAdvisor: (name) => {
         const trimmed = name.trim()
         if (!trimmed) return
@@ -164,7 +185,7 @@ export function DirectoryProvider({ children }: { children: ReactNode }) {
         remove(LAST_CLIENT_KEY)
       },
     }
-  }, [advisors, loading, loggedInAdvisorId, lastClient])
+  }, [advisors, loading, failed, loggedInAdvisorId, lastClient])
 
   return <DirectoryContext.Provider value={value}>{children}</DirectoryContext.Provider>
 }

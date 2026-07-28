@@ -21,6 +21,11 @@ export type Trait = {
   es: string
   /** Short unit shown next to the min/max inputs. */
   unit?: string
+  /**
+   * Spanish unit, when it differs. "y" for years reads as the Spanish word
+   * "and", so "Duración y" looked like an unfinished label.
+   */
+  unitEs?: string
   /** Decimals used when rendering the value in the results table. */
   dp?: number
   get: (i: ManagedInstrument) => number | null
@@ -120,8 +125,8 @@ export const FI_TRAITS: Trait[] = [
   { key: 'ytmBid', en: 'Yield (YTM bid)', es: 'Rendimiento (YTM bid)', unit: '%', dp: 2, get: (i) => parseRate(d(i, 'ytmBid')) },
   { key: 'ytc', en: 'Yield to call', es: 'Rendimiento al call', unit: '%', dp: 2, get: (i) => parseRate(d(i, 'ytc')) },
   { key: 'couponRate', en: 'Coupon', es: 'Cupón', unit: '%', dp: 2, get: (i) => parseRate(d(i, 'couponRate')) },
-  { key: 'duration', en: 'Duration', es: 'Duración', unit: 'y', dp: 2, get: (i) => parseRate(d(i, 'duration')) },
-  { key: 'maturityYears', en: 'Years to maturity', es: 'Años al vencimiento', unit: 'y', dp: 1, get: (i) => yearsToMaturity(d(i, 'maturity')) },
+  { key: 'duration', en: 'Duration', es: 'Duración', unit: 'y', unitEs: 'años', dp: 2, get: (i) => parseRate(d(i, 'duration')) },
+  { key: 'maturityYears', en: 'Years to maturity', es: 'Años al vencimiento', unit: 'y', unitEs: 'años', dp: 1, get: (i) => yearsToMaturity(d(i, 'maturity')) },
   { key: 'dividendYield', en: 'Yield (ETFs)', es: 'Rendimiento (ETFs)', unit: '%', dp: 2, get: (i) => parseRate(d(i, 'dividendYield')) },
   { key: 'expenseRatio', en: 'Expense ratio', es: 'Ratio de gastos', unit: '%', dp: 2, get: (i) => parseRate(d(i, 'expenseRatio')) },
   creditTrait('creditRating', 'Credit rating', 'Calificación'),
@@ -135,7 +140,7 @@ export const NOTE_TRAITS: Trait[] = [
   { key: 'participationRate', en: 'Participation rate', es: 'Nivel de participación', unit: '%', dp: 0, get: (i) => parseRate(d(i, 'participationRate')) },
   { key: 'cap', en: 'Upside cap', es: 'Tope de ganancia', unit: '%', dp: 0, get: (i) => parseRate(d(i, 'cap')) },
   { key: 'protectionLevel', en: 'Capital protected', es: 'Capital protegido', unit: '%', dp: 0, get: (i) => parseRate(d(i, 'protectionLevel')) },
-  { key: 'maturityMonths', en: 'Term', es: 'Plazo', unit: 'mo', dp: 0, get: (i) => parseRate(d(i, 'maturityMonths')) },
+  { key: 'maturityMonths', en: 'Term', es: 'Plazo', unit: 'mo', unitEs: 'meses', dp: 0, get: (i) => parseRate(d(i, 'maturityMonths')) },
   creditTrait('issuerRating', 'Issuer rating', 'Calificación del emisor'),
   RISK_LEVEL,
 ]
@@ -145,14 +150,14 @@ export const NOTE_TRAITS: Trait[] = [
 // for the paper that matures and a manager/unit price for the funds.
 
 const EST_YIELD: Trait = { key: 'estYield', en: 'Estimated yield', es: 'Rendimiento estimado', unit: '%', dp: 2, get: (i) => parseRate(d(i, 'estYield')) }
-const RESIDUAL: Trait = { key: 'residualYears', en: 'Residual term', es: 'Plazo residual', unit: 'y', dp: 1, get: (i) => parseRate(d(i, 'residualYears')) }
+const RESIDUAL: Trait = { key: 'residualYears', en: 'Residual term', es: 'Plazo residual', unit: 'y', unitEs: 'años', dp: 1, get: (i) => parseRate(d(i, 'residualYears')) }
 const LOCAL_RATING = creditTrait('rating', 'Credit rating', 'Calificación')
 const MIN_INVESTMENT: Trait = { key: 'minInvestment', en: 'Minimum investment', es: 'Inversión mínima', dp: 0, get: (i) => magnitude(d(i, 'minInvestment')) }
 
 export const LOCAL_FI_TRAITS: Trait[] = [
   EST_YIELD,
   RESIDUAL,
-  { key: 'maturityYears', en: 'Years to maturity', es: 'Años al vencimiento', unit: 'y', dp: 1, get: (i) => yearsToMaturity(d(i, 'maturity')) },
+  { key: 'maturityYears', en: 'Years to maturity', es: 'Años al vencimiento', unit: 'y', unitEs: 'años', dp: 1, get: (i) => yearsToMaturity(d(i, 'maturity')) },
   LOCAL_RATING,
   RISK_LEVEL,
 ]

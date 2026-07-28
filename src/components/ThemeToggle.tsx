@@ -1,4 +1,5 @@
 import { useTheme } from '../lib/theme'
+import { useT } from '../i18n/i18n'
 
 /**
  * Theme switch. `inline` sits at the end of the masthead as a bare icon; without
@@ -7,14 +8,15 @@ import { useTheme } from '../lib/theme'
  */
 export default function ThemeToggle({ inline = false }: { inline?: boolean }) {
   const { theme, toggle } = useTheme()
+  const t = useT()
   const dark = theme === 'dark'
 
   return (
     <button
       type="button"
       onClick={toggle}
-      aria-label={dark ? 'Switch to light theme' : 'Switch to dark theme'}
-      title={dark ? 'Light' : 'Dark'}
+      aria-label={dark ? t.theme.toLight : t.theme.toDark}
+      title={dark ? t.theme.light : t.theme.dark}
       className={
         inline
           ? 'no-print flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:text-text'

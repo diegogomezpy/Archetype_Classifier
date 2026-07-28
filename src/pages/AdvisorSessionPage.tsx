@@ -56,7 +56,7 @@ export default function AdvisorSessionPage() {
         <p className="mt-2 text-sm text-muted">{t.advisorSession.notFoundBody}</p>
         <Link
           to="/advisor"
-          className="mt-6 inline-block rounded-2xl bg-teal px-6 py-3 text-sm font-semibold text-white shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card"
+          className="mt-6 inline-block rounded-2xl bg-teal px-6 py-3 text-sm font-semibold text-onAccent shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card"
         >
           {t.advisorSession.allSessions}
         </Link>

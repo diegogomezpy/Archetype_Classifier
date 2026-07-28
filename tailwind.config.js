@@ -12,10 +12,8 @@ module.exports = {
       colors: {
         // Mercator — warm paper, ink, deep viridian, on a graph-paper ground.
         bg: withAlpha('--c-bg'),
-        bgElev: withAlpha('--c-bg-elev'),
         surface: withAlpha('--c-surface'),
         surface2: withAlpha('--c-surface-2'),
-        surfaceHover: withAlpha('--c-surface-hover'),
         text: withAlpha('--c-text'),
         muted: withAlpha('--c-text-muted'),
         faint: withAlpha('--c-text-faint'),
@@ -24,11 +22,19 @@ module.exports = {
         hairline: withAlpha('--c-hairline'),
         // `teal` name kept (used everywhere) but now the deep viridian accent.
         teal: withAlpha('--c-accent'),
-        tealHover: withAlpha('--c-accent-hover'),
-        tealWeak: withAlpha('--c-accent-weak'),
-        green: withAlpha('--c-accent'), // positive = the viridian family
         amber: withAlpha('--c-amber'),
         red: withAlpha('--c-red'),
+        // Ink that sits ON a filled accent/semantic ground. `text-white` was
+        // wrong here: --c-accent flips to a light green in dark mode, dropping
+        // white text to 2.8:1.
+        onAccent: withAlpha('--c-on-accent'),
+        // The 1–5 risk ladder, theme-aware. One definition for the advisor
+        // chips, the admin risk model and the portfolio tiles.
+        level1: withAlpha('--c-level-1'),
+        level2: withAlpha('--c-level-2'),
+        level3: withAlpha('--c-level-3'),
+        level4: withAlpha('--c-level-4'),
+        level5: withAlpha('--c-level-5'),
       },
       fontFamily: {
         serif: ['"Source Serif 4"', 'Georgia', 'Times New Roman', 'serif'],

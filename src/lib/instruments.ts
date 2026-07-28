@@ -94,27 +94,3 @@ export function colorForCategory(category: Category, region: Region = 'global'):
 // A deliberately small, representative default set (a few instruments per asset
 // class) — every entry ships with a detail sheet in data/instrumentDetails.ts.
 // This seeds the admin-managed catalog (lib/catalog.tsx); admins add, edit, hide,
-// and emphasize from here. Illustrative sample content, not investment advice.
-export const INSTRUMENTS: Instrument[] = [
-  // Fixed income
-  { name: 'iShares 1-3yr Treasury Bond ETF', ticker: 'SHY', assetClass: 'Fixed income', liquidityTier: 1, lockupMonths: 0 },
-  { name: 'iShares 7-10yr Treasury ETF', ticker: 'IEF', assetClass: 'Fixed income', liquidityTier: 1, lockupMonths: 0 },
-  { name: 'iShares iBoxx HY Corporate Bond ETF', ticker: 'HYG', assetClass: 'Fixed income', liquidityTier: 1, lockupMonths: 0 },
-  { name: 'BVA Paraguay sovereign bond', ticker: 'OTC', assetClass: 'Fixed income', liquidityTier: 2, lockupMonths: 0 },
-  { name: 'BVA investment grade corporate', ticker: 'OTC', assetClass: 'Fixed income', liquidityTier: 2, lockupMonths: 0 },
-
-  // Equities
-  { name: 'Vanguard Total World Stock ETF', ticker: 'VT', assetClass: 'Equities', liquidityTier: 1, lockupMonths: 0 },
-  { name: 'SPDR S&P 500 ETF', ticker: 'SPY', assetClass: 'Equities', liquidityTier: 1, lockupMonths: 0 },
-  { name: 'Invesco QQQ (Nasdaq-100)', ticker: 'QQQ', assetClass: 'Equities', liquidityTier: 1, lockupMonths: 0 },
-  { name: 'iShares MSCI USA Min Vol Factor ETF', ticker: 'USMV', assetClass: 'Equities', liquidityTier: 1, lockupMonths: 0 },
-  { name: 'NVIDIA Corp', ticker: 'NVDA', assetClass: 'Equities', liquidityTier: 1, lockupMonths: 0 },
-  { name: 'Walmart Inc', ticker: 'WMT', assetClass: 'Equities', liquidityTier: 1, lockupMonths: 0 },
-
-  // Structured notes — Phoenix (carry / income) and Participation notes
-  // (convex / growth). Skew can't be expressed by class+rating, so pin a level.
-  { name: 'Phoenix autocallable (monthly obs.)', ticker: 'OTC', assetClass: 'Structured notes', kind: 'Phoenix', riskLevelOverride: 3, liquidityTier: 4, lockupMonths: 12 },
-  { name: 'Phoenix autocallable (barrier, memory coupon)', ticker: 'OTC', assetClass: 'Structured notes', kind: 'Phoenix', riskLevelOverride: 4, liquidityTier: 4, lockupMonths: 12 },
-  { name: 'Capital-protected note + participation', ticker: 'OTC', assetClass: 'Structured notes', kind: 'Participation note', riskLevelOverride: 3, liquidityTier: 4, lockupMonths: 12 },
-  { name: 'Uncapped participation note', ticker: 'OTC', assetClass: 'Structured notes', kind: 'Participation note', riskLevelOverride: 4, liquidityTier: 4, lockupMonths: 12 },
-]

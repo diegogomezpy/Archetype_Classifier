@@ -11,6 +11,15 @@ const en = {
     advisorSessions: 'Advisor sessions',
     advisorView: 'Advisor view',
     admin: 'Admin',
+    loading: 'Loading…',
+    loadFailed: 'Could not reach the server.',
+    retry: 'Try again',
+  },
+  theme: {
+    light: 'Light',
+    dark: 'Dark',
+    toLight: 'Switch to light theme',
+    toDark: 'Switch to dark theme',
   },
   nav: {
     brand: 'Investor Profile',
@@ -31,7 +40,7 @@ const en = {
     welcomeBack: (name: string) => `Continuing as ${name}.`,
     startFresh: 'Not you?',
     start: 'Start',
-    footnote: 'Under 30 seconds a round.',
+    footnote: 'About two minutes, start to finish.',
     advisorAccess: 'Advisor access',
     adminAccess: 'Admin access',
   },
@@ -180,6 +189,11 @@ const en = {
     unitPrice: 'Unit price',
     amount: 'Amount',
     ofBook: 'Of book',
+    byHand: 'by hand',
+    toPlace: 'To place manually',
+    sortBy: 'Sort instruments by',
+    alreadyHeld: 'Already in the portfolio',
+    discardEdits: 'This rebuilds the suggested portfolio and discards your edits. Continue?',
     unitShares: 'shares',
     unitBonds: 'bonds',
     unitUnits: 'units',
@@ -188,7 +202,7 @@ const en = {
     invested: 'Invested',
     residual: 'Cash left over',
     unpricedNote: (n: number) =>
-      `${n} holding${n === 1 ? '' : 's'} without a unit price — sized by target amount only.`,
+      `${n} holding${n === 1 ? '' : 's'} have no unit price — place ${n === 1 ? 'it' : 'them'} by hand for the amount shown.`,
     allInstruments: 'All instruments',
     empty: 'No instruments in the catalog for this portfolio yet — add some in the admin console.',
   },
@@ -251,13 +265,13 @@ const en = {
     assetClass: 'Category',
     importTitle: 'Import from file',
     importHint:
-      'Pick a market + category, download the template (columns also accept Bloomberg field names), fill it, and upload the CSV. Blank σ/α/λ are auto-derived.',
+      'Pick a market + category, download the template (columns also accept Bloomberg field names), fill it, and upload the CSV. Risk level, liquidity tier and lock-up are derived automatically.',
     importHintAuto:
       'The template is just Ticker + Descripción — a ticker is all we need. Name, price, P/E, beta, market cap, sector, price target and analyst recommendations are fetched on import, and the potential return is recomputed against the live price. Anything you put in the file overrides what we fetch.',
     importHintEquities:
       'Set Type (Common / Preferred / ETF) — or leave it blank and Yahoo decides. Give the Ticker + Descripción; name, price, P/E, sector, market cap, price target and analyst recommendations are fetched, and potential return is recomputed live. Anything you type overrides what we fetch.',
     importHintLocal:
-      'Upload the Cadiem boletín PDF and its bond, CDA, fund and equity tables are parsed straight in. Or fill the column template for one category by hand. σ/α/λ are auto-derived either way.',
+      'Upload the boletín PDF and its bond, CDA, fund and equity tables are parsed straight in. Or fill the column template for one category by hand. Risk level, liquidity tier and lock-up are derived either way.',
     importHintFixedIncome:
       'Set Type per row: "Bond ETF" → give a Ticker and price, yield, AUM and the rest are fetched; an individual bond → fill the mirror fields (ISIN, issuer, coupon, maturity, YTM…). The bond types mirror the listing\'s own sections — Corporate and Sovereign carry a rating and call schedule; Treasury, T-Bill and Strip carry neither; TIPS adds breakeven inflation; Floating-rate adds the reference rate + spread. Only Bond ETF rows are fetched — individual bonds are never touched. Descripción is your rationale, and anything you type overrides what we fetch.',
     importFetching: (done: number, total: number) => `Fetching market data ${done}/${total}…`,
@@ -273,7 +287,7 @@ const en = {
       `No market data for ${tickers} — check the symbol is still listed. These rows import with no price, description or metrics.`,
     importBulletin: 'Upload boletín (PDF)',
     importBulletinHint:
-      'Local only: upload the Cadiem bulletin PDF and it auto-parses the bond, CDA, fund and equity tables. Best-effort — review the preview before adding. σ/α/λ are auto-derived.',
+      'Local only: upload the bulletin PDF and it auto-parses the bond, CDA, fund and equity tables. Best-effort — review the preview before adding. Risk level, liquidity tier and lock-up are derived automatically.',
     bulletinNothing:
       'No instruments found in that PDF. It may be a scan (no text layer) or a layout the parser does not recognise yet.',
     importParsing: 'Reading PDF…',
@@ -406,14 +420,14 @@ const en = {
     count: (n: number) => `${n} ${n === 1 ? 'client' : 'clients'}`,
     empty: 'No clients yet. They appear here once someone completes the test with your name selected.',
     sessions: (n: number) => `${n} ${n === 1 ? 'session' : 'sessions'}`,
-    lastPlayed: 'Last played',
+    lastPlayed: 'Last session',
     logout: 'Switch advisor',
     signedInAs: 'Viewing as',
   },
   clientHistory: {
     back: '← Your clients',
     sessions: 'Sessions',
-    sessionsSub: 'Each play, newest first. Replays link to this client automatically.',
+    sessionsSub: 'Every session, newest first. Retakes link to this client automatically.',
     open: 'Open',
   },
 }
@@ -425,6 +439,15 @@ const es: UIStrings = {
     advisorSessions: 'Sesiones del asesor',
     advisorView: 'Vista del asesor',
     admin: 'Admin',
+    loading: 'Cargando…',
+    loadFailed: 'No se pudo conectar con el servidor.',
+    retry: 'Reintentar',
+  },
+  theme: {
+    light: 'Claro',
+    dark: 'Oscuro',
+    toLight: 'Cambiar al tema claro',
+    toDark: 'Cambiar al tema oscuro',
   },
   nav: {
     brand: 'Perfil del Inversor',
@@ -445,7 +468,7 @@ const es: UIStrings = {
     welcomeBack: (name: string) => `Continuando como ${name}.`,
     startFresh: '¿No sos vos?',
     start: 'Comenzar',
-    footnote: 'Menos de 30 segundos por ronda.',
+    footnote: 'Unos dos minutos, de principio a fin.',
     advisorAccess: 'Acceso de asesor',
     adminAccess: 'Acceso administrador',
   },
@@ -594,6 +617,11 @@ const es: UIStrings = {
     unitPrice: 'Precio unitario',
     amount: 'Monto',
     ofBook: 'De la cartera',
+    byHand: 'a mano',
+    toPlace: 'A colocar a mano',
+    sortBy: 'Ordenar instrumentos por',
+    alreadyHeld: 'Ya está en la cartera',
+    discardEdits: 'Esto reconstruye la cartera sugerida y descarta tus cambios. ¿Continuar?',
     unitShares: 'acc.',
     unitBonds: 'bonos',
     unitUnits: 'unid.',
@@ -602,7 +630,7 @@ const es: UIStrings = {
     invested: 'Invertido',
     residual: 'Efectivo restante',
     unpricedNote: (n: number) =>
-      `${n} posici${n === 1 ? 'ón' : 'ones'} sin precio unitario — se muestra solo el monto objetivo.`,
+      `${n} posici${n === 1 ? 'ón' : 'ones'} sin precio unitario — coloca${n === 1 ? 'la' : 'las'} a mano por el monto indicado.`,
     allInstruments: 'Todos los instrumentos',
     empty:
       'Aún no hay instrumentos en el catálogo para esta cartera — agregá algunos en la consola de administración.',
@@ -667,13 +695,13 @@ const es: UIStrings = {
     assetClass: 'Categoría',
     importTitle: 'Importar desde archivo',
     importHint:
-      'Elegí mercado + categoría, descargá la plantilla (las columnas también aceptan nombres de campo de Bloomberg), complétala y sube el CSV. σ/α/λ en blanco se derivan automáticamente.',
+      'Elegí mercado + categoría, descargá la plantilla (las columnas también aceptan nombres de campo de Bloomberg), completala y subí el CSV. El nivel de riesgo, el tramo de liquidez y el bloqueo se derivan automáticamente.',
     importHintAuto:
       'La plantilla es solo Ticker + Descripción — con el ticker alcanza. Nombre, precio, P/E, beta, capitalización, sector, precio objetivo y recomendaciones se buscan al importar, y el retorno potencial se recalcula contra el precio en vivo. Lo que pongas en el archivo pisa lo que buscamos.',
     importHintEquities:
       'Indicá Type (Común / Preferida / ETF) — o dejalo vacío y Yahoo decide. Poné el Ticker + Descripción; nombre, precio, P/E, sector, capitalización, precio objetivo y recomendaciones se buscan, y el retorno potencial se recalcula en vivo. Lo que escribas pisa lo que buscamos.',
     importHintLocal:
-      'Subí el PDF del boletín de Cadiem y sus tablas de bonos, CDA, fondos y renta variable se leen directo. O completá a mano la plantilla de una categoría. σ/α/λ se derivan solos igual.',
+      'Subí el PDF del boletín y sus tablas de bonos, CDA, fondos y renta variable se leen directo. O completá a mano la plantilla de una categoría. El nivel de riesgo, el tramo de liquidez y el bloqueo se derivan solos igual.',
     importHintFixedIncome:
       'Indicá Type por fila: "Bond ETF" → poné un Ticker y precio, rendimiento, AUM y lo demás se buscan; un bono individual → completá los campos del espejo (ISIN, emisor, cupón, vencimiento, YTM…). Los tipos de bono reflejan las secciones del propio listado — Corporate y Sovereign llevan calificación y call; Treasury, T-Bill y Strip no llevan ninguna; TIPS suma la inflación implícita; Floating-rate suma la tasa de referencia + spread. Solo las filas Bond ETF se buscan — los bonos individuales nunca se tocan. Descripción es tu racional, y lo que escribas pisa lo que buscamos.',
     importFetching: (done: number, total: number) => `Buscando datos de mercado ${done}/${total}…`,
@@ -689,7 +717,7 @@ const es: UIStrings = {
       `Sin datos de mercado para ${tickers} — verificá que el símbolo siga listado. Esas filas se importan sin precio, descripción ni métricas.`,
     importBulletin: 'Subir boletín (PDF)',
     importBulletinHint:
-      'Solo local: subí el PDF del boletín de Cadiem y se parsean automáticamente las tablas de bonos, CDA, fondos y renta variable. Es una aproximación — revisá la vista previa antes de agregar. σ/α/λ se derivan solos.',
+      'Solo local: subí el PDF del boletín y se parsean automáticamente las tablas de bonos, CDA, fondos y renta variable. Es una aproximación — revisá la vista previa antes de agregar. El nivel de riesgo, el tramo de liquidez y el bloqueo se derivan automáticamente.',
     bulletinNothing:
       'No se encontraron instrumentos en ese PDF. Puede ser un escaneo (sin capa de texto) o un formato que el lector aún no reconoce.',
     importParsing: 'Leyendo PDF…',
@@ -809,12 +837,12 @@ const es: UIStrings = {
       `¿Eliminar al asesor "${name}"? Las sesiones de sus clientes se conservan pero quedan sin asignar.`,
     save: 'Guardar',
     cancel: 'Cancelar',
-    empty: 'Aún no hay asesores — agrega uno para que los clientes puedan elegirlo al inicio.',
+    empty: 'Aún no hay asesores — agregá uno para que los clientes puedan elegirlo al inicio.',
   },
   advisorPicker: {
     title: '¿Quién sos?',
     subtitle: 'Elegí tu nombre para ver tus clientes. Podés cambiar en cualquier momento.',
-    noAdvisors: 'Aún no hay asesores — crea uno en la consola de administración.',
+    noAdvisors: 'Aún no hay asesores — creá uno en la consola de administración.',
     goAdmin: 'Abrir consola de administración',
   },
   advisorClients: {
@@ -822,14 +850,14 @@ const es: UIStrings = {
     count: (n: number) => `${n} ${n === 1 ? 'cliente' : 'clientes'}`,
     empty: 'Aún no hay clientes. Aparecen aquí cuando alguien completa el test con tu nombre seleccionado.',
     sessions: (n: number) => `${n} ${n === 1 ? 'sesión' : 'sesiones'}`,
-    lastPlayed: 'Última vez',
+    lastPlayed: 'Última sesión',
     logout: 'Cambiar asesor',
     signedInAs: 'Viendo como',
   },
   clientHistory: {
     back: '← Tus clientes',
     sessions: 'Sesiones',
-    sessionsSub: 'Cada partida, la más reciente primero. Las repeticiones se vinculan a este cliente automáticamente.',
+    sessionsSub: 'Cada sesión, la más reciente primero. Si el cliente vuelve a hacer el test, se vincula automáticamente.',
     open: 'Abrir',
   },
 }

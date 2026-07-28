@@ -12,7 +12,14 @@
       (function () {
         try {
           var t = localStorage.getItem('ip-theme');
-          if (t !== 'light' && t !== 'dark') t = 'light';
+          // No saved choice → follow the OS. The theme-color metas above are
+          // already gated on prefers-color-scheme, so defaulting to light
+          // painted dark browser chrome around a warm-paper page.
+          if (t !== 'light' && t !== 'dark') {
+            t = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+              ? 'dark'
+              : 'light';
+          }
           document.documentElement.setAttribute('data-theme', t);
         } catch (e) {}
       })();

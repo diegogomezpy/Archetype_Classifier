@@ -37,19 +37,38 @@ function hexA(hex: string, alpha: number): string {
 
 function AdvisorPicker({ advisors }: { advisors: Advisor[] }) {
   const t = useT()
-  const { login } = useDirectory()
+  const { login, loading, failed, reload } = useDirectory()
 
   return (
     <div className="mx-auto w-full max-w-2xl px-6 py-12">
       <h1 className="text-3xl font-semibold tracking-tight text-text">{t.advisorPicker.title}</h1>
       <p className="mt-2 text-sm text-muted">{t.advisorPicker.subtitle}</p>
 
-      {advisors.length === 0 ? (
+      {/* "No advisors yet — create one in the admin console" is a claim about
+          the data. While the fetch is in flight, or after it failed, we don't
+          know that — and saying it anyway sends the advisor off to re-create
+          accounts that already exist. */}
+      {loading ? (
+        <div className="mt-8 rounded-2xl border border-border bg-surface p-8 text-center shadow-soft">
+          <p className="text-sm text-muted">{t.common.loading}</p>
+        </div>
+      ) : failed ? (
+        <div className="mt-8 rounded-2xl border border-border bg-surface p-8 text-center shadow-soft">
+          <p className="text-sm text-amber">{t.common.loadFailed}</p>
+          <button
+            type="button"
+            onClick={reload}
+            className="mt-5 inline-block rounded-2xl border border-border px-6 py-3 text-sm font-semibold text-muted transition-colors hover:text-teal"
+          >
+            {t.common.retry}
+          </button>
+        </div>
+      ) : advisors.length === 0 ? (
         <div className="mt-8 rounded-2xl border border-border bg-surface p-8 text-center shadow-soft">
           <p className="text-sm text-muted">{t.advisorPicker.noAdvisors}</p>
           <Link
             to="/admin/advisors"
-            className="mt-5 inline-block rounded-2xl bg-teal px-6 py-3 text-sm font-semibold text-white shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card"
+            className="mt-5 inline-block rounded-2xl bg-teal px-6 py-3 text-sm font-semibold text-onAccent shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card"
           >
             {t.advisorPicker.goAdmin}
           </Link>

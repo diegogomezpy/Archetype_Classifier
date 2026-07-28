@@ -592,8 +592,11 @@ app.post('/api/market-data/refresh', async (c) => {
       const target = numOr(details.priceTarget)
       const spot = numOr(details.lastPrice)
       if (target != null && spot != null && spot > 0) {
+        // ASCII hyphen, not U+2212 — the client's parseNum only accepts '-', so
+        // a typographic minus made a −12% name read as +12% upside everywhere
+        // downstream (expected return, and the screener's visibility writes).
         const pct = (target / spot - 1) * 100
-        details.potentialReturn = `${pct >= 0 ? '+' : '−'}${Math.abs(pct).toFixed(1)}%`
+        details.potentialReturn = `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`
       }
       // Repair a name that was stored truncated (Yahoo's 32-char shortName, e.g.
       // "iShares J.P. Morgan USD Emergin"). Only when the stored name is a strict

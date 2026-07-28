@@ -203,7 +203,7 @@ export default function ImportInstruments() {
               <ul className="mt-3 max-h-44 space-y-1 overflow-y-auto pr-2 font-mono text-[11px] text-muted tnum">
                 {result.instruments.slice(0, 12).map((i) => (
                   <li key={i.id} className="truncate">
-                    {i.name} · Nivel {assignedLevel(i)}
+                    {i.name} · {t.result.level(assignedLevel(i))}
                   </li>
                 ))}
                 {result.instruments.length > 12 && <li>+{result.instruments.length - 12}…</li>}
@@ -213,7 +213,7 @@ export default function ImportInstruments() {
               type="button"
               onClick={add}
               disabled={result.instruments.length === 0}
-              className="mt-4 rounded-xl bg-teal px-5 py-2 text-sm font-semibold text-white shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card disabled:cursor-not-allowed disabled:opacity-40"
+              className="mt-4 rounded-xl bg-teal px-5 py-2 text-sm font-semibold text-onAccent shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card disabled:cursor-not-allowed disabled:opacity-40"
             >
               {t.admin.importAdd(result.instruments.length)}
             </button>

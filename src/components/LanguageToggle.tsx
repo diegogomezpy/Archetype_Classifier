@@ -32,7 +32,7 @@ export default function LanguageToggle({ inline = false }: { inline?: boolean })
           onClick={() => setLang(o.value)}
           className={`font-mono text-xs font-medium transition-colors ${
             inline ? 'px-2.5 py-1' : 'px-3 py-1.5'
-          } ${lang === o.value ? 'bg-teal text-white' : 'text-muted hover:text-text'}`}
+          } ${lang === o.value ? 'bg-teal text-onAccent' : 'text-muted hover:text-text'}`}
         >
           {o.label}
         </button>

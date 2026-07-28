@@ -1,5 +1,5 @@
 import { computeFitScore, type AxisScores, type RiskLevel } from './scoring'
-import { deriveRiskLevel, volFromLevel } from './riskLevels'
+import { deriveRiskLevel, getActiveRiskLevels, volFromLevel } from './riskLevels'
 import { type Category, type Region } from './instruments'
 import type { ManagedInstrument } from './catalog'
 
@@ -123,7 +123,9 @@ const RATING_VOL: { re: RegExp; v: number }[] = [
  */
 export function parseNum(v: string | undefined, thousands = true): number | null {
   if (v == null) return null
-  const m = String(v).replace(/\s/g, '').match(/-?[\d.,]+/)
+  // Typographic minus / en-dash → ASCII, so a stored "−12.3%" is read as
+  // negative rather than silently losing its sign and flipping to +12.3.
+  const m = String(v).replace(/\s/g, '').replace(/[−‒–—]/g, '-').match(/-?[\d.,]+/)
   if (!m) return null
   let s = m[0]
   const lastComma = s.lastIndexOf(',')
@@ -247,12 +249,12 @@ function estimateReturn(inst: ManagedInstrument): number {
 }
 
 // Annualized vol → a 1–5 risk level (portfolio aggregate).
+// Reads the SAME admin-editable ladder the per-instrument levels use, so the
+// headline "Portfolio risk N/5" and the per-holding chips beside it can never
+// disagree after an admin edits the thresholds.
 export function riskBucket(vol: number): RiskLevel {
-  if (vol < 0.04) return 1
-  if (vol < 0.08) return 2
-  if (vol < 0.13) return 3
-  if (vol < 0.2) return 4
-  return 5
+  const ladder = getActiveRiskLevels().volThresholds
+  return ladder.find((t) => vol <= t.maxVol)?.level ?? 5
 }
 
 function unitPriceOf(inst: ManagedInstrument): { price: number | null; label: 'share' | 'bond' | 'unit' } {
@@ -261,10 +263,15 @@ function unitPriceOf(inst: ManagedInstrument): { price: number | null; label: 's
   if (cls === 'Equities') return { price: parseNum(d.lastPrice) ?? parseNum(d.price), label: 'share' }
   if (cls === 'Fixed income') {
     if (inst.kind === 'Bond ETF') return { price: parseNum(d.lastPrice), label: 'share' }
-    const clean = parseNum(d.bid) ?? parseNum(d.ask)
+    // A clean price is a percentage of par, never thousands-separated — read
+    // "99.375" as 99.375, not 99,375. parseNum's European-thousands rule
+    // matches any 3-decimal group, so it must not be used here.
+    const clean = parseRate(d.bid) ?? parseRate(d.ask)
     return { price: clean != null ? (clean / 100) * 1000 : null, label: 'bond' }
   }
-  return { price: parseNum(d.price) ?? parseNum(d.minInvestment) ?? parseNum(d.shareValue), label: 'unit' }
+  // A minimum ticket is not a unit price — a fund's share value is. Prefer the
+  // real per-unit figure and fall back to the minimum only if nothing else.
+  return { price: parseNum(d.price) ?? parseNum(d.shareValue) ?? parseNum(d.minInvestment), label: 'unit' }
 }
 
 export function estimate(inst: ManagedInstrument, scores: AxisScores): Estimate {
@@ -379,13 +386,18 @@ const normKey = (s: string | undefined): string =>
     .replace(/[̀-ͯ]/g, '')
     .replace(/[^a-z0-9]/g, '')
 
-// Cached per instrument object — the decomposition only changes when the model
-// changes, and setActivePortfolioModel clears the cache.
-let FACTOR_CACHE = new WeakMap<ManagedInstrument, Decomp>()
+// Cached per instrument object. The decomposition depends on BOTH the portfolio
+// model and the instrument's volatility — and vol comes from the risk-level
+// params, which the admin edits independently. Caching on the instrument alone
+// meant a risk-model edit left stale loadings against a fresh vol² diagonal, so
+// every implied correlation pinned to exactly 1 and the book showed zero
+// diversification until a reload. Keying on vol as well makes it self-healing,
+// and avoids a portfolio.ts ↔ riskLevels.ts import cycle.
+let FACTOR_CACHE = new WeakMap<ManagedInstrument, { vol: number; decomp: Decomp }>()
 
 function decompose(inst: ManagedInstrument, vol: number): Decomp {
   const cached = FACTOR_CACHE.get(inst)
-  if (cached) return cached
+  if (cached && cached.vol === vol) return cached.decomp
 
   const C = ACTIVE_MODEL.correlation
   const d = inst.details
@@ -430,7 +442,7 @@ function decompose(inst: ManagedInstrument, vol: number): Decomp {
     issuer: normKey(d.issuer) || normKey(inst.ticker),
     equity: cls === 'Equities',
   }
-  FACTOR_CACHE.set(inst, out)
+  FACTOR_CACHE.set(inst, { vol, decomp: out })
   return out
 }
 
@@ -460,24 +472,38 @@ export function pairCorrelation(a: Estimate, b: Estimate): number {
 
 // ── Sleeve optimizers (internal weights sum to 1) ────────────────────────────
 function capWeights(w: number[], cap: number): number[] {
+  const n = w.length
+  if (n === 0) return []
   let out = w.map((x) => Math.max(0, x))
   const s = out.reduce((a, b) => a + b, 0)
-  if (s <= 0) return w.map(() => 1 / w.length)
+  if (s <= 0) return w.map(() => 1 / n)
   out = out.map((x) => x / s)
-  for (let iter = 0; iter < 25; iter++) {
-    if (!out.some((x) => x > cap + 1e-9)) break
+
+  // With too few names the cap is arithmetically unreachable — n names can hold
+  // at most n × cap, and if that's under 100% *something* has to exceed it.
+  // Equal weight is the closest feasible book (it minimizes the largest weight),
+  // and it beats silently returning a 100% single-name sleeve.
+  if (cap * n <= 1) return w.map(() => 1 / n)
+
+  for (let iter = 0; iter < 50; iter++) {
     let excess = 0
-    let underSum = 0
+    let headroom = 0
     out = out.map((x) => {
-      if (x > cap) {
+      if (x > cap + 1e-12) {
         excess += x - cap
         return cap
       }
-      underSum += x
+      headroom += cap - x
       return x
     })
-    if (underSum <= 1e-9) break
-    out = out.map((x) => (x < cap ? x + (x / underSum) * excess : x))
+    if (excess <= 1e-12 || headroom <= 1e-12) break
+    // Redistribute by REMAINING HEADROOM (cap − x), not by current weight.
+    // Spreading proportionally to x could never lift a name sitting at exactly
+    // 0 — so when the long-only truncation left one positive name, every other
+    // slot stayed 0, and the trailing renormalize below scaled the lone survivor
+    // straight back to 100%, silently undoing the cap it had just applied.
+    const k = Math.min(1, excess / headroom)
+    out = out.map((x) => (x < cap ? x + k * (cap - x) : x))
   }
   const t = out.reduce((a, b) => a + b, 0) || 1
   return out.map((x) => x / t)
@@ -604,6 +630,9 @@ export function assemblePortfolio(rawHoldings: Holding[], region: Region): Portf
   return { region, sleeves, holdings, expReturn, vol, sharpe, riskLevel: riskBucket(vol), bondStats, classDist, riskDist }
 }
 
+/** Reward per unit of risk — the tie-break when `fit` can't separate two names. */
+const sharpeOf = (e: Estimate): number => (e.vol > 0 ? (e.expReturn - ACTIVE_MODEL.rf) / e.vol : 0)
+
 // Pick + weight the instruments for one class (the suggested book).
 function selectSleeve(
   assetClass: Category,
@@ -618,7 +647,12 @@ function selectSleeve(
   const ceilinged = all.filter((e) => e.riskLevel <= clientLevel + M.levelCeiling)
   const est = (ceilinged.length ? ceilinged : all)
     .slice()
-    .sort((a, b) => b.fit - a.fit)
+    // `fit` reads only risk level + liquidity tier, so across a pool of 50
+    // equities it takes a handful of distinct values and the sort's tie-break
+    // fell through to Firestore document order — i.e. which name made the book
+    // was arbitrary. Break ties on reward-per-unit-risk so the pick is at least
+    // defensible, and deterministic.
+    .sort((a, b) => b.fit - a.fit || sharpeOf(b) - sharpeOf(a) || a.inst.id.localeCompare(b.inst.id))
     .slice(0, Math.max(1, count))
   if (est.length === 0) return []
 
@@ -757,21 +791,42 @@ export function holdingsFromWeights(
 
 // ── Capital → holdings ───────────────────────────────────────────────────────
 export type CapitalLine = { holding: Holding; units: number; cost: number; targetAmount: number; actualWeight: number }
-export type CapitalPlan = { capital: number; lines: CapitalLine[]; invested: number; residual: number; unpriced: Holding[] }
+/** A holding with no unit price: we can still say how much money it should get. */
+export type ManualLine = { holding: Holding; targetAmount: number }
+export type CapitalPlan = {
+  capital: number
+  lines: CapitalLine[]
+  invested: number
+  /** Money the priced lines couldn't absorb because of whole-unit rounding. */
+  residual: number
+  /** Holdings with no unit price, with the amount each is owed. */
+  manual: ManualLine[]
+  /** Total owed to `manual` — real money, not cash left over. */
+  manualTotal: number
+  unpriced: Holding[]
+}
 
 export function allocateCapital(portfolio: Portfolio, capital: number): CapitalPlan {
   const priced = portfolio.holdings.filter((h) => h.unitPrice != null)
   const unpriced = portfolio.holdings.filter((h) => h.unitPrice == null)
-  const wSum = priced.reduce((a, h) => a + h.weight, 0) || 1
 
+  // Each holding is sized at its TRUE weight in the book. Renormalizing over the
+  // priced subset instead would hand the unpriced holdings' money to whoever
+  // happens to have a price — and local Fixed income, local CDs and structured
+  // notes carry no price field at all, so on a local book that silently pushed
+  // most of the client's capital into one or two lines.
   const lines: CapitalLine[] = priced.map((h) => {
     const price = h.unitPrice as number
-    const targetAmount = capital * (h.weight / wSum)
+    const targetAmount = capital * h.weight
     const units = Math.max(0, Math.floor(targetAmount / price))
     return { holding: h, units, cost: units * price, targetAmount, actualWeight: 0 }
   })
+  const manual: ManualLine[] = unpriced.map((h) => ({ holding: h, targetAmount: capital * h.weight }))
+  const manualTotal = manual.reduce((a, l) => a + l.targetAmount, 0)
 
-  let residual = capital - lines.reduce((a, l) => a + l.cost, 0)
+  // Only the priced lines' own budget is available to top up with whole units —
+  // spending the manual holdings' money here is exactly the bug above.
+  let residual = capital - manualTotal - lines.reduce((a, l) => a + l.cost, 0)
   for (let guard = 0; guard < 100000; guard++) {
     let best = -1
     let bestShort = 0
@@ -792,6 +847,16 @@ export function allocateCapital(portfolio: Portfolio, capital: number): CapitalP
   }
 
   const invested = lines.reduce((a, l) => a + l.cost, 0)
-  for (const l of lines) l.actualWeight = invested > 0 ? l.cost / invested : 0
-  return { capital, lines, invested, residual: capital - invested, unpriced }
+  // Share of the WHOLE book, not of the priced part — a line that is 9% of the
+  // portfolio must read 9%, even when half the book has no unit price.
+  for (const l of lines) l.actualWeight = capital > 0 ? l.cost / capital : 0
+  return {
+    capital,
+    lines,
+    invested,
+    residual: capital - manualTotal - invested,
+    manual,
+    manualTotal,
+    unpriced,
+  }
 }

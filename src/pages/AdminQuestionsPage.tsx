@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AXES, useQuestionnaire, type Axis, type Question } from '../lib/questionnaire'
 import { useLang, useT } from '../i18n/i18n'
 import AppNav from '../components/AppNav'
 import AdminNav from '../components/AdminNav'
 
 const textInput =
-  'w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text shadow-soft outline-none transition-shadow placeholder:text-muted/50 focus:ring-2 focus:ring-teal/40'
+  'w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text shadow-soft outline-none transition-shadow placeholder:text-muted focus:ring-2 focus:ring-teal/40'
 const fieldLabel = 'mb-1 block font-mono text-[10px] uppercase tracking-wider text-muted'
 const pickL = (lang: 'en' | 'es', en: string, es: string) => (lang === 'es' ? es : en)
 
@@ -28,7 +28,24 @@ export default function AdminQuestionsPage() {
     useQuestionnaire()
 
   const [drafts, setDrafts] = useState<Draft[]>(() => questions.map(toDraft))
-  useEffect(() => setDrafts(questions.map(toDraft)), [questions])
+  // Reconcile per question, not wholesale. Reordering, adding or deleting
+  // persists immediately and hands back a new array — which, re-seeded blindly,
+  // discarded a Spanish prompt the admin had retyped but not yet saved.
+  const persistedRef = useRef(new Map<string, string>())
+  useEffect(() => {
+    setDrafts((prev) => {
+      const byId = new Map(prev.map((d) => [d.id, d]))
+      return questions.map((q) => {
+        const fresh = toDraft(q)
+        const key = JSON.stringify(fresh)
+        const lastSeen = persistedRef.current.get(q.id)
+        persistedRef.current.set(q.id, key)
+        const existing = byId.get(q.id)
+        if (!existing || lastSeen === undefined || lastSeen !== key) return fresh
+        return existing
+      })
+    })
+  }, [questions])
 
   const patch = (id: string, p: Partial<Draft>) =>
     setDrafts((ds) => ds.map((d) => (d.id === id ? { ...d, ...p } : d)))
@@ -86,7 +103,7 @@ export default function AdminQuestionsPage() {
           <button
             type="button"
             onClick={addQuestion}
-            className="rounded-full bg-teal px-4 py-1.5 text-sm font-semibold text-white shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card"
+            className="rounded-full bg-teal px-4 py-1.5 text-sm font-semibold text-onAccent shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card"
           >
             + {t.adminQuestions.add}
           </button>
@@ -171,7 +188,7 @@ export default function AdminQuestionsPage() {
                 <button
                   type="button"
                   onClick={() => save(d)}
-                  className="rounded-xl bg-teal px-5 py-2 text-sm font-semibold text-white shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card"
+                  className="rounded-xl bg-teal px-5 py-2 text-sm font-semibold text-onAccent shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card"
                 >
                   {t.adminQuestions.save}
                 </button>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ASSET_CLASSES,
   ASSET_CLASS_COLORS,
@@ -23,7 +23,7 @@ const pickL = (lang: 'en' | 'es', en: string, es: string) => (lang === 'es' ? es
 const numInput =
   'rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm text-text tnum shadow-soft outline-none transition-shadow focus:ring-2 focus:ring-teal/40'
 const textInput =
-  'w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text shadow-soft outline-none transition-shadow placeholder:text-muted/50 focus:ring-2 focus:ring-teal/40'
+  'w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text shadow-soft outline-none transition-shadow placeholder:text-muted focus:ring-2 focus:ring-teal/40'
 const fieldLabel = 'mb-1 block font-mono text-[10px] uppercase tracking-wider text-muted'
 
 type Draft = {
@@ -63,7 +63,27 @@ export default function AdminBandsPage() {
   const { config, updateBand, recomputeMix, recomputeLocalMix, reset } = useRiskBands()
 
   const [drafts, setDrafts] = useState<Draft[]>(() => config.bands.map(toDraft))
-  useEffect(() => setDrafts(config.bands.map(toDraft)), [config.bands])
+  // Reconcile ONLY the band that actually changed. Re-seeding every draft off
+  // `config.bands` meant saving band 4 — which produces a fresh array — silently
+  // reverted unsaved edits sitting in bands 1-3, and it also ate anything typed
+  // before the async config load resolved.
+  const persistedRef = useRef(new Map<RiskLevel, string>())
+  useEffect(() => {
+    setDrafts((prev) => {
+      const byLevel = new Map(prev.map((d) => [d.level, d]))
+      return config.bands.map((b) => {
+        const fresh = toDraft(b)
+        const key = JSON.stringify(fresh)
+        const lastSeen = persistedRef.current.get(b.level)
+        persistedRef.current.set(b.level, key)
+        const existing = byLevel.get(b.level)
+        // Unseen band, or its persisted content moved → adopt. Otherwise the
+        // draft in hand is the admin's, and it stays.
+        if (!existing || lastSeen === undefined || lastSeen !== key) return fresh
+        return existing
+      })
+    })
+  }, [config.bands])
 
   const patch = (level: RiskLevel, p: Partial<Draft>) =>
     setDrafts((ds) => ds.map((d) => (d.level === level ? { ...d, ...p } : d)))
@@ -87,7 +107,10 @@ export default function AdminBandsPage() {
     )
     updateBand(d.level, {
       color: d.color,
-      name: { en: d.nameEn.trim() || `Nivel ${d.level}`, es: d.nameEs.trim() || d.nameEn.trim() || `Nivel ${d.level}` },
+      // Persisted per-language defaults — these are stored values, not UI, so
+      // they must NOT follow the current interface language (that would write
+      // "Nivel 3" into the English field).
+      name: { en: d.nameEn.trim() || `Level ${d.level}`, es: d.nameEs.trim() || d.nameEn.trim() || `Nivel ${d.level}` },
       desc: { en: d.descEn.trim(), es: d.descEs.trim() },
       ...(mix.length ? { mix } : {}),
       ...(localMix.length ? { localMix } : {}),
@@ -147,7 +170,7 @@ export default function AdminBandsPage() {
                     {d.level}
                   </span>
                   <h3 className="flex-1 text-base font-semibold text-text">
-                    {pickL(lang, d.nameEn, d.nameEs) || `Nivel ${d.level}`}
+                    {pickL(lang, d.nameEn, d.nameEs) || t.result.level(d.level)}
                   </h3>
                   {range && (
                     <span className="font-mono text-[11px] text-muted tnum">
@@ -169,7 +192,7 @@ export default function AdminBandsPage() {
                     <label className={fieldLabel}>{pickL(lang, 'Color', 'Color')}</label>
                     <input
                       type="color"
-                      aria-label={`Nivel ${d.level} color`}
+                      aria-label={`${t.result.level(d.level)} — ${pickL(lang, 'colour', 'color')}`}
                       className="h-9 w-16 cursor-pointer rounded-lg border border-border bg-surface"
                       value={d.color}
                       onChange={(e) => patch(d.level, { color: e.target.value })}
@@ -232,7 +255,7 @@ export default function AdminBandsPage() {
                   <button
                     type="button"
                     onClick={() => save(d)}
-                    className="rounded-xl bg-teal px-5 py-2 text-sm font-semibold text-white shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card"
+                    className="rounded-xl bg-teal px-5 py-2 text-sm font-semibold text-onAccent shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card"
                   >
                     {t.adminBands.save}
                   </button>

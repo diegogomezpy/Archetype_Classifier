@@ -115,7 +115,7 @@ export default function IntroScreen({ onStart }: Props) {
           type="button"
           onClick={start}
           disabled={!ready}
-          className="mt-4 w-full max-w-sm rounded-2xl bg-teal py-4 text-base font-semibold text-white shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40"
+          className="mt-4 w-full max-w-sm rounded-2xl bg-teal py-4 text-base font-semibold text-onAccent shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {t.intro.start}
         </button>

@@ -54,7 +54,11 @@ export default function AdvisorClientPage() {
   const latestColor = latestLive ? bandColor(latestLive.level) : '#8A8D99'
   const latestName = latestLive ? localizedBand(latestLive.level, lang).name : null
 
-  const handleDelete = (s: SessionRecord) => {
+  // A completed risk profile is not recoverable, and the ✕ sits inside the row's
+  // own click target — one stray click was enough to destroy it. Every other
+  // destructive action in the app confirms; this one now does too.
+  const handleDelete = (s: SessionRecord, label: string) => {
+    if (!window.confirm(t.advisorList.deleteConfirm(label))) return
     void getSessionStore()
       .deleteSession(s.id)
       .then(() => setSessions((prev) => prev?.filter((x) => x.id !== s.id) ?? prev))
@@ -135,8 +139,8 @@ export default function AdvisorClientPage() {
                 type="button"
                 aria-label={t.advisorList.delete}
                 title={t.advisorList.delete}
-                onClick={() => handleDelete(s)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 rounded-lg px-2 py-1.5 text-muted/50 transition-colors hover:bg-red/10 hover:text-red"
+                onClick={() => handleDelete(s, `${band.name} · ${fmtDate(s.createdAt, dateLocale(lang))}`)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 rounded-lg px-2 py-1.5 text-muted transition-colors hover:bg-red/10 hover:text-red"
               >
                 <span aria-hidden>✕</span>
               </button>

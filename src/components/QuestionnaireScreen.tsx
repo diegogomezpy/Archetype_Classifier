@@ -71,7 +71,7 @@ export default function QuestionnaireScreen({ questions, answers, onAnswer, onSu
                 aria-label={q.prompt[lang]}
                 className="mt-4 grid grid-cols-5 gap-1.5 sm:gap-2"
               >
-                {scale.map((s) => {
+                {scale.map((s, si) => {
                   const active = current === s.value
                   return (
                     <button
@@ -79,6 +79,25 @@ export default function QuestionnaireScreen({ questions, answers, onAnswer, onSu
                       type="button"
                       role="radio"
                       aria-checked={active}
+                      // Roving tabIndex + arrow keys, as a radiogroup is meant to
+                      // work: one tab stop per question instead of five, and the
+                      // arrows actually move the choice. Without this a 12-item
+                      // form was 60 tab stops and arrow keys did nothing — on the
+                      // only screen the end client ever touches.
+                      tabIndex={active || (current == null && si === 0) ? 0 : -1}
+                      onKeyDown={(e) => {
+                        const delta = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1
+                          : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1
+                          : 0
+                        if (!delta) return
+                        e.preventDefault()
+                        const next = scale[(si + delta + scale.length) % scale.length]
+                        onAnswer(q.id, next.value)
+                        const group = e.currentTarget.parentElement
+                        const btns = group?.querySelectorAll('button')
+                        const idx = (si + delta + scale.length) % scale.length
+                        ;(btns?.[idx] as HTMLElement | undefined)?.focus()
+                      }}
                       onClick={() => onAnswer(q.id, s.value)}
                       className={`flex min-h-[3.75rem] flex-col items-center justify-center gap-1 rounded-xl border px-1 py-2 text-center transition-all duration-150 ${
                         active
@@ -121,7 +140,7 @@ export default function QuestionnaireScreen({ questions, answers, onAnswer, onSu
             type="button"
             onClick={onSubmit}
             disabled={!complete}
-            className="shrink-0 rounded-2xl bg-teal px-6 py-3 text-sm font-semibold text-white shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
+            className="shrink-0 rounded-2xl bg-teal px-6 py-3 text-sm font-semibold text-onAccent shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
           >
             {t.questionnaire.submit}
           </button>

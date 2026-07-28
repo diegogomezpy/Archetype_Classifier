@@ -19,12 +19,16 @@ type Props = {
 // Volatility (x) vs expected return (y), one dot per holding, colored by class.
 // Pure SVG so it stays self-contained and theme-aware (axis chrome via CSS vars).
 export default function RiskReturnScatter({ points, region, title, xLabel, yLabel }: Props) {
-  const W = 520
-  const H = 320
-  const padL = 44
-  const padR = 16
-  const padT = 16
-  const padB = 40
+  // The chart renders at ~380px inside the dashboard's 1.3fr slot, so a 520-wide
+  // viewBox scaled 10px ticks down to ~7px — smaller than any other type in the
+  // app. A tighter box means less downscaling, and the type below is sized for
+  // the box rather than for a full-width canvas.
+  const W = 360
+  const H = 240
+  const padL = 38
+  const padR = 12
+  const padT = 14
+  const padB = 34
 
   const xs = points.map((p) => p.vol * 100)
   const ys = points.map((p) => p.ret * 100)
@@ -48,14 +52,14 @@ export default function RiskReturnScatter({ points, region, title, xLabel, yLabe
         {yTicks.map((t) => (
           <g key={`y${t}`}>
             <line x1={padL} y1={py(t)} x2={W - padR} y2={py(t)} stroke="rgb(var(--c-hairline))" strokeWidth={1} />
-            <text x={padL - 6} y={py(t) + 3} textAnchor="end" className="fill-muted" fontSize={10} fontFamily="ui-monospace, monospace">
+            <text x={padL - 6} y={py(t) + 3} textAnchor="end" className="fill-muted" fontSize={11} fontFamily="ui-monospace, monospace">
               {Math.round(t)}
             </text>
           </g>
         ))}
         {/* x ticks */}
         {xTicks.map((t) => (
-          <text key={`x${t}`} x={px(t)} y={H - padB + 14} textAnchor="middle" className="fill-muted" fontSize={10} fontFamily="ui-monospace, monospace">
+          <text key={`x${t}`} x={px(t)} y={H - padB + 15} textAnchor="middle" className="fill-muted" fontSize={11} fontFamily="ui-monospace, monospace">
             {t}
           </text>
         ))}
@@ -64,7 +68,7 @@ export default function RiskReturnScatter({ points, region, title, xLabel, yLabe
 
         {/* points */}
         {points.map((p) => (
-          <circle key={p.id} cx={px(p.vol * 100)} cy={py(p.ret * 100)} r={5.5} fill={colorForCategory(p.assetClass, region)} fillOpacity={0.85}>
+          <circle key={p.id} cx={px(p.vol * 100)} cy={py(p.ret * 100)} r={4.5} fill={colorForCategory(p.assetClass, region)} fillOpacity={0.85}>
             <title>{`${p.name} · ${(p.vol * 100).toFixed(1)}% vol · ${(p.ret * 100).toFixed(1)}% ret`}</title>
           </circle>
         ))}

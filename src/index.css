@@ -20,7 +20,18 @@
   /* ink */
   --c-text: 28 36 31;
   --c-text-muted: 92 99 91;
-  --c-text-faint: 140 145 137;
+  --c-text-faint: 112 118 110;   /* 4.6:1 on surface — was 140 145 137 (3.2:1) */
+  /* ink for text/icons sitting ON a filled accent or semantic ground */
+  --c-on-accent: 255 254 251;
+  /* Risk ladder 1–5. Used as INK on its own ~13% wash, so the light values are
+     darkened until they clear 4.5:1 against that composite; dark mode keeps the
+     brighter set, which is already legible on the dark ground. One definition —
+     the advisor chips, the admin risk model and the portfolio tiles all read it. */
+  --c-level-1: 22 116 82;   /* 4.60:1 as ink on its own 15% wash */
+  --c-level-2: 76 111 33;   /* 4.71:1 */
+  --c-level-3: 128 97 15;   /* 4.64:1 */
+  --c-level-4: 158 84 22;   /* 4.53:1 */
+  --c-level-5: 168 55 55;   /* 5.05:1 */
   /* lines */
   --c-border: 230 225 213;
   --c-border-strong: 212 205 189;
@@ -57,7 +68,13 @@
   --c-surface-hover: 35 44 36;
   --c-text: 238 241 234;
   --c-text-muted: 154 164 155;
-  --c-text-faint: 107 117 108;
+  --c-text-faint: 134 144 135;   /* 4.6:1 on surface — was 107 117 108 (3.6:1) */
+  --c-on-accent: 10 26 20;
+  --c-level-1: 79 200 156;
+  --c-level-2: 158 208 106;
+  --c-level-3: 232 200 90;
+  --c-level-4: 232 152 86;
+  --c-level-5: 232 116 116;
   --c-border: 42 51 44;
   --c-border-strong: 58 69 60;
   --c-hairline: 35 44 36;
@@ -114,75 +131,6 @@ h3 {
   font-variant-numeric: tabular-nums;
 }
 
-/* ── THE REGISTER — helpers ────────────────────────────────────────────────
-   Figures in mono + tabular; units split small + muted; deltas signed +
-   coloured (viridian up / claret down); eyebrows mono uppercase. */
-.fig {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: 'tnum' 1;
-}
-.fig-unit {
-  font-style: normal;
-  font-size: 0.6em;
-  color: rgb(var(--c-text-faint));
-  margin-left: 1px;
-}
-.delta-pos {
-  color: rgb(var(--c-accent));
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-}
-.delta-neg {
-  color: rgb(var(--c-red));
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-}
-.eyebrow {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgb(var(--c-text-faint));
-}
-
-/* ── ledger table — heavy header rule, hairline rows + vertical rules ──────── */
-.ledger {
-  width: 100%;
-  border-collapse: collapse;
-}
-.ledger th {
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: rgb(var(--c-text-faint));
-  text-align: left;
-  padding: 9px 12px;
-  border-bottom: 1.5px solid rgb(var(--c-text));
-}
-.ledger td {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  font-size: 13px;
-  color: rgb(var(--c-text));
-  padding: 9px 12px;
-  border-bottom: 1px solid rgb(var(--c-hairline));
-}
-.ledger th + th,
-.ledger td + td {
-  border-left: 1px solid rgb(var(--c-hairline));
-}
-.ledger td.num,
-.ledger th.num {
-  text-align: right;
-}
-.ledger tr:last-child td {
-  border-bottom: none;
-}
-
 /* ── graph-paper ground — apply to the app shell behind the panels ────────── */
 .ground {
   background-color: rgb(var(--c-bg-elev));
@@ -210,74 +158,6 @@ h3 {
   background: transparent;
 }
 
-/* PayoffBar allocation slider — native range styled to match the brand.
-   Left end = X (viridian), right end = Y (ochre). */
-.payoff-range {
-  -webkit-appearance: none;
-  appearance: none;
-  height: 28px;
-  background: transparent;
-  cursor: pointer;
-  outline: none;
-}
-.payoff-range::-webkit-slider-runnable-track {
-  height: 12px;
-  border-radius: 9999px;
-  background: linear-gradient(
-    90deg,
-    rgb(var(--c-accent) / 0.34) 0%,
-    rgb(var(--c-accent) / 0.12) 30%,
-    rgb(var(--c-surface-2)) 50%,
-    rgb(var(--c-amber) / 0.16) 70%,
-    rgb(var(--c-amber) / 0.36) 100%
-  );
-}
-.payoff-range::-moz-range-track {
-  height: 12px;
-  border-radius: 9999px;
-  background: linear-gradient(
-    90deg,
-    rgb(var(--c-accent) / 0.34) 0%,
-    rgb(var(--c-accent) / 0.12) 30%,
-    rgb(var(--c-surface-2)) 50%,
-    rgb(var(--c-amber) / 0.16) 70%,
-    rgb(var(--c-amber) / 0.36) 100%
-  );
-}
-.payoff-range::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 24px;
-  height: 24px;
-  margin-top: -6px;
-  border-radius: 9999px;
-  background: rgb(var(--c-surface));
-  border: 1px solid rgb(var(--c-border-strong));
-  box-shadow: var(--shadow-thumb);
-}
-.payoff-range::-moz-range-thumb {
-  width: 24px;
-  height: 24px;
-  border-radius: 9999px;
-  background: rgb(var(--c-surface));
-  border: 1px solid rgb(var(--c-border-strong));
-  box-shadow: var(--shadow-thumb);
-}
-.payoff-range:focus-visible::-webkit-slider-thumb {
-  box-shadow: 0 0 0 4px var(--ring);
-}
-.payoff-range:focus-visible::-moz-range-thumb {
-  box-shadow: 0 0 0 4px var(--ring);
-}
-/* Untouched: hide the thumb until the player makes their first move, so the
-   slider can't suggest a pre-set default (which would anchor the answer). */
-.payoff-range--untouched::-webkit-slider-thumb {
-  opacity: 0;
-}
-.payoff-range--untouched::-moz-range-thumb {
-  opacity: 0;
-}
-
 /* ---- Entrance animations ---- */
 @keyframes fadeSlideUp {
   from {
@@ -303,42 +183,14 @@ h3 {
   }
 }
 
-/* 300ms fade for the game -> dashboard transition */
+/* 300ms fade for view transitions */
 .animate-fade-300 {
   animation: fadeIn 0.3s ease-out both;
 }
 
-/* Round transitions */
-.round-enter {
-  animation: fadeSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-/* Skeleton shimmer (determinate loading, no spinners) */
-.skeleton {
-  border-radius: 6px;
-  background: linear-gradient(
-    90deg,
-    rgb(var(--c-surface-2)) 25%,
-    rgb(var(--c-surface-hover)) 37%,
-    rgb(var(--c-surface-2)) 63%
-  );
-  background-size: 800px 100%;
-  animation: shimmer 1.4s linear infinite;
-}
-@keyframes shimmer {
-  0% {
-    background-position: -400px 0;
-  }
-  100% {
-    background-position: 400px 0;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-slide-up,
-  .animate-fade-300,
-  .round-enter,
-  .skeleton {
+  .animate-fade-300 {
     animation: none;
   }
   * {
@@ -358,7 +210,7 @@ h3 {
     margin: 14mm;
   }
 
-  /* Preserve the brand hex colors (donut, fit bars, accents) in the PDF. */
+  /* Preserve accent colours in the PDF. */
   * {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
@@ -373,33 +225,10 @@ h3 {
     display: none !important;
   }
 
-  /* Stack the advisor/client two-panel grid for the report. */
-  .print-report-grid {
-    display: block !important;
-    max-width: none !important;
-  }
-  .print-report-grid > * {
-    border: none !important;
-    background: transparent !important;
-  }
-
   /* Avoid awkward breaks mid-section. */
   section,
   .print-avoid-break {
     break-inside: avoid;
     page-break-inside: avoid;
   }
-
-  /* Swap the interactive tabs for the flattened, stacked print version. */
-  .print-only {
-    display: block !important;
-  }
-  .screen-only {
-    display: none !important;
-  }
-}
-
-/* Print-only blocks are hidden on screen until @media print reveals them. */
-.print-only {
-  display: none;
 }
