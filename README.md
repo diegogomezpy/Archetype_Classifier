@@ -1,346 +1,420 @@
 # Investor Profile
 
-A gamified investor risk-profiling web app. The client makes a series of quick
-investment decisions, and the app builds a behavioral risk profile from those
-choices — classifying them into one of five investor archetypes and producing
-an advisor-facing dashboard with a suggested asset allocation and a ranked list
-of fitting instruments.
+An investor risk-profiling and portfolio-construction tool for a Paraguayan
+brokerage. A client answers a short questionnaire; the app places them on two
+axes, assigns a **1–5 risk band**, and hands their advisor a workspace that
+builds, edits and sizes a real portfolio from a curated instrument catalog.
 
-Built as a single-page app with **React + TypeScript + Vite + Tailwind CSS +
-React Router** — no external UI libraries.
+Three surfaces, one app:
+
+- **Client test** — the questionnaire, and the client's own result.
+- **Advisor** — the workspace: a suggested book, drag-and-drop editing,
+  re-optimization, and a buy ticket sized to a capital amount.
+- **Admin** — the instrument catalog, the screener that decides what advisors
+  may see, and every knob behind the scoring and the optimizer.
+
+Built as a single-page app with **React 18 + TypeScript + Vite + Tailwind CSS +
+React Router**, plus a **Node + Hono + Firestore** backend that also serves the
+built frontend. No external UI libraries.
 
 The visual language is the **Mercator design system** (warm paper, ink, a deep
 viridian accent, and three type voices — Source Serif 4 titles / Hanken Grotesk
 UI / IBM Plex Mono figures — on a faint graph-paper ground), with a **light/dark
-theme** toggled bottom-left. Colours live as RGB-triplet CSS variables in
-`src/index.css` (light + dark under `[data-theme]` on `<html>`); the Tailwind
-config maps its colour tokens to those variables so a single attribute flip
-re-themes the whole app and every opacity modifier keeps working. The source
-package sits in `mercator_design_system/`.
+theme**. Colours live as RGB-triplet CSS variables in `src/index.css` (light +
+dark under `[data-theme]` on `<html>`); `tailwind.config.js` maps its colour
+tokens to those variables, so one attribute flip re-themes the whole app and
+every `/15`-style opacity modifier keeps working. The source package sits in
+`mercator_design_system/`.
 
-## Localization
+---
 
-The whole app is bilingual **English / Spanish** — a fixed toggle (bottom-right)
-switches live and persists in `localStorage`; the default follows the browser
-language. The i18n layer is dependency-free (`src/i18n/`): UI chrome strings
-live in typed tables (`strings.ts`), while content translations (round cards,
-archetype copy, asset-class labels, advisor talking points) are layered over
-the English data files at render time (`content.ts`, `advisorCopy.ts`) — the
-scoring engine only ever sees ids, probabilities, and amounts, so language has
-zero effect on results. Dollar amounts keep en-US formatting in both languages.
+## How the profile works
+
+**Two axes, not a personality.** The client rates a handful of statements on a
+5-point agree/disagree scale (`src/lib/questionnaire.ts`). Each statement feeds
+exactly one axis, with a direction saying whether agreeing raises or lowers it:
+
+| Axis | Meaning |
+|---|---|
+| `riskAversion` | Tolerance for volatility and drawdown |
+| `liquidity` | How much access to the money the client needs |
+
+`riskAversion` alone maps to a **fixed 1–5 risk band** via `BAND_THRESHOLDS`
+(`src/lib/scoring.ts`) — `liquidity` never moves it. Liquidity instead feeds
+per-instrument **fit** (weighted 0.35 against risk-match's 0.65), so a client who
+needs access to their money isn't handed locked-up paper. It also feeds
+`computeAllocation`, which *seeds* each band's model mix and backs the "recompute
+from profile" button on the bands page — but once a mix is saved, the band's
+stored preset is what the optimizer uses.
+
+The questions, the bands, the risk model and the portfolio model are **all
+admin-editable at runtime and persisted server-side**. Advisor views never trust
+a session's stored classification: they re-derive it from the stored *answers*
+(`reclassifyScores`), so an admin's edit is reflected immediately on every
+existing session.
+
+---
+
+## How the portfolio is built
+
+The band fixes the **% per asset class**. Optimization happens *within* each
+class. All of it is admin-editable at `#/admin/portfolio`.
+
+**Expected return.** Equities blend analyst price-target upside with a CAPM
+estimate (`rf + β × ERP`); bonds use yield-to-worst; local instruments use the
+bulletin's estimated yield.
+
+**Volatility** comes from implied vol, or from duration + credit rating.
+
+**Correlation is a four-factor model, not one number per class pair.** Every
+instrument's volatility is decomposed onto four common factors — **global
+equity, rates, credit, and the local (Guaraní) market** — plus an idiosyncratic
+remainder. Two instruments correlate because they load on the same factors:
+
+- **equity** loading = `β × market vol` for a listed share
+- **rates** loading = `modified duration × rate vol` — so *duration*, not asset
+  class, decides how much two bonds co-move
+- **credit** loading = the vol implied by the credit rating
+- **local** — local instruments sit on their own factor; Guaraní rates are not
+  US rates
+
+`cov(i,j) = LᵢᵀΦLⱼ + residual·idioᵢ·idioⱼ`, where the residual covers same
+*issuer* (a company's bond against its stock) and same *sector* between two
+equities. Loadings are rescaled so `cov(i,i) === vol²` exactly. Φ is forced
+positive-definite by a Sylvester-criterion check that shrinks the off-diagonals
+toward independence, so no admin input can hand the optimizer an unsolvable
+matrix.
+
+A 3-year A-rated bond and a 20-year Treasury come out at **0.60**, two 20-year
+Treasuries at **0.95**, two same-sector equities **0.62**, cross-sector **0.37**,
+equity against a Treasury **−0.09**. Under a flat model every one of those was
+0.7 or 0.2.
+
+**Weights.** Equities use max-Sharpe MVO: `w ∝ Σ⁻¹(μ − rf)` solved by Gaussian
+elimination on the full covariance matrix with a ridge, long-only and per-name
+capped. Bonds reward yield against the band's duration target. Funds and notes
+are weighted by proximity to the client's level.
+
+**Book size is one number.** `totalAssets` — how many instruments the suggested
+portfolio holds altogether — is apportioned across the classes the band
+allocates to by largest remainder, so a 76/24 band draws 76% of its names from
+bonds. Every active class keeps a floor of one name.
+
+---
 
 ## Routes
 
-Hash-based routing (works on static hosting with no server rewrites):
+Hash-based routing (works on static hosting with no server rewrites).
 
 | Route | Audience | What |
-|-------|----------|------|
-| `#/` | Client (public) | The 10-round test. Client enters their name and picks their advisor, then gets their archetype + brief description only. Completing it saves a session. |
-| `#/advisor` | Advisor | A one-click "Who are you?" picker → that advisor's clients, each with their play history. |
-| `#/advisor/client/:clientId` | Advisor | One client's session history, newest first (replays accumulate here). |
-| `#/advisor/session/:id` | Advisor | One session's dashboard: classification, allocation, and recommended instruments with per-asset detail drill-down. Strictly advisor-facing. |
-| `#/admin` | Admin | Instrument catalog console: curate everything offerable to clients — risk vectors (σ/α/λ), visibility, "house pick" emphasis, and per-asset-class details. Bulk-load from a CSV/Bloomberg export, or (local) auto-parse the Cadiem bulletin PDF. |
-| `#/admin/archetypes` | Admin | Archetype console: edit the classification shape vectors (Banker/Venture/Insurer) and each archetype's recommended model asset mix. |
-| `#/admin/risk` | Admin | Risk model: the σ/α/λ auto-derivation coefficients used on import (global base per asset class, local base + per-credit-risk sensitivity, the credit-rating → risk-factor table, and equity β sensitivity). Editable and persisted; drives every subsequent import. |
-| `#/admin/advisors` | Admin | Advisor accounts: create the advisors clients pick from (just names). |
+|---|---|---|
+| `#/` | Client | The questionnaire. Client enters their name, picks their advisor, answers, and sees their band + description only. |
+| `#/advisor` | Advisor | One-click "Who are you?" picker → that advisor's clients. |
+| `#/advisor/client/:clientId` | Advisor | One client's session history, newest first. |
+| `#/advisor/session/:id` | Advisor | **The workspace.** Metrics, risk/return scatter, class mix, the editable book, and the buy ticket. |
+| `#/admin` | Admin | Instrument catalog: CRUD, per-class detail sheets, market-data autofill, CSV import, Cadiem bulletin PDF parsing, document attachments. |
+| `#/admin/screener` | Admin | **Screen any class by its own traits, then publish that subset to advisors.** |
+| `#/admin/questions` | Admin | The questionnaire statements, their axis and direction. |
+| `#/admin/bands` | Admin | The five bands: name, colour, and the global + local model mixes. |
+| `#/admin/risk` | Admin | How an instrument gets its 1–5 level (class base, credit-rating adjust, vol ladder). |
+| `#/admin/portfolio` | Admin | The optimizer: rf, ERP, analyst blend, name cap, book size, level ceiling, per-band duration, and all 13 correlation params. |
+| `#/admin/advisors` | Admin | Advisor accounts (names only). |
 
-A consistent top nav (**Client test · Advisor · Admin**) sits on every screen
-except mid-game. Everything (sessions, instrument catalog, archetype config,
-advisors, clients) is persisted **server-side in Firestore** via the backend API
-(`server/`), reached through a thin client (`src/lib/api.ts`) behind the same
-store interfaces (`src/lib/storage.ts`, `src/lib/catalog.tsx`,
-`src/lib/archetypeConfig.tsx`, `src/lib/directory.tsx`). So data is shared across
-devices and browsers — an admin's edits and a client's sessions show up
-everywhere, not just on the machine that made them. Only two things stay
-device-local (`localStorage`): the language toggle and the advisor picker's
-"who am I on this device" selection. The drawn game P&L is deliberately **not**
-persisted — it's an engagement mechanic, not profile data.
+---
+
+## The advisor workspace
+
+The core loop: pick a client → read the suggested book → edit it → size the
+ticket.
+
+- **Headline metrics** on one line: expected return, volatility, return/risk,
+  portfolio risk 1–5, average modified duration.
+- **Editable holdings table** — per-row weight (decimals supported), remove, and
+  a click-through to a full client-ready instrument report.
+- **`ASSETS − 11/14 +`** — realized over requested. The optimizer can zero a name
+  out, so the book is often smaller than the number asked for.
+- **Re-optimize** re-weights exactly the names the advisor kept: the band mix
+  applied to the classes present, renormalized to 100%, with no level ceiling
+  since the advisor chose them deliberately.
+- **Scale to 100%** appears only when the total drifts.
+- **Build the ticket** turns a capital amount into whole units. Holdings with no
+  unit price (local fixed income, CDs, structured notes carry no price field)
+  still appear, marked `BY HAND` with the amount they're owed — their share is
+  never silently handed to whichever line happens to have a price.
+
+Capital is tracked **per region**, because $100,000 and ₲100.000 are not the
+same order of magnitude and there is no FX source in the app.
+
+---
+
+## The screener
+
+Advisors only ever see instruments flagged `visible`. The screener *is* that
+flag, exposed as a filter.
+
+Every class in both regions has a screen (`SCREENS` in `src/lib/traits.ts`) —
+global equities / fixed income / structured notes, and local fixed income /
+equities / CDs / mutual funds / investment funds — each filtering on the fields
+that class actually carries:
+
+- **Global equities** — price-target upside, buy-rated %, analysts covering,
+  1-year change, β, implied vol, P/E, forward P/E, dividend yield, market cap
+- **Global fixed income** — YTM, yield-to-call, coupon, duration, years to
+  maturity, ETF yield, expense ratio, credit rating
+- **Structured notes** — coupon/premium, barrier, autocall, participation, cap,
+  capital protected, term, issuer rating
+- **Local** — estimated yield, residual term, rating, unit price, minimum
+
+Credit ratings are ordinal, so they render as a single "at least AA" select
+rather than a pair of meaningless ladder indices. Local Paraguayan ratings carry
+a country suffix (`AAApy`, `AA-py`) which is stripped before ranking.
+
+A trait an instrument has **no value for fails a bounded filter** — screening on
+"upside over 20%" must not quietly admit names with no analyst coverage at all.
+
+---
+
+## Instrument catalog
+
+Global classes: **Fixed income · Equities · Structured notes**.
+Local (Cadiem menu) categories: **Fixed income · Equities · CDs · Mutual funds ·
+Investment funds**.
+
+Each class splits into **subclasses** (`instrument.kind`) that gate which detail
+fields show and whether market data can autofill them — a floating-rate note
+shows its reference rate and spread, a TIPS shows breakeven inflation, a plain
+fixed-rate bond shows neither. Global fixed income is a superset: bond **ETFs**
+autofill from a ticker, while **individual bonds** mirror the broker's "Listado
+de Bonos" columns 1:1 (ISIN, issuer, sector, country, bid, ask, YTM bid/ask,
+coupon, duration, maturity, rating, YTC, next call).
+
+The catalog **starts empty** — the admin builds it up.
+
+**Autofill.** The admin enters a ticker or ISIN and hits Fetch. The browser posts
+to the backend (`POST /api/market-data`), which fetches server-side — no keys or
+CORS in the browser. Equities and ETFs come from **Yahoo Finance**
+(`yahoo-finance2`, keyless): description, price, 1-year change, 52-week range,
+volume, market cap, dividend yield, P/E, β, analyst consensus, and ATM ~3-month
+implied vol from the option chain.
+
+> Yahoo's default host (`query2`) returns **429 for Google Cloud IPs**, so the
+> server routes calls to `query1` with a browser `User-Agent`. See the note in
+> `server/src/marketData.ts`.
+
+Fetched fields are formatted (compact `$1.2T`, signed `+38.4%`) and merged
+non-destructively — a fetch never blanks a field the admin already filled, and
+never touches the research firm's `rationale`.
+
+**Bulk import.** Per-class CSV templates, a Bloomberg-export dictionary, and a
+PDF parser for the local bulletin. Failed market-data fetches are reported, not
+swallowed.
+
+---
+
+## Localization
+
+The whole app is bilingual **English / Spanish**, toggled live and persisted in
+`localStorage`, defaulting to the browser language.
+
+- UI chrome lives in typed tables (`src/i18n/strings.ts`). `en` and `es` must
+  match key-for-key — `es` is typed as `UIStrings`, so a missing key is a
+  compile error.
+- Spanish uses **voseo** (*poné, indicá, elegí, agregá, volvé*), matching
+  Paraguayan usage — not tú, not usted.
+- **Fetched free text is translated too.** Company descriptions and sector names
+  arrive from Yahoo in English and are translated once via MyMemory (free,
+  keyless) and cached alongside the English under `<key>Es`. So switching to
+  Spanish localizes the *data*, not just the chrome.
+
+MyMemory's quota is **per IP per day**, and a bulk import can exhaust it partway
+— leaving rows permanently English, since a re-fetch only re-translates when the
+*source* text changes. So the backfill sweep runs itself: at boot, coalesced
+after catalog writes, and at the end of the daily refresh. That last one is what
+guarantees convergence, because it runs inside a real request (Cloud Run only
+allocates CPU then) and lands each morning on a fresh quota.
+
+Numbers follow the region: `es-PY` groups with periods (₲1.050), `en-US` with
+commas.
+
+---
+
+## Data & persistence
+
+Everything — sessions, catalog, advisors, clients, and all four config
+documents — is persisted **server-side in Firestore** through the backend API,
+reached by a thin client (`src/lib/api.ts`) behind store interfaces
+(`storage.ts`, `catalog.tsx`, `directory.tsx`, `bandConfig.tsx`,
+`riskLevelsConfig.tsx`, `portfolioModelConfig.tsx`). Data is shared across
+devices and browsers.
+
+Only two things stay device-local: the language toggle and the advisor picker's
+"who am I on this device".
+
+Providers distinguish **loading**, **failed** and **empty** — a backend outage
+renders as "could not reach the server" with a retry, never as the confident lie
+"there are no advisors yet".
 
 ### Advisor & client linking
 
-**No logins (MVP).** The admin console is open, and an advisor "signs in" by
-clicking their name on the Advisor tab (remembered on the device; "Switch
-advisor" to change). Admins create advisors (name only). When a client plays,
-they enter their name and pick their advisor, which links the session to both.
-**Replays re-link to the same client** — a client is matched by (advisor +
-normalized name), and the browser also remembers the last client for a one-tap
-"continuing as…" on the intro. Each advisor's tab shows only their own clients.
+**No logins (MVP).** The admin console is open; an advisor "signs in" by clicking
+their name (remembered on the device). Clients enter their name and pick their
+advisor, which links the session to both. Replays re-link to the same client,
+matched on (advisor + normalized name).
 
-> **Note.** This is MVP-grade scoping, not security. Data now lives server-side
-> in Firestore, but the API is open (no auth) and the advisor "login" is just an
-> unverified device-local pick — anyone who reaches the API or the admin console
-> can read or change anything. Real enforcement (authenticated advisors,
-> server-checked ownership) is deliberately deferred until the product is
+> **This is MVP-grade scoping, not security.** The API is open and the advisor
+> "login" is an unverified device-local pick — anyone who reaches the API or the
+> admin console can read or change anything. Authenticated advisors and
+> server-checked ownership are deliberately deferred until the product is
 > validated.
 
-### Admin-configurable engine
-
-The archetype **shape vectors** and the per-archetype **model asset mix** are
-admin-editable at runtime, not hardcoded — and **any admin change is reflected
-immediately on every advisor dashboard**. Advisor views never trust a session's
-stored classification: they re-derive it from the session's stored *scores*
-(`reclassifyScores`, `src/lib/scoring.ts`) against the current shape vectors, and
-render the archetype's current model mix. Scores are language- and
-vector-independent (they come only from the client's answers), so a saved session
-always shows the current call. Each archetype's asset mix is an explicit model
-portfolio, seeded from the allocation engine (`computeAllocation`) so defaults
-match prior behavior, then editable and normalized to 100%. The offline scoring
-harnesses (`scripts/`) never call `setActiveShapeVectors`, so they validate
-against the built-in defaults unchanged.
-
-### Instrument catalog & asset details
-
-Every instrument carries, besides its identity and risk vector, a per-class
-detail sheet (defined in `ASSET_FIELD_SPECS`, `src/lib/catalog.tsx`) that the
-admin curates and the advisor sees when drilling into a recommendation:
-
-- **Equities** — type (stock/ETF), sector or index tracked, exchange, last
-  price, 1-year change, 52-week range, average volume, market cap/AUM,
-  dividend yield, P/E (stocks), expense ratio (ETFs), beta, ATM 3M implied vol
-- **Fixed income** — issuer, coupon rate & frequency, maturity, duration,
-  yield to maturity, credit rating, minimum investment, currency
-- **Income structures** — underlying(s), coupon/premium, protection barrier,
-  autocall level, observation frequency, maturity, issuer & rating, capital
-  protection, worst-case scenario
-- **Growth structures** — underlying(s), participation rate, upside cap,
-  protection level, maturity, issuer & rating, worst-case scenario
-- **Alternatives** — underlying exposure, expense ratio, distribution yield,
-  average volume, diversification role
-- **Crypto** — last price, 1-year change, market cap, average volume,
-  custody/wrapper form, ATM 3M implied vol, volatility/drawdown note
-- **Cash/MMF** — current yield, average maturity, minimum investment, expense
-  ratio
-
-The catalog **starts empty** — the admin builds it up from scratch. (A bundled
-sample set still lives in `src/lib/instruments.ts` / `src/data/instrumentDetails.ts`
-for reference, but it is no longer auto-seeded.) Admins add, edit, hide, and
-emphasize instruments; a **visibility filter** (All / Visible / Hidden) plus a
-per-row "visible to advisors" checkbox manage what clients can be offered, and
-**"Delete filtered (N)"** bulk-deletes the current selection behind a
-type-the-word confirmation.
-
-**Autofill.** When adding an instrument, the admin enters a ticker (or ISIN) and
-hits "Fetch data". The browser posts the identity to the backend
-(`POST /api/market-data`), which does the fetching server-side (`server/src/marketData.ts`) —
-no keys or CORS limits in the browser. The client side (`src/lib/marketData.ts`)
-is just a thin call to that endpoint:
-
-- **Equities/ETFs → Yahoo Finance** (`yahoo-finance2`, keyless) — description,
-  price, 1-year change, 52-week range, volume, market cap, dividend yield, P/E,
-  beta, and **ATM ~3-month implied vol** from the option chain. Yahoo's default
-  data host (`query2`) returns 429 for Google Cloud IPs, so the server routes
-  calls to `query1` with a browser `User-Agent` (see the note in
-  `server/src/marketData.ts`) — that mirrors the working crumb request and gets
-  past the block.
-- **Crypto → CoinGecko + Deribit** (both keyless) — CoinGecko fills last price,
-  1-year change, market cap, and volume; **Deribit DVOL** fills crypto ATM
-  implied vol.
-
-Fetched fields are formatted (compact `$1.2T`, signed `+38.4%`) and merged
-non-destructively — a fetch never blanks a field the admin already filled.
-
-**What stays manual:** bond/structured-product reference data (coupon, rating,
-barriers — OTC desk data with no free API). Those fields are in the schema and
-editable, just not auto-fillable.
-
-## How it works
-
-The profiler runs as a **10-round game across two screens** (a brief halfway
-interstitial sits between them — rounds 1–5 on screen 1, rounds 6–10 on screen
-2). Every round is an allocation slider: the client splits $10,000 between two
-sides. The **Growth** side (`X`) is always the more aggressive / higher-variance
-/ skew-seeking option; the **Anchor** side (`Y`) is the calmer one. Outcomes are
-framed as gains/losses vs. the $10,000 input.
-
-### Paired, all-mismatched design
-
-The ten rounds are **5 payoff-shape contrasts × 2**. Every round has a slightly
-richer side (one side's average outcome is higher, by ~$200–350 — the gap is
-never stated). Each contrast is tested twice, with the **richer side flipped**:
-
-- the **"a"** round (screen 1) makes the aggressive **Growth** side the richer one;
-- the **"b"** round (screen 2) makes the calm **Anchor** side the richer one.
-
-The five contrasts are variance, skew, loss aversion, combined risk profile, and
-lottery (long-shot) skew. Scoring then separates two things cleanly:
-
-- **Shape** (σ, α, λ) — the *average* of a pair. The EV pull points opposite ways
-  in the two rounds, so it cancels; what's left is the player's payoff-shape taste.
-- **EV-discipline** (ev) — the *difference* within a pair. A pure-shape player
-  answers both rounds the same way (ev cancels); a player who chases the richer
-  side splits them (ev accumulates).
-
-After locking in each round, the app **draws one real outcome** from the
-player's chosen distribution (a spinning pointer lands on a segment, and the
-segment *is* the result) and adds it to a running total — a single,
-non-re-rollable draw per round, surfaced as "Your run" on the dashboard. The
-draw is purely for engagement; the profile is scored only from the *choices*.
-
-### The four dimensions
-
-| Dimension | Meaning |
-|-----------|---------|
-| **σ (sigma)** | Variance tolerance |
-| **α (alpha)** | Skew preference (taste for positive vs. negative skew) |
-| **λ (lambda)** | Loss aversion |
-| **ev** | EV-discipline (chases the higher expected value vs. a preferred shape) |
-
-σ and α are read from signed slider weights (see `ROUND_SCORES` in `scoring.ts`).
-**ev** is read from each round's actual EV gap (`evGap`): leaning toward the
-richer side accumulates `ev`, weighted by how much richer that side is, so
-bigger-gap rounds count more. **λ is handled differently again**: a linear slider
-weight conflated it with σ, so λ is instead derived from the *realized downside*
-the player signed up for — **expected shortfall**, scoring how far they leaned
-toward the safer side.
-The two pure-skew contrasts are excluded from λ because their loss tail reflects
-skew taste, not loss aversion.
-
-### Classification
-
-The base archetype is decided by payoff **shape** only (σ, α, λ), matched by
-**cosine similarity** against **three** shape vectors — **Banker**, **Venture
-Capitalist**, and **Insurer**. The other two archetypes are not directions in
-shape space and are handled specially:
-
-- **The Quant** is an *additive overlay*: when EV-discipline is strong enough
-  (`ev ≥ EV_TAG`), the result becomes "<shape> + Quant" (or a pure Quant when the
-  player has no shape tilt at all). It's a discipline that sits on top of a risk
-  personality, not a competing one.
-- **The Indexer** is the *low-conviction outcome*: when the player's style tilt
-  (skew + loss-shape, √(α²+λ²)) is below `STYLE_MIN`, there's no archetype
-  identity, so "own the market" wins.
-
-Every result carries a **confidence** score (conviction × separation) and is
-flagged **tentative** when confidence is low. Asset-class allocation and
-instrument ranking on the advisor dashboard are driven by the `(σ, α, λ)` shape
-vector (the Quant gets a fixed 90% equities / 10% crypto book).
+---
 
 ## Getting started
 
 **Prerequisites:** Node.js 18+ and npm.
 
 ```bash
-# Install dependencies
 npm install
-
-# Start the dev server (http://localhost:5173)
-npm run dev
-
-# Type-check and build for production
-npm run build
-
-# Preview the production build locally
-npm run preview
+npm run dev        # http://localhost:5173
 ```
 
-## Available scripts
+The frontend runs without the backend, but every data call fails and the catalog
+renders empty. For real data you need both processes — see `CLI.md`.
 
-| Script | Description |
-|--------|-------------|
-| `npm run dev` | Start the Vite dev server with HMR |
-| `npm run build` | Type-check (`tsc --noEmit`) and build to `dist/` |
+| Script | What |
+|---|---|
+| `npm run dev` | Vite dev server with HMR |
+| `npm run build` | Type-check (`tsc --noEmit`) then build to `dist/` |
 | `npm run typecheck` | Type-check only |
 | `npm run preview` | Serve the production build locally |
+| `npm run deploy` | Build and deploy the container to Cloud Run |
 
-The two files in `scripts/` (`audit.ts`, `coverage.ts`) are offline validation
-harnesses for the scoring model — persona tests and a Monte-Carlo sweep over the
-answer space. They aren't wired into `package.json`; run them ad hoc, e.g.
-`npx tsx scripts/coverage.ts`.
+---
 
 ## Project structure
 
 ```
 src/
-├── App.tsx                 # Route shell (HashRouter): test / advisor / admin
-├── main.tsx                # React entry point
-├── types.ts                # Shared types (rounds, scores)
-├── index.css               # Tailwind layers + animations + print styles
+├── App.tsx                    # Route shell (HashRouter) + all providers
+├── index.css                  # Mercator colour layer (light/dark) + helpers
 ├── pages/
-│   ├── TestFlowPage.tsx    # Client flow: intro → rounds → interstitial → own profile
-│   ├── AdvisorListPage.tsx # Advisor: "who are you?" picker + their client list
-│   ├── AdvisorClientPage.tsx # Advisor: one client's session history
-│   ├── AdvisorSessionPage.tsx # Advisor: one session's dashboard
-│   ├── AdminPage.tsx       # Admin: instrument catalog console (CRUD + details)
-│   ├── AdminArchetypesPage.tsx # Admin: archetype vectors + model asset mixes
-│   └── AdminAdvisorsPage.tsx # Admin: advisor account management
-├── i18n/
-│   ├── i18n.tsx            # Language context/provider + hooks (en/es)
-│   ├── strings.ts          # UI chrome strings, both languages
-│   └── content.ts          # Round/archetype/asset-class translations + helpers
+│   ├── TestFlowPage.tsx       # Client: intro → questionnaire → own result
+│   ├── AdvisorListPage.tsx    # Advisor picker + that advisor's clients
+│   ├── AdvisorClientPage.tsx  # One client's session history
+│   ├── AdvisorSessionPage.tsx # Loads a session → AdvisorDashboard
+│   ├── AdminPage.tsx          # Instrument catalog console
+│   ├── AdminScreenerPage.tsx  # Screen a class by trait → publish `visible`
+│   ├── AdminQuestionsPage.tsx # Questionnaire statements
+│   ├── AdminBandsPage.tsx     # The five bands + their model mixes
+│   ├── AdminRiskPage.tsx      # Instrument 1–5 level derivation
+│   ├── AdminPortfolioPage.tsx # Optimizer + the four-factor correlation model
+│   └── AdminAdvisorsPage.tsx  # Advisor accounts
 ├── components/
-│   ├── IntroScreen.tsx     # Landing screen (name + advisor pick, "continue as")
-│   ├── ClientResult.tsx    # Client end screen: archetype + description only
-│   ├── LanguageToggle.tsx  # Fixed EN/ES switch (all routes)
-│   ├── RoundScreen.tsx     # Thin per-round wrapper → RoundDecision
-│   ├── RoundDecision.tsx   # Allocation round: payoff distribution + slider + draw
-│   ├── RoundProgress.tsx   # Segmented per-round progress indicator
-│   ├── Coachmarks.tsx      # One-time in-context tutorial (first round)
-│   ├── Scoreboard.tsx      # Running capital / profit tally above the bar
-│   ├── DrawPointer.tsx     # Spinning pointer that lands on the drawn outcome
-│   ├── PayoffBar.tsx       # Canvas payoff-distribution bar (joint outcomes)
-│   ├── HalfwayScreen.tsx   # Screen 1 → screen 2 transition
-│   ├── AdvisorDashboard.tsx# Two-panel session view (advisor route only)
-│   ├── AppNav.tsx          # Global top nav (Client test / Advisor / Admin)
-│   ├── AdminNav.tsx        # Admin sub-tabs (Instruments / Archetypes / Advisors)
-│   ├── RecommendationsPanel.tsx # Classification + allocation + instruments (advisor-framed)
-│   ├── AdvisorPanel.tsx    # Raw scores, confidence, talking points
-│   ├── DonutChart.tsx      # Pure-SVG allocation donut
-│   ├── InstrumentTabs.tsx  # Per-asset-class tabs (screen) / stacked sections (print)
-│   ├── InstrumentList.tsx  # Ranked fit list with per-asset detail drill-down
-│   └── DimensionScoreBar.tsx
-├── hooks/
-│   └── useDrawSequence.ts  # Draw count-up animation state machine
-├── data/
-│   ├── rounds.ts           # The 10 round definitions
-│   ├── archetypes.ts       # Archetype copy + keys (shape vectors live in scoring.ts)
-│   └── instrumentDetails.ts# Seed per-asset detail sheets (illustrative samples)
+│   ├── AdvisorDashboard.tsx   # The workspace (metrics, book, ticket, ficha)
+│   ├── InstrumentReport.tsx   # Client-ready per-instrument report
+│   ├── QuestionnaireScreen.tsx# The Likert screen
+│   ├── IntroScreen.tsx        # Name + advisor pick
+│   ├── ClientResult.tsx       # Client end screen: band + description only
+│   ├── ImportInstruments.tsx  # CSV / Bloomberg / bulletin-PDF import
+│   ├── InstrumentDocs.tsx     # Document attachments
+│   ├── RiskReturnScatter.tsx  # Pure-SVG vol/return scatter
+│   ├── CompanyLogo.tsx        # Parqet logo by ticker + uploaded local logos
+│   ├── AppNav.tsx / AdminNav.tsx
+│   └── LanguageToggle.tsx / ThemeToggle.tsx / BrandMark.tsx
+├── i18n/                      # i18n.tsx · strings.ts (en/es) · content.ts
+├── data/archetypes.ts         # Band ids, colours, seed copy
 └── lib/
-    ├── scoring.ts          # Scoring pipeline, classification, allocation engine
-    ├── api.ts              # Thin fetch client for the backend API (/api)
-    ├── storage.ts          # Session store → POST/GET /api/sessions
-    ├── catalog.tsx         # Managed instrument catalog: field specs, provider (API-backed)
-    ├── archetypeConfig.tsx # Editable shape vectors + per-archetype model mixes (API-backed)
-    ├── directory.tsx       # Advisors (API-backed) + one-click advisor picker
-    ├── marketData.ts       # Autofill: thin POST to /api/market-data
-    ├── outcomes.ts         # Joint payoff distribution + weighted draw sampling
-    ├── instruments.ts      # Bundled instrument universe (seeds the catalog)
-    └── advisorCopy.ts      # Advisor talking-point generation (en/es)
+    ├── portfolio.ts           # THE ENGINE — estimates, four-factor covariance,
+    │                          #   MVO, apportionment, capital planning
+    ├── scoring.ts             # Answers → axes → 1–5 band, fit score
+    ├── questionnaire.ts       # Likert scale + statements
+    ├── traits.ts              # Screenable traits + SCREENS (per region/class)
+    ├── riskLevels.ts          # Instrument 1–5 derivation
+    ├── riskPalette.ts         # The 1–5 colour ladder (one definition)
+    ├── catalog.tsx            # Field specs, subclasses, catalog provider
+    ├── bandConfig.tsx         # Bands + model mixes (API-backed)
+    ├── riskLevelsConfig.tsx   # Risk model (API-backed)
+    ├── portfolioModelConfig.tsx # Optimizer params (API-backed)
+    ├── directory.tsx          # Advisors + device-local advisor pick
+    ├── storage.ts             # Sessions
+    ├── api.ts                 # Thin fetch client for /api
+    ├── marketData.ts          # Autofill: thin POST to /api/market-data
+    ├── importSchema.ts / csv.ts / bloombergDict.ts / bulletinParse.ts / pdfText.ts
+    ├── documents.ts / logos.ts / issuer.ts / theme.tsx
+    └── instruments.ts         # Taxonomy: regions, classes, palettes
 
-server/                     # Backend API (Node + Hono + Firestore), serves the built app too
+server/                        # Node + Hono + Firestore; also serves the built app
 └── src/
-    ├── index.ts            # Hono app: /api routes + static frontend + SPA fallback
-    ├── db.ts               # Firestore init (@google-cloud/firestore) + collections
-    └── marketData.ts       # Server market data: Yahoo (equities) + CoinGecko/Deribit (crypto)
+    ├── index.ts               # /api routes, static frontend, SPA fallback,
+    │                          #   daily refresh, automatic translation sweep
+    ├── db.ts                  # Firestore init + collections
+    ├── marketData.ts          # Yahoo Finance (server-side)
+    └── translate.ts           # EN→ES via MyMemory, with quota handling
 ```
+
+---
 
 ## Deployment
 
-One container on **Cloud Run** (`npm run deploy` →
-`gcloud run deploy investor-profile --source . --region us-central1 --allow-unauthenticated`).
-The `Dockerfile` builds the Vite app and the Node server, then runs the server —
-which serves the built app **and** the `/api` routes from the same origin, so
-there are no CORS or cross-service concerns. The container scales to zero.
-Firestore (native mode) lives in the same GCP project (`archetype-classifier`);
-Cloud Run's runtime service account reaches it with project `editor` access — no
-key files, no Firebase SDK. Live at
-<https://investor-profile-41156376159.us-central1.run.app>.
+One container on **Cloud Run**. The `Dockerfile` builds the Vite app and the Node
+server, then runs the server — which serves the built app **and** the `/api`
+routes from the same origin, so there are no CORS or cross-service concerns. The
+container scales to zero.
 
-### Local development
+```bash
+npm run deploy
+```
 
-Two processes (see `CLI.md`):
+> **The GCP project has been deleted.** `archetype-classifier` was torn down on
+> 2026-07-27, which removed the Cloud Run service, the Firestore database (the
+> whole catalog, advisors and client sessions), both storage buckets, the
+> container images and the Cloud Scheduler job. The code here is complete and
+> unaffected. See **Bringing it back up** below.
 
-- **API server** — `cd server && npm install && npm run dev` (port 8080). Needs
-  Firestore credentials once: `gcloud auth application-default login`.
-- **Frontend** — `npm run dev` (port 5173). Vite proxies `/api` → `:8080`.
+### Bringing it back up
+
+Within ~30 days of deletion the whole project — data included — can be restored:
+
+```bash
+gcloud projects undelete archetype-classifier
+# then re-enable billing, and:
+npm run deploy
+```
+
+After that window, a fresh environment needs:
+
+1. A GCP project with billing enabled, and the Cloud Run, Cloud Build,
+   Firestore, Artifact Registry and Cloud Scheduler APIs on.
+2. **Firestore in native mode** in the same project. The Cloud Run runtime
+   service account reaches it with project `editor` — no key files, no Firebase
+   SDK.
+3. A GCS bucket for instrument document attachments (`<project>-docs`).
+4. The project id updated in `package.json`'s `deploy` script and in `CLI.md`.
+5. `npm run deploy`.
+6. The catalog rebuilt through the admin console — CSV import per class, or the
+   Cadiem bulletin PDF for local instruments. Advisors and questions re-created
+   at `#/admin/advisors` and `#/admin/questions`; bands, risk model and portfolio
+   model seed themselves from the built-in defaults on first load.
+
+Optional but recommended:
+
+- **`REFRESH_TOKEN`** env var + a Cloud Scheduler job POSTing to
+  `/api/market-data/refresh` each weekday morning. This re-pulls Yahoo data,
+  keeps analyst upside honest against the tape, and is what drives the Spanish
+  translation sweep to convergence.
+- **`TRANSLATE_CONTACT_EMAIL`** env var — raises the MyMemory translation cap
+  from 5k to 50k words/day.
+
+---
 
 ## Notes
 
-- **Desktop-first.** The layout targets desktop widths; it is not yet optimized
-  for mobile.
-- **Backend, but no logins/auth (MVP).** Data persists server-side in Firestore
-  via the `server/` API, so it's shared across devices — but the API is open and
-  the advisor "login" is an unverified device-local pick. Authenticated advisors
-  and server-checked ownership are deferred until the product is proven. Scoring
-  still runs client-side (the server only stores results and fetches market data).
-- Fonts (DM Mono, Inter) are loaded from Google Fonts at runtime.
-- The instrument universe and archetype copy are illustrative sample content.
+- **Responsive, desktop-first.** The workspace is built for desktop but no page
+  hands a phone a horizontal scrollbar; tables truncate and stack rather than
+  clip their controls.
+- **Accessibility.** Risk levels are encoded by number *and* colour, the ficha
+  modal traps and restores focus, tables use real headers, and the muted/faint
+  text tokens clear WCAG AA in both themes.
+- Fonts are loaded from Google Fonts at runtime.
+- `"Cadiem"` is deliberately kept out of UI chrome; it appears only inside real
+  product names and imported data.
